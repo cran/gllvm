@@ -45,8 +45,8 @@ summary.gllvm <- function(object, ...) {
   cat("\n")
   if (!is.null(object$TR)) {
     if (!is.null(object$X)) {
-    cat("Covariate coefficients: \n")
-    print(object$params$B)}
+      cat("Covariate coefficients: \n")
+      print(object$params$B)}
     cat("\n")
   } else {
     if (!is.null(object$X)) {
@@ -56,8 +56,15 @@ summary.gllvm <- function(object, ...) {
     }
   }
   if (!is.null(object$params$row.params)) {
-    cat("Row Intercepts: \n")
+    cat("Row intercepts: \n")
     print(object$params$row.params)
+    cat("\n")
+  }
+
+  if (object$row.eff=="random") {
+    cat("Variance of random row intercepts: \n")
+    object$params$sigma2=object$params$sigma^2;names(object$params$sigma2)="sigma^2"
+    print(object$params$sigma2)
     cat("\n")
   }
 

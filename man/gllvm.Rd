@@ -15,7 +15,7 @@ gllvm(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL,
 \arguments{
 \item{y}{(n x m) matrix of responses.}
 
-\item{X}{matrix of environmental covariates.}
+\item{X}{matrix or data.frame of environmental covariates.}
 
 \item{TR}{matrix of trait covariates.}
 
@@ -29,7 +29,7 @@ gllvm(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL,
 
 \item{method}{model can be fitted using Laplace approximation method (\code{method = "LA"}) or variational approximation method (\code{method = "VA"}). Defaults to \code{"VA"}.}
 
-\item{row.eff}{logical, Indicating whether row effects are included in the model. Defaults to \code{FALSE}.}
+\item{row.eff}{\code{FALSE}, \code{TRUE} or \code{"random"}, Indicating whether row effects are included in the model as a fixed or as a random effects. Defaults to \code{FALSE}.}
 
 \item{offset}{vector or matrix of offset terms.}
 
@@ -39,7 +39,7 @@ gllvm(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL,
 
 \item{diag.iter}{non-negative integer which is used to speed up the updating of variational (covariance) parameters in VA method. Defaults to 5.}
 
-\item{trace}{logical, if \code{TRUE} in each iteration step information on current step will be printed. Defaults to \code{FALSE}.}
+\item{trace}{logical, if \code{TRUE} in each iteration step information on current step will be printed. Defaults to \code{FALSE}. Only with \code{TMB = FALSE}.}
 
 \item{plot}{logical, if \code{TRUE} ordination plots will be printed in each iteration step when \code{TMB = FALSE}. Defaults to \code{FALSE}.}
 
@@ -121,6 +121,8 @@ usually gives reasonably good results.
 
 Models are implemented using TMB (Kristensen et al., 2015) applied to variational approximation (Hui et al., 2017) and Laplace approximation (Niku et al., 2017).
 
+An exception is ordinal family which is not implemented with TMB and therefore also \code{row.eff = "random"} does not work.
+With ordinal family response classes must start from 0 or 1.
 
 \subsection{Distributions}{
 
@@ -147,44 +149,44 @@ TR <- antTraits$traits
 # Fit model with environmental covariates Bare.ground and Shrub.cover
 fit <- gllvm(y, X, formula = ~ Bare.ground + Shrub.cover,
             family = "poisson")
-ordiplot.gllvm(fit)
-coefplot.gllvm(fit)
+ordiplot(fit)
+coefplot(fit)
 
 \donttest{
 ## Example 1: Fit model with two latent variables
 # Using variational approximation:
 fitv0 <- gllvm(y, family = "negative.binomial", method = "VA")
-ordiplot.gllvm(fitv0)
+ordiplot(fitv0)
 plot(fitv0, mfrow = c(2,2))
 summary(fitv0)
 confint(fitv0)
 # Using Laplace approximation: (this line may take about 30 sec to run)
 fitl0 <- gllvm(y, family = "negative.binomial", method = "LA")
-ordiplot.gllvm(fitl0)
+ordiplot(fitl0)
 
 # Poisson family:
 fit.p <- gllvm(y, family = "poisson", method = "LA")
-ordiplot.gllvm(fit.p)
+ordiplot(fit.p)
 # Use poisson model as a starting parameters for ZIP-model, this line may take few minutes to run
 fit.z <- gllvm(y, family = "ZIP", method = "LA", start.fit = fit.p)
-ordiplot.gllvm(fit.z)
+ordiplot(fit.z)
 
 
 ## Example 2: gllvm with environmental variables
 # Fit model with two latent variables and all environmental covariates,
 fitvX <- gllvm(formula = y ~ X, family = "negative.binomial")
-ordiplot.gllvm(fitvX, biplot = TRUE)
-coefplot.gllvm(fitvX)
+ordiplot(fitvX, biplot = TRUE)
+coefplot(fitvX)
 # Fit model with environmental covariates Bare.ground and Shrub.cover
 fitvX2 <- gllvm(y, X, formula = ~ Bare.ground + Shrub.cover,
  family = "negative.binomial")
-ordiplot.gllvm(fitvX2)
-coefplot.gllvm(fitvX2)
+ordiplot(fitvX2)
+coefplot(fitvX2)
 # Use 5 initial runs and pick the best one
 fitvX_5 <- gllvm(y, X, formula = ~ Bare.ground + Shrub.cover,
  family = "negative.binomial", n.init = 5, jitter.var = 0.1)
-ordiplot.gllvm(fitvX_5)
-coefplot.gllvm(fitvX_5)
+ordiplot(fitvX_5)
+coefplot(fitvX_5)
 
 ## Example 3: Data in long format
 # Reshape data to long format:
@@ -197,13 +199,13 @@ fitvLong <- gllvm(data = datalong, formula = y ~ Bare.ground + Shrub.cover,
 ## Example 4: Fourth corner model
 # Fit fourth corner model with two latent variables
 fitF1 <- gllvm(y = y, X = X, TR = TR, family = "negative.binomial")
-coefplot.gllvm(fitF1)
+coefplot(fitF1)
 # Specify model using formula
 fitF2 <- gllvm(y = y, X = X, TR = TR,
  formula = ~ Bare.ground + Canopy.cover*(Pilosity + Webers.length),
  family = "negative.binomial")
-ordiplot.gllvm(fitF2)
-coefplot.gllvm(fitF2)
+ordiplot(fitF2)
+coefplot(fitF2)
 
 ## Example 5: Fit Tweedie model
 # Load coral data
@@ -215,7 +217,11 @@ ycoral <- ycoral[((tikus$x$time == 81) + (tikus$x$time == 83)) > 0,]
 ycoral <- ycoral[(colSums(ycoral > 0) > 3)]
 # Fit Tweedie model for coral data (this line may take few minutes to run)
 fit.twe <- gllvm(y = ycoral, family = "tweedie", method = "LA")
-ordiplot.gllvm(fit.twe)
+ordiplot(fit.twe)
+
+## Example 6: Random row effects
+fitRand <- gllvm(y, family = "negative.binomial", row.eff = "random")
+ordiplot(fitRand,biplot=TRUE)
 }
 }
 \references{

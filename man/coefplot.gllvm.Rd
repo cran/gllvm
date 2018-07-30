@@ -2,13 +2,14 @@
 % Please edit documentation in R/coefplot.gllvm.R
 \name{coefplot.gllvm}
 \alias{coefplot.gllvm}
+\alias{coefplot}
 \title{Plot covariate coefficients and confidence intervals}
 \usage{
-coefplot.gllvm(fit, y.label = TRUE, which.Xcoef = NULL, cex.ylab = 0.5,
-  mfrow = NULL, mar = c(4, 8, 2, 1), ...)
+\method{coefplot}{gllvm}(object, y.label = TRUE, which.Xcoef = NULL,
+  cex.ylab = 0.5, mfrow = NULL, mar = c(4, 6, 2, 1), ...)
 }
 \arguments{
-\item{fit}{an object of class 'gllvm'.}
+\item{object}{an object of class 'gllvm'.}
 
 \item{y.label}{logical, if \code{TRUE} (default) colnames of y with respect to coefficients are added to plot.}
 
@@ -39,13 +40,13 @@ coefplot.gllvm(fit)
 \donttest{
 # Fit model with all environmental covariates
 fitx <- gllvm(y, X, family = "negative.binomial")
-coefplot.gllvm(fitx, mfrow = c(3,2))
-coefplot.gllvm(fitx, which.Xcoef = 1:2)
+coefplot(fitx, mfrow = c(3,2))
+coefplot(fitx, which.Xcoef = 1:2)
 
 # Fit gllvm model with environmental and trait covariates
 TR <- antTraits$traits
 fitT <- gllvm(y = y, X = X, TR = TR, family = "negative.binomial")
-coefplot.gllvm(fitT)
+coefplot(fitT)
 }
 }
 \author{

@@ -2,9 +2,10 @@
 % Please edit documentation in R/getResidualCor.gllvm.R
 \name{getResidualCor.gllvm}
 \alias{getResidualCor.gllvm}
+\alias{getResidualCor}
 \title{Extract residual correlations from gllvm object}
 \usage{
-getResidualCor.gllvm(object)
+\method{getResidualCor}{gllvm}(object)
 }
 \arguments{
 \item{object}{an object of class 'gllvm'.}
@@ -19,7 +20,7 @@ y <- as.matrix(antTraits$abund)
 # Fit gllvm model
 fit <- gllvm(y = y, family = "poisson")
 # residual correlations:
-cr <- getResidualCor.gllvm(fit)
+cr <- getResidualCor(fit)
 
 \dontrun{
 # Plot residual correlations:
@@ -32,6 +33,7 @@ Colors <- rbPal(100)[as.numeric(cut(cr$cor, breaks = breaks))]
 corrplot(cr$cor[order.single(cr$cor), order.single(cr$cor)], diag = F,
   type = "lower", method = "square", tl.cex = 0.8, tl.srt = 45, tl.col = "red")
   }
+
 }
 \author{
 Francis K.C. Hui, Jenni Niku, David I. Warton

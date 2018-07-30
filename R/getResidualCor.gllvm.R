@@ -12,7 +12,7 @@
 #'# Fit gllvm model
 #'fit <- gllvm(y = y, family = "poisson")
 #'# residual correlations:
-#'cr <- getResidualCor.gllvm(fit)
+#'cr <- getResidualCor(fit)
 #'
 #'\dontrun{
 #'# Plot residual correlations:
@@ -25,19 +25,27 @@
 #'corrplot(cr$cor[order.single(cr$cor), order.single(cr$cor)], diag = F,
 #'   type = "lower", method = "square", tl.cex = 0.8, tl.srt = 45, tl.col = "red")
 #'   }
-#'@export
 #'
-
-
+#'@aliases getResidualCor getResidualCor.gllvm
+#'@method getResidualCor gllvm
+#'@export
+#'@export getResidualCor.gllvm
 getResidualCor.gllvm = function(object)
 {
   ResCov <- object$params$theta%*%t(object$params$theta)
   if (object$family == "negative.binomial")
-    ResCov <- ResCov + diag(log(object$params$phi+1))
+    ResCov <- ResCov + diag(log(1/object$params$phi+1))
   Res.sd <- 1/sqrt(diag(ResCov))
-  Res.Cor <- diag(Res.sd) %*% ResCov %*% diag(Res.sd)
+  Res.Cor <- diag(Res.sd) %*% ResCov %*% diag(Res.sd)*0.99999
   colnames(Res.Cor) <- colnames(object$y)
   rownames(Res.Cor) <- colnames(object$y)
   out <- list(cor=Res.Cor, cov=ResCov, trace=sum(diag(ResCov)))
   return(out)
 }
+
+#'@export getResidualCor
+getResidualCor <- function(object)
+{
+  UseMethod(generic="getResidualCor")
+}
+

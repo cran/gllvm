@@ -10,9 +10,10 @@ print.gllvm <- function(x, ...) {
   cat("\n")
   cat("log-likelihood: ",x$logL,"\n")
   if(!is.null(x$params$inv.phi)){ x$params$inv.phi<-NULL; }
-  df=length(unlist(x$params))-x$num.lv*(x$num.lv-1)/2
-  if(x$row.eff %in% c("fixed",TRUE) ) df=df-1
+  crit=inf.criteria(x)
+  df=crit$k
   cat("Degrees of freedom: ",df,"\n")
-  cat("AIC: ",AIC(x),"\n")
-  cat("BIC: ",BIC(x),"\n")
+  cat("BIC: ",crit$BIC,"\n")
+  cat("AIC: ",crit$AIC,"\n")
+  cat("AICc: ",crit$AICc,"\n")
 }

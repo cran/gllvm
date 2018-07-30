@@ -1,7 +1,7 @@
 #' @title Plot covariate coefficients and confidence intervals
 #' @description Plots covariate coefficients and their confidence intervals.
 #'
-#' @param fit an object of class 'gllvm'.
+#' @param object an object of class 'gllvm'.
 #' @param y.label logical, if \code{TRUE} (default) colnames of y with respect to coefficients are added to plot.
 #' @param which.Xcoef vector indicating which X-coefficients will be plotted. Can be vector of covariate names or numbers. Default is \code{NULL} when all covariate coefficients are plotted.
 #' @param cex.ylab the magnification to be used for axis annotation relative to the current setting of cex.
@@ -25,24 +25,27 @@
 #'\donttest{
 #'# Fit model with all environmental covariates
 #'fitx <- gllvm(y, X, family = "negative.binomial")
-#'coefplot.gllvm(fitx, mfrow = c(3,2))
-#'coefplot.gllvm(fitx, which.Xcoef = 1:2)
+#'coefplot(fitx, mfrow = c(3,2))
+#'coefplot(fitx, which.Xcoef = 1:2)
 #'
 #'# Fit gllvm model with environmental and trait covariates
 #'TR <- antTraits$traits
 #'fitT <- gllvm(y = y, X = X, TR = TR, family = "negative.binomial")
-#'coefplot.gllvm(fitT)
+#'coefplot(fitT)
 #'}
+#'@aliases coefplot coefplot.gllvm
 #'@export
-
-
-coefplot.gllvm <- function(fit, y.label = TRUE, which.Xcoef=NULL,cex.ylab=0.5, mfrow=NULL, mar=c(4,8,2,1),...)
+#'@export coefplot.gllvm
+coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef=NULL,cex.ylab=0.5, mfrow=NULL, mar=c(4,6,2,1),...)
 {
-  if(is.null(fit$X)) stop("No X covariates in the model.");
-  if(is.null(fit$TR)){
-    if(is.null(which.Xcoef)) which.Xcoef <- c(1:NCOL(fit$params$Xcoef))
-    Xcoef <-as.matrix(fit$params$Xcoef[,which.Xcoef])
-  cnames <- colnames(fit$params$Xcoef)[which.Xcoef]
+  if (any(class(object) != "gllvm"))
+    stop("Class of the object isn't 'gllvm'.")
+
+  if(is.null(object$X)) stop("No X covariates in the model.");
+  if(is.null(object$TR)){
+    if(is.null(which.Xcoef)) which.Xcoef <- c(1:NCOL(object$params$Xcoef))
+    Xcoef <-as.matrix(object$params$Xcoef[,which.Xcoef])
+  cnames <- colnames(object$params$Xcoef)[which.Xcoef]
   k <- length(cnames)
   labely <- rownames(Xcoef)
   m <- length(labely)
@@ -52,7 +55,7 @@ coefplot.gllvm <- function(fit, y.label = TRUE, which.Xcoef=NULL,cex.ylab=0.5, m
   if(is.null(mfrow)) par(mar = mar)
   for (i in 1:k) {
     Xc <- Xcoef[,i]
-    sdXcoef<-as.matrix(fit$sd$Xcoef[,which.Xcoef])
+    sdXcoef<-as.matrix(object$sd$Xcoef[,which.Xcoef])
     lower <- Xc - 1.96 * sdXcoef[,i]
     upper <- Xc + 1.96 * sdXcoef[,i]
     Xc <- sort(Xc)
@@ -69,15 +72,15 @@ coefplot.gllvm <- function(fit, y.label = TRUE, which.Xcoef=NULL,cex.ylab=0.5, m
     abline(v=0, lty=1)
     if (y.label) axis(2, at=At.y, labels=names(Xc), las=1,cex.axis=cex.ylab) }
   } else{
-    Xcoef <-fit$params$B
+    Xcoef <-object$params$B
 
-    xnames <- names(fit$params$B)
+    xnames <- names(object$params$B)
     m <- length(xnames); k=1
-    #if(fit$get.trait) k=2;
+    #if(object$get.trait) k=2;
     if(is.null(mfrow)) mfrow=c(1,k);
     par(mfrow = mfrow, mar = mar)
     Xc <- Xcoef
-    sdXcoef<-fit$sd$B
+    sdXcoef<-object$sd$B
     lower <- Xc - 1.96 * sdXcoef
     upper <- Xc + 1.96 * sdXcoef
     Xc <- sort(Xc)
@@ -97,3 +100,10 @@ coefplot.gllvm <- function(fit, y.label = TRUE, which.Xcoef=NULL,cex.ylab=0.5, m
   }
 
 }
+
+#'@export
+coefplot <- function(object, ...)
+{
+  UseMethod(generic="coefplot")
+}
+

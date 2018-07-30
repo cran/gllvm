@@ -1,4 +1,4 @@
-start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, trial.size = 1, num.lv = 0, start.lvs = NULL, seed = NULL,power=NULL,starting.val="res",formula=NULL, jitter.var=0) {
+start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, trial.size = 1, num.lv = 0, start.lvs = NULL, seed = NULL,power=NULL,starting.val="res",formula=NULL, jitter.var=0,yXT=NULL) {
   if(!is.null(seed)) set.seed(seed)
   N<-n <- nrow(y); p <- ncol(y); y <- as.matrix(y)
   num.T <- 0; if(!is.null(TR)) num.T <- dim(TR)[2]
@@ -29,7 +29,7 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, t
   y <- as.matrix(y)
 
   if(family == "ordinal") {
-    max.levels <- apply(y,2,max);
+    max.levels <- apply(y,2,function(x) length(min(x):max(x)));
     if(any(max.levels == 1) || all(max.levels == 2)) stop("Ordinal data requires all columns to have at least has two levels. If al columns only have two levels, please use family == binomial instead. Thanks")
   }
 
@@ -41,44 +41,9 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, t
   if(family != "tweedie" && family!="ordinal") { ## Using logistic instead of prbit regession here for binomial, but whatever...
     if(starting.val=="res" && is.null(start.lvs) ){# && num.lv>0
       if(is.null(TR)){
-        if(FALSE){
-        fit.mva <- gllvm.VA(y, X = X, TR = NULL, family = family, num.lv = 0, Lambda.struc = "diagonal", trace = FALSE, plot = FALSE, sd.errors = FALSE, maxit = 1000, seed=seed,n.init=1,starting.val="random")
-        #fit.mva=traitglm(data.frame(y),data.frame(X),data.frame(TR),formula=formula(formula),family=family,method="manyglm")
-        coef <- cbind(fit.mva$coef$beta0,fit.mva$coef$Xcoef)
-
-        fit.mva$phi <- phi <- fit.mva$coef$phi
-        ds.res <- matrix(NA, n, p)
-        rownames(ds.res) <- rownames(y)
-        colnames(ds.res) <- colnames(y)
-        mu <- exp(matrix(cbind(1,X)%*%t(coef),n,p))
-        for (i in 1:n) {
-          for (j in 1:p) {
-            if (family == "poisson") {
-              a <- ppois(as.vector(unlist(y[i, j])) - 1, mu[i,j])
-              b <- ppois(as.vector(unlist(y[i, j])), mu[i,j])
-              u <- runif(n = 1, min = a, max = b)
-              ds.res[i, j] <- qnorm(u)
-            }
-            if (family == "negative.binomial") {
-              phis <- fit.mva$coef$phi + 1e-05
-              a <- pnbinom(as.vector(unlist(y[i, j])) - 1, mu = mu[i, j], size = 1/phis[j])
-              b <- pnbinom(as.vector(unlist(y[i, j])), mu = mu[i, j], size = 1/phis[j])
-              u <- runif(n = 1, min = a, max = b)
-              ds.res[i, j] <- qnorm(u)
-            }
-            if (family == "binomial") {
-              a <- pbinom(as.vector(unlist(y[i, j])) - 1, 1, mu[i, j])
-              b <- pbinom(as.vector(unlist(y[i, j])), 1, mu[i, j])
-              u <- runif(n = 1, min = a, max = b)
-              ds.res[i, j] <- qnorm(u)
-            }
-          }
-        }
-        resi <- as.matrix(ds.res); resi[is.infinite(resi)]=0
-      }
         if(!is.null(X)) fit.mva <- mvabund::manyglm(y ~ X, family = family, K = trial.size)
         if(is.null(X)) fit.mva <- mvabund::manyglm(y ~ 1, family = family, K = trial.size)
-        resi <- residuals(fit.mva); resi[is.infinite(resi)] <- 0
+        resi <- residuals(fit.mva); resi[is.infinite(resi)] <- 0; resi[is.nan(resi)] <- 0
         coef <- t(fit.mva$coef)
       } else {
         n1 <- colnames(X)
@@ -86,22 +51,20 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, t
         form1=NULL
         if(is.null(formula)){
           form1 <- "~ 1"
-        for(m in 1:length(n2)){
-          for(l in 1:length(n1)){
-            ni <- paste(n1[l],n2[m],sep = "*")
-            form1 <- paste(form1,ni,sep = "+")
-          }
+          for(m in 1:length(n2)){
+            for(l in 1:length(n1)){
+              ni <- paste(n1[l],n2[m],sep = "*")
+              form1 <- paste(form1,ni,sep = "+")
+            }
           }
           formula=form1
         }
-        #fit.mva=traitglm(data.frame(y),data.frame(X),data.frame(TR),formula=formula(form1),family=family,method="glm1path")
-        fit.mva <- gllvm.VA(y, X = X, TR = TR, formula=formula(formula), family = family, num.lv = 0, Lambda.struc = "diagonal", trace = FALSE, plot = FALSE, sd.errors = FALSE, maxit = 1000, seed=seed,n.init=1,starting.val="random")
-        #fit.mva=traitglm(data.frame(y),data.frame(X),data.frame(TR),formula=formula(formula),family=family,method="manyglm")
+        fit.mva <- gllvm.VA(y, X = X, TR = TR, formula=formula(formula), family = family, num.lv = 0, Lambda.struc = "diagonal", trace = FALSE, plot = FALSE, sd.errors = FALSE, maxit = 1000, seed=seed,n.init=1,starting.val="zero",yXT=yXT)
         if(!is.null(form1)){
-        env <- (fit.mva$coef$B)[n1]
-        trait <- (fit.mva$coef$B)[n2]
-        inter <- (fit.mva$coef$B)[!names(fit.mva$coef$B) %in% c(n1,n2)]
-        B <- c(env,trait,inter)} else {B=fit.mva$coef$B}
+          env <- (fit.mva$coef$B)[n1]
+          trait <- (fit.mva$coef$B)[n2]
+          inter <- (fit.mva$coef$B)[!names(fit.mva$coef$B) %in% c(n1,n2)]
+          B <- c(env,trait,inter)} else {B=fit.mva$coef$B}
 
         fit.mva$phi <- phi <- fit.mva$coef$phi
         ds.res <- matrix(NA, n, p)
@@ -131,33 +94,35 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, t
             }
           }
         }
-        resi <- as.matrix(ds.res); resi[is.infinite(resi)] <- 0
+        resi <- as.matrix(ds.res); resi[is.infinite(resi)] <- 0; resi[is.nan(resi)] <- 0
       }
       gamma=NULL
       if(num.lv>0){
-      if(p>2 && n>2){
-        if(n>p){
-          fa  <-  try(factanal(resi,factors=num.lv,scores = "regression"))
-          if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
-          gamma<-matrix(fa$loadings,p,num.lv)
-          index <- fa$scores
-        } else if(n<p) {
-          fa  <-  try(factanal(t(resi),factors=num.lv,scores = "regression"))
-          if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
-          gamma<-fa$scores
-          index <- matrix(fa$loadings,n,num.lv)
-        } else {
-          fa  <-  try(factanal(rbind(resi,rnorm(p)),factors=num.lv,scores = "regression"))
-          if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
-          gamma<-matrix(fa$loadings,p,num.lv)
-          index <- fa$scores[1:n,]
-        }
+        if(p>2 && n>2){
+          if(any(is.nan(resi))){stop("Method 'res' for starting values can not be used, when glms fit too poorly to the data. Try other starting value methods 'zero' or 'random' or change the model.")}
+
+          if(n>p){
+            fa  <-  try(factanal(resi,factors=num.lv,scores = "regression"))
+            if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
+            gamma<-matrix(fa$loadings,p,num.lv)
+            index <- fa$scores
+          } else if(n<p) {
+            fa  <-  try(factanal(t(resi),factors=num.lv,scores = "regression"))
+            if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
+            gamma<-fa$scores
+            index <- matrix(fa$loadings,n,num.lv)
+          } else {
+            fa  <-  try(factanal(rbind(resi,rnorm(p)),factors=num.lv,scores = "regression"))
+            if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
+            gamma<-matrix(fa$loadings,p,num.lv)
+            index <- fa$scores[1:n,]
+          }
         } else {
           gamma <- matrix(1,p,num.lv)
           gamma[upper.tri(gamma)]=0
           index <- matrix(0,n,num.lv)
         }
-        }
+      }
       if(is.null(TR)){params <- cbind(coef,gamma)#cbind(t(fit.mva$coef),gamma)
       } else { params <- cbind((fit.mva$coef$beta0),gamma)}
     } else {
@@ -202,7 +167,7 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, t
   }
 
   if(family == "ordinal") {
-    max.levels <- max(y)
+    max.levels <- length(unique(c(y)))
     params <- matrix(NA,p,ncol(cbind(1,X))+num.lv)
     zeta <- matrix(NA,p,max.levels - 1)
     zeta[,1] <- 0 ## polr parameterizes as no intercepts and all cutoffs vary freely. Change this to free intercept and first cutoff to zero
@@ -233,59 +198,59 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, t
     #if(num.lv>1) params[,(ncol(params) - num.lv + 1):ncol(params)][upper.tri(params[,(ncol(params) - num.lv + 1):ncol(params)])]=0
     if(starting.val%in%c("res") && num.lv>0){
 
-    eta.mat <- matrix(params[,1],n,p,byrow=TRUE)
-    if(!is.null(X) && is.null(TR)) eta.mat <- eta.mat + (X %*% matrix(params[,2:(1+num.X)],num.X,p))
+      eta.mat <- matrix(params[,1],n,p,byrow=TRUE)
+      if(!is.null(X) && is.null(TR)) eta.mat <- eta.mat + (X %*% matrix(params[,2:(1+num.X)],num.X,p))
 
-    ds.res <- matrix(NA, n, p)
-    rownames(ds.res) <- rownames(y)
-    colnames(ds.res) <- colnames(y)
-  for (i in 1:n) {
-    for (j in 1:p) {
-    probK <- NULL
-    probK[1] <- pnorm(zeta[j,1]-eta.mat[i,j],log.p = FALSE)
-    probK[max(y[,j])] <- 1 - pnorm(zeta[j,max(y[,j]) - 1] - eta.mat[i,j])
-    if(max(y[,j]) > 2) {
-      j.levels <- 2:(max(y[,j])-1)
-      for(k in j.levels) { probK[k] <- pnorm(zeta[j,k] - eta.mat[i,j]) - pnorm(zeta[j,k - 1] - eta.mat[i,j]) }
-    }
-    probK <- c(0,probK)
-    cumsum.b <- sum(probK[1:(y[i,j]+1)])
-    cumsum.a <- sum(probK[1:(y[i,j])])
-    u <- runif(n = 1, min = cumsum.a, max = cumsum.b)
-    if (abs(u - 1) < 1e-05)
-      u <- 1
-    if (abs(u - 0) < 1e-05)
-      u <- 0
-    ds.res[i, j] <- qnorm(u)
-    }
-  }
-    resi <- as.matrix(ds.res); resi[is.infinite(resi)] <- 0
-
-    if(num.lv>0){
-      if(p>2 && n>2){
-        if(n>p){
-          fa  <-  try(factanal(resi,factors=num.lv,scores = "regression"))
-          if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
-          gamma<-matrix(fa$loadings,p,num.lv)
-          index <- fa$scores
-        } else if(n<p){
-          fa  <-  try(factanal(t(resi),factors=num.lv,scores = "regression"))
-          if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
-          gamma<-fa$scores
-          index <- matrix(fa$loadings,n,num.lv)
-        } else {
-          fa  <-  try(factanal(rbind(resi,rnorm(p)),factors=num.lv,scores = "regression"))
-          if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
-          gamma<-matrix(fa$loadings,p,num.lv)
-          index <- fa$scores[1:n,]
+      ds.res <- matrix(NA, n, p)
+      rownames(ds.res) <- rownames(y)
+      colnames(ds.res) <- colnames(y)
+      for (i in 1:n) {
+        for (j in 1:p) {
+          probK <- NULL
+          probK[1] <- pnorm(zeta[j,1]-eta.mat[i,j],log.p = FALSE)
+          probK[max(y[,j])] <- 1 - pnorm(zeta[j,max(y[,j]) - 1] - eta.mat[i,j])
+          if(max(y[,j]) > 2) {
+            j.levels <- 2:(max(y[,j])-1)
+            for(k in j.levels) { probK[k] <- pnorm(zeta[j,k] - eta.mat[i,j]) - pnorm(zeta[j,k - 1] - eta.mat[i,j]) }
+          }
+          probK <- c(0,probK)
+          cumsum.b <- sum(probK[1:(y[i,j]+1)])
+          cumsum.a <- sum(probK[1:(y[i,j])])
+          u <- runif(n = 1, min = cumsum.a, max = cumsum.b)
+          if (abs(u - 1) < 1e-05)
+            u <- 1
+          if (abs(u - 0) < 1e-05)
+            u <- 0
+          ds.res[i, j] <- qnorm(u)
         }
+      }
+      resi <- as.matrix(ds.res); resi[is.infinite(resi)] <- 0
+
+      if(num.lv>0){
+        if(p>2 && n>2){
+          if(n>p){
+            fa  <-  try(factanal(resi,factors=num.lv,scores = "regression"))
+            if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
+            gamma<-matrix(fa$loadings,p,num.lv)
+            index <- fa$scores
+          } else if(n<p){
+            fa  <-  try(factanal(t(resi),factors=num.lv,scores = "regression"))
+            if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
+            gamma<-fa$scores
+            index <- matrix(fa$loadings,n,num.lv)
+          } else {
+            fa  <-  try(factanal(rbind(resi,rnorm(p)),factors=num.lv,scores = "regression"))
+            if(inherits(fa,"try-error")) stop("Too many latent variables. Try smaller 'num.lv' value or change 'starting.val' to 'zero' or 'random'.")
+            gamma<-matrix(fa$loadings,p,num.lv)
+            index <- fa$scores[1:n,]
+          }
         } else {
           gamma <- matrix(1,p,num.lv)
           gamma[upper.tri(gamma)]=0
           index <- matrix(0,n,num.lv)
         }
-    }
-    params[,(ncol(cbind(1,X))+1):ncol(params)]=gamma
+      }
+      params[,(ncol(cbind(1,X))+1):ncol(params)]=gamma
     }
     env <- rep(0,num.X)
     trait <- rep(0,num.T)
@@ -294,12 +259,12 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, t
   }
 
   if(family!="ordinal" || (family=="ordinal" & starting.val=="res")){
-  if(num.lv>1 && p>2){
-    gamma<-as.matrix(params[,(ncol(params) - num.lv + 1):ncol(params)])
-    qr.gamma <- qr(t(gamma))
-    params[,(ncol(params) - num.lv + 1):ncol(params)]<-t(qr.R(qr.gamma))
-    index<-(index%*%qr.Q(qr.gamma))
-  }}
+    if(num.lv>1 && p>2){
+      gamma<-as.matrix(params[,(ncol(params) - num.lv + 1):ncol(params)])
+      qr.gamma <- qr(t(gamma))
+      params[,(ncol(params) - num.lv + 1):ncol(params)]<-t(qr.R(qr.gamma))
+      index<-(index%*%qr.Q(qr.gamma))
+    }}
   if(starting.val=="zero"){
     params=matrix(0,p,1+num.X+num.lv)
     params[,1:(ncol(params) - num.lv)] <- 0
@@ -1028,5 +993,20 @@ lambda.convert <- function(lambda,type=1) {
   }
 }
 
+inf.criteria <- function(fit)
+{
+  family=fit$family
+  abund=fit$y
+  num.lv=fit$num.lv
+  n <- dim(abund)[1]
+  k<-attributes(logLik.gllvm(fit))$df
+
+  BIC <- -2*fit$logL + (k) * log(n)
+  # AIC
+  AIC <- -2*fit$logL + (k) * 2
+  # AICc
+  AICc <- AIC + 2*k*(k+1)/(n-k-1)
+  list(BIC = BIC, AIC = AIC, AICc = AICc, prm = k)
+}
 
 

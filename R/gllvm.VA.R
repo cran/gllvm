@@ -12,11 +12,13 @@
 ##############################################################
 
 
-gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", num.lv = 2, max.iter = 200, eps = 1e-4, row.eff = TRUE, Lambda.struc = "unstructured", trace = TRUE, plot = FALSE, sd.errors = FALSE, start.lvs = NULL, offset=NULL, maxit = 100, diag.iter = 5, seed=NULL,get.fourth=TRUE,get.trait=TRUE,n.init=1,constrOpt=FALSE,restrict=30,start.params=NULL,starting.val="res",Lambda.start=0.1, jitter.var=0) {
+gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", num.lv = 2, max.iter = 200, eps = 1e-4, row.eff = TRUE, Lambda.struc = "unstructured", trace = TRUE, plot = FALSE, sd.errors = FALSE, start.lvs = NULL, offset=NULL, maxit = 100, diag.iter = 5, seed=NULL,get.fourth=TRUE,get.trait=TRUE,n.init=1,constrOpt=FALSE,restrict=30,start.params=NULL,starting.val="res",Lambda.start=0.1, jitter.var=0, yXT = NULL) {
   if(is.null(X) && !is.null(TR)) stop("Unable to fit a model that includes only trait covariates")
 
   n<-dim(y)[1]; p<-dim(y)[2];
   y=as.data.frame(y)
+  X1=X; TR1=TR;
+  formula1=formula
 
   # change categorical variables to dummy variables
   num.X <- 0
@@ -42,28 +44,46 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
   num.T <- 0
   if(!is.null(TR)) {
     num.T <- dim(TR)[2]
-    T.new <- NULL
-    for (i in 1:num.T) {
-      if(!is.factor(TR[,i])  && length(unique(TR[,i]))>2) {
-        TR[,i]=scale(TR[,i])
-        T.new <- cbind(T.new,scale(TR[,i])); colnames(T.new)[dim(T.new)[2]] <- colnames(TR)[i]
-      } else {
-        dum <- model.matrix(~TR[,i]-1)
-        colnames(dum) <- paste(colnames(TR)[i],levels(TR[,i]),sep="")
-        T.new <- cbind(T.new,dum)
+    if(num.T>0){
+      T.new <- NULL
+      for (i in 1:num.T) {
+        if(!is.factor(TR[,i])  && length(unique(TR[,i]))>2) {
+          TR[,i]=scale(TR[,i])
+          T.new <- cbind(T.new,scale(TR[,i])); colnames(T.new)[dim(T.new)[2]] <- colnames(TR)[i]
+        } else {
+          dum <- model.matrix(~TR[,i]-1)
+          colnames(dum) <- paste(colnames(TR)[i],levels(TR[,i]),sep="")
+          T.new <- cbind(T.new,dum)
+        }
       }
+      T.new <- data.matrix(T.new);
     }
-    T.new <- data.matrix(T.new);
   }
+
 
   if(is.null(TR)){
     if(!is.null(formula) && !is.null(X)){
       xb=as.matrix(model.matrix(formula,data = data.frame(X)))
       X=as.matrix(xb[,!(colnames(xb) %in% c("(Intercept)"))])
+      colnames(X)<- colnames(xb)[!(colnames(xb) %in% c("(Intercept)"))]
       num.X <- dim(X)[2]
     }
-    if(is.null(formula) && !is.null(X)){ X=as.matrix(X.new); num.X=ncol(X)}
-    Xd=NULL
+    if(is.null(formula) && !is.null(X)){
+      n1 <- colnames(X)
+      formula=paste("~",n1[1],sep = "")
+      if(length(n1)>1){
+        for(i1 in 2:length(n1)){
+          formula <- paste(formula,n1[i1],sep = "+")
+        }}
+      formula1=formula
+      formula=formula(formula)
+      xb=as.matrix(model.matrix(formula,data = data.frame(X)))
+      X<-as.matrix(xb[,!(colnames(xb) %in% c("(Intercept)"))])
+      colnames(X)<- colnames(xb)[!(colnames(xb) %in% c("(Intercept)"))]
+
+      num.X=ncol(X);
+    }
+    Xd<-X1<-X
   } else {
     if(is.null(formula)){
       n1 <- colnames(X)
@@ -80,33 +100,27 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
         for(i2 in 1:length(n2)){
           formula <- paste(formula,n2[i2],sep = "+")
         }}
-      formula=paste(formula,")",sep = "")
-      formula=formula(formula)
+      formula1=paste(formula,")",sep = "")
+      formula=formula(formula1)
     }
-  if(is.null(formula)){
-    X=X.new; TR=T.new;
-    yX=reshape(data.frame(cbind(y,X)),direction = "long", varying = colnames(y),v.names = "y")
-    TR2<-data.frame(time=1:p,TR)
-    yXT=merge(yX,TR2,by="time")
 
-    data=yXT[,!(colnames(yXT) %in% c("time","y","id"))]
-    TX=kronecker(as.matrix(TR),as.matrix(X))
-    Xd=as.matrix(cbind(data,TX))
-  } else {
-    yX=reshape(data.frame(cbind(y,X)),direction = "long", varying = colnames(y),v.names = "y")
+    yX <- reshape(data.frame(cbind(y,X)),direction = "long", varying = colnames(y),v.names = "y")
     TR2<-data.frame(time=1:p,TR)
-    yXT=merge(yX,TR2,by="time")
-    data=yXT
+    if(is.null(yXT)){
+      yXT=merge(yX,TR2,by="time")
+    }
+    data <- yXT
 
-    Xd=as.matrix(model.matrix(object=formula,data = data))
-    Xd=as.matrix(Xd[,!(colnames(Xd) %in% c("(Intercept)"))])
-    X=as.matrix(X.new[,colnames(X.new) %in% colnames(Xd)]); TR=as.matrix(T.new[,colnames(T.new) %in% colnames(Xd)]);
-    colnames(X)=colnames(X.new)[colnames(X.new) %in% colnames(Xd)]; colnames(TR)=colnames(T.new)[colnames(T.new) %in% colnames(Xd)];
-    nxd=colnames(Xd)
-    formulab=paste("~",nxd[1],sep = "");
-    for(i in 2:length(nxd)) formulab=paste(formulab,nxd[i],sep = "+")
-    formula=formulab;
-  }
+    Xd <- as.matrix(model.matrix(formula,data = data))
+    Xd <- as.matrix(Xd[,!(colnames(Xd) %in% c("(Intercept)"))])
+    # Tässä ongelma, miten saada vain X tai TR muuttujat minne kuuluukin
+    X <- Xd[data$time==1,]; X1=as.matrix(X.new[,colnames(X.new) %in% colnames(Xd)]);
+    TR <- Xd[data$id==1,]; TR1=as.matrix(T.new[,colnames(T.new) %in% colnames(Xd)]);
+    colnames(X1) <- colnames(X.new)[colnames(X.new) %in% colnames(Xd)]; colnames(TR1)=colnames(T.new)[colnames(T.new) %in% colnames(Xd)];
+    nxd <- colnames(Xd)
+    formulab <- paste("~",nxd[1],sep = "");
+    for(i in 2:length(nxd)) formulab <- paste(formulab,nxd[i],sep = "+")
+    formula1 <- formulab
     nd=ncol(Xd)
 
   }
@@ -124,14 +138,17 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
   if(is.null(rownames(y))) rownames(y) <- paste("Row",1:n,sep="")
   if(is.null(colnames(y))) colnames(y) <- paste("Col",1:p,sep="")
   if(!is.null(X)) { if(is.null(colnames(X))) colnames(X) <- paste("x",1:ncol(X),sep="") }
+  if(is.null(formula) && is.null(X) && is.null(TR)){formula1 =  "~ 1"}
 
+  y00=y
   if(family == "ordinal") {
-    max.levels <- apply(y,2,max)
+    if(min(y)==0){ y=y+1}
+    max.levels <- apply(y,2,function(x) length(min(x):max(x)))
     if(any(max.levels == 1) || all(max.levels == 2))
       stop("Ordinal data requires all columns to have at least has two levels. If all columns only have two levels, please use family == binomial instead. Thanks")
   }
 
-  out.list <-  list(y = y, X = X, TR = TR, num.lv = num.lv, row.eff = row.eff, logLik = -Inf, family = family, offset=offset,X.design=Xd)
+  out.list <-  list(y = y, X = X1, TR = TR1, num.lv = num.lv, row.eff = row.eff, logLik = -Inf, family = family, offset=offset,X.design=Xd)
 
   tstart<-Sys.time()
   n.i<-1;
@@ -139,7 +156,7 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
   while(n.i<=n.init){
     if(n.init>1 && trace) cat("initial run ",n.i,"\n");
 
-    res <- start.values.gllvm.TMB(y = y, X = X, TR = TR, family = family, formula = formula, offset=offset, trial.size = trial.size, num.lv = num.lv, start.lvs = start.lvs, seed = seed[n.i],starting.val=starting.val, jitter.var=jitter.var)
+    res <- start.values.gllvm.TMB(y = y, X = X, TR = TR, family = family, formula = formula, offset=offset, trial.size = trial.size, num.lv = num.lv, start.lvs = start.lvs, seed = seed[n.i],starting.val=starting.val, jitter.var=jitter.var, yXT=yXT)
     if(is.null(start.params)){
       new.beta0 <- beta0 <- res$params[,1]
       # common env params or different env response for each spp
@@ -450,14 +467,14 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
 
         B2=NULL;
         if(!is.null(X) && is.null(TR)){
-            for(s in 1:num.X){
-              B2.=X[,s]
-              B0=X[,s]
-              for(i in 1:(p-1)){
-                B2.=as.matrix(Matrix::bdiag(B2.,B0))
-              }
-              B2=cbind(B2,B2.)
+          for(s in 1:num.X){
+            B2.=X[,s]
+            B0=X[,s]
+            for(i in 1:(p-1)){
+              B2.=as.matrix(Matrix::bdiag(B2.,B0))
             }
+            B2=cbind(B2,B2.)
+          }
         }
 
         G=NULL;
@@ -472,7 +489,7 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
 
         Bf=NULL;
         if(!is.null(TR)){
-            Bf=Xd
+          Bf=Xd
         }
 
         U=cbind(G,B1,B2,Bf,A)
@@ -825,7 +842,7 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
 
       if(family == "ordinal") {
         out.list$coef$zeta <- zeta; rownames(out.list$coef$zeta) <- colnames(y);
-        colnames(out.list$coef$zeta) <- paste(1:(max(y)-1),"|",2:max(y),sep="")
+        colnames(out.list$coef$zeta) <- paste(min(y00):(max(y00)-1),"|",(min(y00)+1):max(y00),sep="")
       }}
     n.i=n.i+1;
   }
@@ -835,14 +852,11 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
     tr <- try({get.sds <- calc.infomat(theta=out.list$coef$theta, beta0=out.list$coef$beta0, env=out.list$coef$Xcoef, row.params=out.list$coef$row.params, vameans=out.list$lvs, lambda=out.list$Lambda, phi=1/out.list$coef$phi, zeta=out.list$coef$zeta, num.lv = num.lv, family = family, Lambda.struc = tmp.Lambda.struc, row.eff = row.eff, y = y, X = X, TR = TR, Xd=Xd,offset=offset, B = out.list$coef$B)#, formula=formula
     out.list$sd <- get.sds})
     if(inherits(tr, "try-error")) { cat("Standard errors for parameters could not be calculated.\n") }
+    if(family == "ordinal") {
+      colnames(out.list$sd$zeta) <- paste(min(y00):(max(y00)-1),"|",(min(y00)+1):max(y00),sep="")
+    }
   }
+  if(is.null(formula1)){ out.list$formula=formula} else {out.list$formula=formula1}
 
   return(out.list)
 }
-
-
-
-
-
-
-
