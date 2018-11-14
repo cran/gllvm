@@ -148,7 +148,9 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, t
   } else { phi <- NULL }
 
   if(family == "tweedie") {
-    indeX <- cbind(index, X)
+    if(is.null(TR)){
+      indeX <- cbind(index, X)
+    }else{indeX <- cbind(index)}
     if(num.lv == 0) indeX <- X#cbind(index = rep(1,N), X)
 
     phi0<-NULL
@@ -162,6 +164,7 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, t
       } else {coefs0<-rbind(coefs0,rnorm(num.lv+dim(X)[2]+1)); phi0<-c(phi0,runif(1,0.2,3));}
     }
 
+    if(!is.null(TR)) B=rep(0,num.X+num.T+num.X*num.T)
     params <- as.matrix(coefs0)
     phi <- phi0
   }
@@ -283,6 +286,9 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family, offset= NULL, t
   if(num.lv > 0) {
     index=index+mvtnorm::rmvnorm(n, rep(0, num.lv),diag(num.lv)*jitter.var);}
 
+  if(any(abs(params)>10)) {
+    params[abs(params)>10] <- unlist(lapply(params[abs(params)>10],FUN =  function(x) min(c(3,abs(x)/3))*sign(x)))
+  }
   out <- list(params=params,phi=phi)
   if(!is.null(TR)) { out$B <- B}
   if(num.lv > 0) out$index <- index
@@ -1006,7 +1012,70 @@ inf.criteria <- function(fit)
   AIC <- -2*fit$logL + (k) * 2
   # AICc
   AICc <- AIC + 2*k*(k+1)/(n-k-1)
-  list(BIC = BIC, AIC = AIC, AICc = AICc, prm = k)
+  list(BIC = BIC, AIC = AIC, AICc = AICc, k = k)
+}
+
+# Creates matrix of fourth corner terms from a vector
+getFourthCorner<- function(object){
+  if(is.null(object$X) || is.null(object$TR)) stop();
+
+  n1=colnames(object$X)
+  n2=colnames(object$TR)
+
+  nams=names(object$params$B)
+  fx<-cbind(apply(sapply(n1,function(x){grepl(x, nams)}),1,any), apply(sapply(n2,function(x){grepl(x, nams)}),1,any))
+  fourth.index<-rowSums(fx)>1
+  nams2=nams[fourth.index]
+  fourth.corner=object$params$B[fourth.index]
+
+  i=1; j=1;
+  fourth<-matrix(0,length(n1),length(n2))
+  for (i in 1:length(n1)) {
+    for (j in 1:length(n2)) {
+      fur=(grepl(n1[i], nams2)+grepl(n2[j], nams2))>1
+      if(any(fur)){ fourth[i,j]=fourth.corner[fur]}
+    }
+  }
+  colnames(fourth)=n2
+  rownames(fourth)=n1
+  return(fourth)
 }
 
 
+# Calculates standard errors for random effects
+sdrandom<-function(obj, Vtheta, incl, ignore.u = FALSE){
+  r <- obj$env$random
+  par = obj$env$last.par.best
+  hessian.random <- obj$env$spHess(par, random = TRUE)
+  L <- obj$env$L.created.by.newton
+  if (ignore.u) {
+    diag.term2 <- 0
+  } else {
+    f <- obj$env$f
+    w <- rep(0, length(par))
+    reverse.sweep <- function(i) {
+      w[i] <- 1
+      f(par, order = 1, type = "ADGrad", rangeweight = w, doforward = 0)[r]
+    }
+    nonr <- setdiff(seq_along(par), r)
+    tmp <- sapply(nonr, reverse.sweep)
+    if (!is.matrix(tmp))
+      tmp <- matrix(tmp, ncol = length(nonr))
+    A <- solve(hessian.random, tmp[, incl])
+    diag.term2 <- diag(rowSums((A %*% Vtheta) * A))
+  }
+  diag.term1 <- Matrix::chol2inv(L)
+  diag.cov.random <- diag.term1 + diag.term2
+  return(diag.cov.random)
+}
+
+# draw an ellipse
+ellipse<-function(center, covM, rad){
+  seg <- 51
+  Qc <- chol(covM, pivot = TRUE)
+  angles <- (0:seg) * 2 * pi / seg
+  unit.circ <- cbind(cos(angles), sin(angles))
+  order <- order(attr(Qc, "pivot"))
+  ellips <- t(center + rad * t(unit.circ %*% Qc[, order]))
+  lines(ellips, col = 4)
+}

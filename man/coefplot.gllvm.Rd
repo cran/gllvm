@@ -6,7 +6,8 @@
 \title{Plot covariate coefficients and confidence intervals}
 \usage{
 \method{coefplot}{gllvm}(object, y.label = TRUE, which.Xcoef = NULL,
-  cex.ylab = 0.5, mfrow = NULL, mar = c(4, 6, 2, 1), ...)
+  cex.ylab = 0.5, mfrow = NULL, mar = c(4, 6, 2, 1), xlim.list = NULL,
+  ...)
 }
 \arguments{
 \item{object}{an object of class 'gllvm'.}
@@ -21,6 +22,8 @@
 
 \item{mar}{vector of length 4, which defines the margin sizes: \code{c(bottom, left, top, right)}. Defaults to \code{c(4,5,2,1)}.}
 
+\item{xlim.list}{list of vectors with length of two to define the intervals for x axis in each covariate plot. Defaults to NULL when the interval is defined by the range of point estimates and confidence intervals}
+
 \item{...}{additional graphical arguments.}
 }
 \description{
@@ -31,10 +34,9 @@ Plots covariate coefficients and their confidence intervals.
 data(antTraits)
 y <- as.matrix(antTraits$abund)
 X <- as.matrix(antTraits$env)
-TR <- antTraits$traits
 # Fit model with environmental covariates
 fit <- gllvm(y, X, formula = ~ Bare.ground + Shrub.cover,
-            family = "poisson")
+            family = poisson())
 coefplot.gllvm(fit)
 
 \donttest{

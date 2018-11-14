@@ -4,19 +4,29 @@
 \alias{plot.gllvm}
 \title{Plot Diagnostics for an gllvm Object}
 \usage{
-\method{plot}{gllvm}(x, which = 1:4,
+\method{plot}{gllvm}(x, which = 1:5,
   caption = c("Residuals vs linear predictors", "Normal Q-Q",
-  "Residuals vs row index", "Residuals vs column index"), var.colors = NULL,
-  ...)
+  "Residuals vs row index", "Residuals vs column index", "Scale-Location"),
+  var.colors = NULL, panel = if (add.smooth) panel.smooth else points,
+  add.smooth = if (!is.null(getOption("add.smooth"))) {    
+  getOption("add.smooth") } else TRUE, envelopes = TRUE, reps = 150, ...)
 }
 \arguments{
 \item{x}{an object of class 'gllvm'.}
 
-\item{which}{if a subset of the plots is required, specify a subset of the numbers 1:4, see caption below.}
+\item{which}{if a subset of the plots is required, specify a subset of the numbers 1:5, see caption below.}
 
 \item{caption}{captions to appear above the plots.}
 
 \item{var.colors}{colors for responses, vector with length of number of response variables or 1. Defaults to NULL, when different responses have different colors.}
+
+\item{panel}{panel function}
+
+\item{add.smooth}{logical indicating if a smoother should be added to most plots; see also panel above.}
+
+\item{envelopes}{logical, indicating if simulated point-wise confidence interval envelope will be added to Q-Q plot, defaults to \code{TRUE}}
+
+\item{reps}{number of replications when simulating confidence envelopes for normal Q-Q plot}
 
 \item{...}{additional graphical arguments.}
 }
@@ -25,22 +35,22 @@ Four plots (selectable by which) are currently available: a plot of residuals ag
 linear predictors of fitted values, a Normal Q-Q plot of residuals, residuals against row index and residuals against column index.
 }
 \details{
-plot.gllvm is used for model diagnostics. Dunn-Smyth residuals or randomized quantile residuals (Dunn and Smyth, 1996) are used in plots. Colors indicate different species.
+plot.gllvm is used for model diagnostics. Dunn-Smyth residuals (randomized quantile residuals) (Dunn and Smyth, 1996) are used in plots. Colors indicate different species.
 }
 \examples{
 ## Load a dataset from the mvabund package
 data(antTraits)
 y <- as.matrix(antTraits$abund)
 # Fit gllvm model with Poisson family
-fit <- gllvm(y, family = "poisson")
+fit <- gllvm(y, family = poisson())
 # Plot residuals
-plot(fit, mfrow = c(2,2))
+plot(fit, mfrow = c(3,2))
 
 \donttest{
 # Fit gllvm model with negative binomial family
 fitnb <- gllvm(y = y, family = "negative.binomial")
 # Plot residuals
-plot(fitnb, mfrow = c(2,2))
+plot(fitnb, mfrow = c(3,2))
 # Plot only two first plots
 plot(fitnb, which = 1:2, mfrow = c(1,2))
 }

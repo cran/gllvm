@@ -15,6 +15,7 @@
 gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", num.lv = 2, max.iter = 200, eps = 1e-4, row.eff = TRUE, Lambda.struc = "unstructured", trace = TRUE, plot = FALSE, sd.errors = FALSE, start.lvs = NULL, offset=NULL, maxit = 100, diag.iter = 5, seed=NULL,get.fourth=TRUE,get.trait=TRUE,n.init=1,constrOpt=FALSE,restrict=30,start.params=NULL,starting.val="res",Lambda.start=0.1, jitter.var=0, yXT = NULL) {
   if(is.null(X) && !is.null(TR)) stop("Unable to fit a model that includes only trait covariates")
 
+  term=NULL
   n<-dim(y)[1]; p<-dim(y)[2];
   y=as.data.frame(y)
   X1=X; TR1=TR;
@@ -97,7 +98,7 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
       formula=paste(formula,n2[1],sep = "")
 
       if(length(n2)>1){
-        for(i2 in 1:length(n2)){
+        for(i2 in 2:length(n2)){
           formula <- paste(formula,n2[i2],sep = "+")
         }}
       formula1=paste(formula,")",sep = "")
@@ -110,6 +111,9 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
       yXT=merge(yX,TR2,by="time")
     }
     data <- yXT
+
+    m1<-model.frame(formula,data = data)
+    term<-terms(m1)
 
     Xd <- as.matrix(model.matrix(formula,data = data))
     Xd <- as.matrix(Xd[,!(colnames(Xd) %in% c("(Intercept)"))])
@@ -148,7 +152,7 @@ gllvm.VA <- function(y, X = NULL, TR = NULL, formula=NULL, family = "poisson", n
       stop("Ordinal data requires all columns to have at least has two levels. If all columns only have two levels, please use family == binomial instead. Thanks")
   }
 
-  out.list <-  list(y = y, X = X1, TR = TR1, num.lv = num.lv, row.eff = row.eff, logLik = -Inf, family = family, offset=offset,X.design=Xd)
+  out.list <-  list(y = y, X = X1, TR = TR1, num.lv = num.lv, row.eff = row.eff, logLik = -Inf, family = family, offset=offset,X.design=Xd, terms=term)
 
   tstart<-Sys.time()
   n.i<-1;

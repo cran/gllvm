@@ -7,12 +7,12 @@
 \usage{
 \method{ordiplot}{gllvm}(object, biplot = FALSE, ind.spp = NULL,
   alpha = 0.5, main = NULL, which.lvs = c(1, 2), jitter = FALSE,
-  s.colors = 1, symbols = FALSE, ...)
+  s.colors = 1, symbols = FALSE, cex.spp = 0.7, ...)
 }
 \arguments{
 \item{object}{an object of class 'gllvm'.}
 
-\item{biplot}{\code{TRUE} if both latent variables and their coefficients are plotted, \code{FALSE} if only LVs.}
+\item{biplot}{\code{TRUE} if both latent variables and their coefficients are plotted, \code{FALSE} if only latent variables.}
 
 \item{ind.spp}{the number of response variables (usually, species) to include on the biplot. The default is none, or all if \code{biplot = TRUE}.}
 
@@ -27,6 +27,8 @@
 \item{s.colors}{colors for sites}
 
 \item{symbols}{logical, if \code{TRUE} sites are plotted using symbols, if \code{FALSE} (default) site numbers are used}
+
+\item{cex.spp}{size of species labels in biplot}
 
 \item{...}{additional graphical arguments.}
 }
@@ -48,7 +50,7 @@ If \code{alpha = 0.5}, the latent variables and their coefficients are on the sa
 #'## Load a dataset from the mvabund package
 data(antTraits)
 y <- as.matrix(antTraits$abund)
-fit <- gllvm(y, family = "poisson")
+fit <- gllvm(y, family = poisson())
 # Ordination plot:
 ordiplot(fit)
 # Biplot with 10 species

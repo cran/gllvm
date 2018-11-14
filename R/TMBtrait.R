@@ -8,6 +8,7 @@
 trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "poisson",Lambda.struc="unstructured", row.eff = FALSE, reltol = 1e-5, seed = NULL,maxit = 1000, start.lvs = NULL, offset=NULL, sd.errors = TRUE,trace=TRUE,link="logit",n.init=1,start.params=NULL,start0=FALSE,optimizer="optim",starting.val="res",method="VA",randomX=NULL,Power=1.5,diag.iter=1,Lambda.start=0.1, jitter.var=0) {
   if(is.null(X) && !is.null(TR)) stop("Unable to fit a model that includes only trait covariates")
 
+  term=NULL
   n<-dim(y)[1]; p<-dim(y)[2];
   y <- as.data.frame(y)
   formula1=formula
@@ -70,7 +71,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
     formula=paste(formula,n2[1],sep = "")
 
     if(length(n2)>1){
-      for(i2 in 1:length(n2)){
+      for(i2 in 2:length(n2)){
         formula <- paste(formula,n2[i2],sep = "+")
       }}
     formula1=paste(formula,")",sep = "")
@@ -82,6 +83,9 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
     TR2<-data.frame(time=1:p,TR)
     yXT <- merge(yX,TR2,by="time")
     data <- yXT
+
+    m1<-model.frame(formula,data = data)
+    term<-terms(m1)
 
     Xd <- as.matrix(model.matrix(formula,data = data))
     Xd <- as.matrix(Xd[,!(colnames(Xd) %in% c("(Intercept)"))])
@@ -95,7 +99,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
   }
 
 
-  if(!(family %in% c("poisson","negative.binomial","binomial","ordinal")))
+  if(!(family %in% c("poisson","negative.binomial","binomial","tweedie","ZIP")))
     stop("Selected family not permitted...sorry!")
   if(!(Lambda.struc %in% c("unstructured","diagonal")))
     stop("Lambda matrix (covariance of vartiational distribution for latent variable) not permitted...sorry!")
@@ -109,7 +113,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
   if(is.null(colnames(y))) colnames(y) <- paste("Col",1:p,sep="")
   if(!is.null(X)) { if(is.null(colnames(X))) colnames(X) <- paste("x",1:ncol(X),sep="") }
 
-  out <-  list(y = y, X = X1, TR = TR1, num.lv = num.lv, row.eff = row.eff, logL = Inf, family = family, offset=offset,randomX=randomX,X.design=Xd)
+  out <-  list(y = y, X = X1, TR = TR1, num.lv = num.lv, row.eff = row.eff, logL = Inf, family = family, offset=offset,randomX=randomX,X.design=Xd,terms=term)
   if(is.null(formula) && is.null(X) && is.null(TR)){formula ="~ 1"}
 
   n.i<-1;
@@ -121,7 +125,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
 
     if(n.init>1 && trace) cat("initial run ",n.i,"\n");
     #offset=NULL
-    res <- start.values.gllvm.TMB(y = y, X = X, TR = TR, family = family, offset=offset, trial.size = trial.size, num.lv = num.lv, start.lvs = start.lvs, seed = seed[n.i],starting.val=starting.val,formula = formula, jitter.var=jitter.var,yXT=yXT)
+    res <- start.values.gllvm.TMB(y = y, X = X, TR = TR, family = family, offset=offset, trial.size = trial.size, num.lv = num.lv, start.lvs = start.lvs, seed = seed[n.i],starting.val=starting.val,power=Power,formula = formula, jitter.var=jitter.var,yXT=yXT)
     if(is.null(start.params)){
       beta0 <- res$params[,1]
       # common env params or different env response for each spp
@@ -174,14 +178,17 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
     }
     if (is.null(offset))  offset <- matrix(0, nrow = n, ncol = p)
 
-    phi <- NULL; if(family == "negative.binomial") { phis <- res$phi; if(any(phis>10))phis[phis>10]=10; if(any(phis<0.10))phis[phis<0.10]=0.10; phi <- 1/phis }
+    phi <- phis <- NULL; if(family == "negative.binomial") {phis <- 1/res$phi; if(any(phis>10))phis[phis>10]=10; if(any(phis<0.10))phis[phis<0.10]=0.10;}# && phi.upd=="inv.phi"
+    if(family == "tweedie") {phis <- res$phi; if(any(phis>10))phis[phis>10]=10; if(any(phis<0.10))phis[phis<0.10]=0.10; phis= (phis)}
+    if (family == "ZIP") {phis <- (colMeans(y==0)*0.98)+0.01; phis<-phis/(1-phis)} # ZIP probability
+
     q=num.lv
 
     if(!is.null(row.params)){ r0=row.params} else {r0=rep(0,n)}
     a=c(beta0)
     if(num.lv > 0) theta=theta[lower.tri(theta,diag = TRUE)]
     if(num.lv > 0) u=vameans
-    if(!is.null(phi)) {phi=(phi)} else {phi=rep(1,p)}
+    if(!is.null(phi)) {phi=(phis)} else {phi=rep(1,p)}
     q = num.lv
     sigma=1
 
@@ -215,7 +222,12 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
     extra=0
     if(family == "poisson") { familyn=0}
     if(family == "negative.binomial") { familyn=1}
-    if(family == "binomial") { familyn=2}
+    if(family == "binomial") {
+      familyn=2;
+      if(link=="probit") extra=1
+    }
+    if(family=="tweedie"){ familyn=3; extra=Power}
+    if(family=="ZIP"){ familyn=4;}
 
 
     if(row.eff=="random"){# || !is.null(randomX)
@@ -300,6 +312,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
     if(optimizer=="optim") {
       timeo<-system.time(optr <- try(optim(objr$par, objr$fn, objr$gr,method = "BFGS",control = list(reltol=reltol,maxit=maxit),hessian = FALSE),silent = TRUE))
     }
+    if(inherits(optr,"try-error")) warning(optr[1]);
 
     if(diag.iter>0 && Lambda.struc=="unstructured" && method =="VA" && (num.lv>0 || row.eff=="random") && is.null(randomX)){
       objr1=objr
@@ -354,7 +367,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
     }
 
     param<-objr$env$last.par.best
-    if(family =="negative.binomial") {
+    if(family %in% c("negative.binomial","tweedie")) {
       phis=exp(param[names(param)=="lg_phi"])
     }
     if(family=="ZIP") {
@@ -432,6 +445,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
       out$row.eff=row.eff
       out$time=timeo
       out$start<-res
+      out$Power=Power
       pars=optr$par
 
       if(method=="VA" && num.lv>0){
@@ -472,7 +486,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
 
 
     tr<-try({
-      if(sd.errors) {
+      if(sd.errors && !is.infinite(out$logL)) {
         if(trace) cat("Calculating standard errors for parameters...\n")
 
         sdr <- optimHess(pars, objr$fn, objr$gr,control = list(reltol=reltol,maxit=maxit))
@@ -498,7 +512,26 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
         }
         if(method=="LA" || (num.lv==0 && row.eff!="random")){
           incl[names(objr$par)=="Au"]=FALSE;
-          se<- try(sqrt(diag(abs(MASS::ginv(-sdr[incl,incl])))))
+
+          covM<- try(MASS::ginv(sdr[incl,incl]))
+          se<- try(sqrt(diag(abs(covM))))
+          if(num.lv>0 || row.eff=="random" || !is.null(randomX)) {
+            sd.random <- sdrandom(objr, covM, incl)
+            prediction.errors <- list()
+            if(row.eff=="random"){
+              prediction.errors$row.params <- diag(as.matrix(sd.random))[1:n];
+              sd.random <- sd.random[-(1:n),-(1:n)]
+            }
+            if(num.lv>0){
+              cov.lvs <- array(0, dim = c(n, num.lv, num.lv))
+              for (i in 1:n) {
+                cov.lvs[i,,] <- as.matrix(sd.random[(0:(num.lv-1)*n+i),(0:(num.lv-1)*n+i)])
+              }
+              prediction.errors$lvs <- cov.lvs
+              #sd.random <- sd.random[-(1:(n*num.lv))]
+            }
+            out$prediction.errors <- prediction.errors
+          }
         } else {
           A.mat=-sdr[incl,incl] # a x a
           D.mat=-sdr[incld,incld] # d x d

@@ -10,15 +10,21 @@
 \arguments{
 \item{object}{an object of class 'gllvm'.}
 }
+\value{
+Function returns following components:
+ \item{cor }{residual correlation matrix}
+ \item{cov }{residual covariance matrix}
+ \item{trace }{trace of residual covariance matrix}
+}
 \description{
-Calculates the residual correlation from gllvm models.
+Calculates the residual covariance and correlation matrices for gllvm model.
 }
 \examples{
 # Load a dataset from the mvabund package
 data(antTraits)
 y <- as.matrix(antTraits$abund)
 # Fit gllvm model
-fit <- gllvm(y = y, family = "poisson")
+fit <- gllvm(y = y, family = poisson())
 # residual correlations:
 cr <- getResidualCor(fit)
 
@@ -27,7 +33,7 @@ cr <- getResidualCor(fit)
 install.packages("corrplot", "gclus")
 library(corrplot)
 library(gclus)
-rbPal <- colorRampPalette(c('darkblue','white','darkred'))
+rbPal <- colorRampPalette(c('darkblue', 'white', 'darkred'))
 breaks <- seq(min(cr$cor), max(cr$cor), length.out = 40)
 Colors <- rbPal(100)[as.numeric(cut(cr$cor, breaks = breaks))]
 corrplot(cr$cor[order.single(cr$cor), order.single(cr$cor)], diag = F,
