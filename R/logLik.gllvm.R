@@ -28,6 +28,7 @@ logLik.gllvm <- function(object, ...)
     object$params$row.params <- object$params$row.params[-1]
   if (object$row.eff == "random")
     object$params$row.params <- NULL
+
   attributes(logL)$df <- length(unlist(object$params)) - object$num.lv * (object$num.lv - 1) / 2
   attributes(logL)$nobs <- dim(object$y)[1]
   class(logL) <- "logLik"

@@ -99,7 +99,7 @@
 #'  \item{Power }{ power parameter \eqn{\nu} for Tweedie family}
 #'  \item{sd }{ list of standard errors of parameters}
 #'  \item{prediction.errors }{ list of prediction covariances for latent variables and variances for random row effects when method \code{"LA"} is used}
-#'  \item{A, Ar }{ covariance matrices for variational densities of latent variables and random row effects}
+#'  \item{A, Ar }{ covariance matrices for variational densities of latent variables and variances for random row effects}
 #'
 #' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>, Wesley Brooks, Riki Herliansyah, Francis K.C. Hui, Sara Taskinen, David I. Warton
 #' @references
@@ -204,7 +204,7 @@
 #'# Let's consider only years 1981 and 1983
 #'ycoral <- ycoral[((tikus$x$time == 81) + (tikus$x$time == 83)) > 0, ]
 #'# Exclude species which have observed at less than 4 sites
-#'ycoral <- ycoral[(colSums(ycoral > 0) > 3)]
+#'ycoral <- ycoral[-17, (colSums(ycoral > 0) > 3)]
 #'# Fit Tweedie model for coral data (this line may take few minutes to run)
 #'fit.twe <- gllvm(y = ycoral, family = "tweedie", method = "LA")
 #'ordiplot(fit.twe)
@@ -225,7 +225,14 @@
 #'@importFrom MASS ginv polr
 #'@importFrom mvtnorm rmvnorm
 
-gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, num.lv = 2, family, method = "VA", row.eff = FALSE, offset = NULL, sd.errors = TRUE, Lambda.struc = "unstructured", diag.iter = 5, trace = FALSE, plot = FALSE, la.link.bin = "logit", n.init = 1, Power = 1.5, reltol = 1e-6, seed = NULL, max.iter = 200, maxit = 1000, start.fit = NULL, starting.val = "res", TMB = TRUE, optimizer = "optim", Lambda.start = 0.1, jitter.var = 0) {
+gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL,
+                  num.lv = 2, family, method = "VA", row.eff = FALSE,
+                  offset = NULL, sd.errors = TRUE, Lambda.struc = "unstructured",
+                  diag.iter = 5, trace = FALSE, plot = FALSE, la.link.bin = "probit",
+                  n.init = 1, Power = 1.5, reltol = 1e-8, seed = NULL,
+                  max.iter = 200, maxit = 1000, start.fit = NULL,
+                  starting.val = "res", TMB = TRUE, optimizer = "optim",
+                  Lambda.start = c(0.1,0.5), jitter.var = 0) {
     constrOpt <- FALSE
     restrict <- 30
     randomX <- NULL
@@ -296,13 +303,18 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, nu
       } else{
         X <- NULL
       }
-      datayx <- data.frame(y, X)
 
       if (NCOL(y) == 1 &&
           !is.null(data)) {
         y <- matrix(y, n, p)
         colnames(y) <- paste("y", 1:p, sep = "")
       }
+      try(
+      if (is.null(X)) {
+        datayx <- data.frame(y = y)
+      } else {
+        datayx <- data.frame(y = y, X = X)
+      }, silent = TRUE)
 
       if (!is.null(data)) {
         frame1 <- mf
@@ -345,6 +357,16 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, nu
       la.link.bin <- family$link
       family <- family$family
     }
+
+    if(any(colSums(y)==0))
+      stop("There are responses full of zeros, model can not be fitted. \n");
+
+    if(row.eff %in% c("fixed", "random", TRUE)){
+      if(p<2)
+        stop("There must be at least two responses in order to include row effects. \n");
+      if(any(rowSums(y)==0))
+          stop("There are rows full of zeros in y, model can not be fitted. \n");
+      }
 
 
     if (row.eff == "random" && family == "ordinal") {
@@ -559,9 +581,19 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, nu
     out$formula <- fitg$formula
     if (is.null(out$terms))
       out$terms <- fitg$terms
-    if (!is.null(TR)) {
-      out$fourth.corner <- try(getFourthCorner(out))
+    if (is.finite(out$logL) && !is.null(TR) && NCOL(out$TR)>0 && NCOL(out$X)>0) {
+      out$fourth.corner <- try(getFourthCorner(out),silent = TRUE)
     }
+    if (is.finite(out$logL) && row.eff == "random"){
+      if(method == "LA"){
+        if(abs(out$params$sigma)<0.02)
+          cat("Random row effects ended up to almost zero. Might be a false convergence or local maxima. You can try simpler model, less latent variables or change the optimizer. \n")
+      } else{
+        if(abs(out$params$sigma)<0.02 && max(abs(out$params$sigma-sqrt(out$Ar))) < 1e-3)
+          cat("Random row effects ended up to almost zero. Might be a false convergence or local maxima. You can try simpler model, less latent variables or change the optimizer. \n")
+      }
+    }
+
     out$prediction.errors = fitg$prediction.errors
     out$call <- match.call()
     class(out) <- "gllvm"

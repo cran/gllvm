@@ -1,7 +1,7 @@
 Package: gllvm
 Type: Package
 Title: Generalized Linear Latent Variable Models
-Version: 1.1.0
+Version: 1.1.2
 Author: Jenni Niku, Wesley Brooks, Riki Herliansyah, Francis K.C. Hui, Sara Taskinen, David I. Warton
 Maintainer: Jenni Niku <jenni.m.e.niku@jyu.fi>
 Description: Analysis of multivariate data using generalized linear latent variable models (gllvm). 
@@ -15,8 +15,8 @@ Depends: TMB, mvabund
 Encoding: UTF-8
 LazyData: true
 LinkingTo: TMB, RcppEigen
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.1
 NeedsCompilation: yes
-Packaged: 2018-11-01 11:17:00 UTC; jenni
+Packaged: 2019-01-02 12:00:06 UTC; jenni
 Repository: CRAN
-Date/Publication: 2018-11-14 10:10:03 UTC
+Date/Publication: 2019-01-02 13:10:16 UTC

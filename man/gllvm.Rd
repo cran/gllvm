@@ -5,12 +5,13 @@
 \title{Generalized Linear Latent Variable Models}
 \usage{
 gllvm(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL,
-  num.lv = 2, family, method = "VA", row.eff = FALSE, offset = NULL,
-  sd.errors = TRUE, Lambda.struc = "unstructured", diag.iter = 5,
-  trace = FALSE, plot = FALSE, la.link.bin = "logit", n.init = 1,
-  Power = 1.5, reltol = 1e-06, seed = NULL, max.iter = 200,
-  maxit = 1000, start.fit = NULL, starting.val = "res", TMB = TRUE,
-  optimizer = "optim", Lambda.start = 0.1, jitter.var = 0)
+  num.lv = 2, family, method = "VA", row.eff = FALSE,
+  offset = NULL, sd.errors = TRUE, Lambda.struc = "unstructured",
+  diag.iter = 5, trace = FALSE, plot = FALSE,
+  la.link.bin = "probit", n.init = 1, Power = 1.5, reltol = 1e-08,
+  seed = NULL, max.iter = 200, maxit = 1000, start.fit = NULL,
+  starting.val = "res", TMB = TRUE, optimizer = "optim",
+  Lambda.start = c(0.1, 0.5), jitter.var = 0)
 }
 \arguments{
 \item{y}{(n x m) matrix of responses.}
@@ -89,7 +90,7 @@ An object of class "gllvm" includes the following components:
  \item{Power }{ power parameter \eqn{\nu} for Tweedie family}
  \item{sd }{ list of standard errors of parameters}
  \item{prediction.errors }{ list of prediction covariances for latent variables and variances for random row effects when method \code{"LA"} is used}
- \item{A, Ar }{ covariance matrices for variational densities of latent variables and random row effects}
+ \item{A, Ar }{ covariance matrices for variational densities of latent variables and variances for random row effects}
 }
 \description{
 Fits generalized linear latent variable model for multivariate data. The model can be fitted using Laplace approximation method or variational
@@ -226,7 +227,7 @@ ycoral <- tikus$abund
 # Let's consider only years 1981 and 1983
 ycoral <- ycoral[((tikus$x$time == 81) + (tikus$x$time == 83)) > 0, ]
 # Exclude species which have observed at less than 4 sites
-ycoral <- ycoral[(colSums(ycoral > 0) > 3)]
+ycoral <- ycoral[-17, (colSums(ycoral > 0) > 3)]
 # Fit Tweedie model for coral data (this line may take few minutes to run)
 fit.twe <- gllvm(y = ycoral, family = "tweedie", method = "LA")
 ordiplot(fit.twe)

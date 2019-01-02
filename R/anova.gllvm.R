@@ -20,10 +20,9 @@
 #'X <- antTraits$env
 #'TR <- antTraits$traits
 #'# Fit gllvm model
-#'fit1 <- gllvm(y, X, TR, formula = ~ Bare.ground + Shrub.cover
-#'              + Webers.length, family = poisson())
-#'fit2 <- gllvm(y, X, TR, formula = ~ (Bare.ground + Shrub.cover) *
-#'              Webers.length, family = poisson())
+#'fit1 <- gllvm(y, X, TR, formula = ~ Bare.ground + Shrub.cover, family = poisson())
+#'fit2 <- gllvm(y, X, TR, formula = ~ Bare.ground + Shrub.cover +
+#'              (Bare.ground + Shrub.cover) : Webers.length, family = poisson())
 #'# Test if the model with fourth corner interaction terms is significantly
 #'# better using likelihood-ratio test:
 #'anova(fit1, fit2)
@@ -64,7 +63,7 @@ anova.gllvm <- function(object, ...) {
   df.chisq <- (df.list[-1] - df.list[1:(length(df.list) - 1)])
   Pval <- 1 - pchisq(D, df.chisq)
   paste("Model", 1:length(objects_order))
-  result <- data.frame( Resid.Df = n * p - df.list, D = c(0, D), Df.diff = c(0, df.chisq), Pr = c("", signif(Pval)) )
+  result <- data.frame( Resid.Df = n * p - df.list, D = c(0, D), Df.diff = c(0, df.chisq), P.value = c("", signif(Pval)) )
   #}
   if (any(result$Df > 20))
     warning( "This test was not designed for tests with a df.diff larger than 20 so the P-value should be treated as approximate.\n")

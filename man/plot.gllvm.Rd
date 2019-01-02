@@ -9,7 +9,8 @@
   "Residuals vs row index", "Residuals vs column index", "Scale-Location"),
   var.colors = NULL, panel = if (add.smooth) panel.smooth else points,
   add.smooth = if (!is.null(getOption("add.smooth"))) {    
-  getOption("add.smooth") } else TRUE, envelopes = TRUE, reps = 150, ...)
+  getOption("add.smooth") } else TRUE, envelopes = TRUE, reps = 150,
+  ...)
 }
 \arguments{
 \item{x}{an object of class 'gllvm'.}
