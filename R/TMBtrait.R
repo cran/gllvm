@@ -120,7 +120,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
   }
 
 
-  if(!(family %in% c("poisson","negative.binomial","binomial","tweedie","ZIP")))
+  if(!(family %in% c("poisson","negative.binomial","binomial","tweedie","ZIP", "gaussian")))
     stop("Selected family not permitted...sorry!")
   if(!(Lambda.struc %in% c("unstructured","diagonal")))
     stop("Lambda matrix (covariance of vartiational distribution for latent variable) not permitted...sorry!")
@@ -158,7 +158,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
       if(row.eff!=FALSE){
         row.params <- res$row.params
         if (row.eff == "random") {
-          sigma <- 1;
+          sigma <- sd(row.params);
         }
       }
       vameans <- theta <- lambda <- NULL
@@ -215,8 +215,11 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
 
     if(!is.null(row.params)){ r0 <- row.params} else {r0 <- rep(0, n)}
     a <- c(beta0)
-    if(num.lv > 0) theta <- theta[lower.tri(theta, diag = TRUE)]
-    if(num.lv > 0) u <- vameans
+    if(num.lv > 0) {
+      # diag(theta) <- log(diag(theta)) !!!
+      theta <- theta[lower.tri(theta, diag = TRUE)]
+      u <- vameans
+    }
     if(!is.null(phis)) {phi=(phis)} else {phi <- rep(1,p)}
     q <- num.lv
     sigma <- 1
@@ -254,8 +257,9 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
       familyn <- 2;
       if(link=="probit") extra <- 1
     }
-    if(family=="tweedie"){ familyn <- 3; extra <- Power}
-    if(family=="ZIP"){ familyn <- 4;}
+    if(family == "gaussian") {familyn=3}
+    if(family == "tweedie"){ familyn <- 4; extra <- Power}
+    if(family == "ZIP"){ familyn <- 5;}
 
 
     if(row.eff=="random"){# || !is.null(randomX)
@@ -332,19 +336,16 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
       param1 <- optr$par
       nam <- names(param1)
       r1 <- matrix(param1[nam=="r0"])
-      b1 <- rbind(param1[nam=="b"]+rnorm(p,0,0.01))
+      b1 <- rbind(param1[nam=="b"])
       B1 <- matrix(param1[nam=="B"])
       lambda1 <- param1[nam=="lambda"]
       u1 <- matrix(param1[nam=="u"],n,num.lv)
       lg_phi1 <- param1[nam=="lg_phi"]
       lg_sigma1 <- param1[nam=="log_sigma"]
 
-      Au1 <- c(param1[nam=="Au"],rep(0,num.lv*(num.lv-1)/2*n))
+      Au1<- c(pmax(param1[nam=="Au"],rep(log(0.001), num.lv*n)), rep(0,num.lv*(num.lv-1)/2*n))
       Ar1 <- c(param1[nam=="lg_Ar"])
-      if(row.eff=="random"){
-        r1 <- matrix(res$row.params); lg_sigma1 <- log(sd(r1))
-        Ar1 <- log(exp(c(param1[nam=="lg_Ar"]))+max(Lambda.start))
-      }
+
 
       if(row.eff=="random"){
 
@@ -382,7 +383,7 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
     }
 
     param <- objr$env$last.par.best
-    if(family %in% c("negative.binomial","tweedie")) {
+    if(family %in% c("negative.binomial", "tweedie", "gaussian")) {
       phis=exp(param[names(param)=="lg_phi"])
     }
     if(family=="ZIP") {
@@ -422,12 +423,15 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
     if(num.lv > 0){
       lvs <- (matrix(param[ui],n,q))
       theta <- matrix(0,p,num.lv)
-      theta[lower.tri(theta,diag = TRUE)] <- param[li];
+      if(p>1) {
+        theta[lower.tri(theta,diag=TRUE)] <- param[li];
+      } else {theta <- param[li]}
+      # diag(theta) <- exp(diag(theta)) !!!
     }
     new.loglik<-objr$env$value.best[1]
 
 
-    if((n.i==1 || out$logL > abs(new.loglik)) && !inherits(optr, "try-error") && new.loglik>0){
+    if((n.i==1 || out$logL > (new.loglik)) && is.finite(new.loglik) && !inherits(optr, "try-error")){
       objr1 <- objr;optr1 <- optr;
       out$logL <- new.loglik
       if(num.lv > 0) {
@@ -444,9 +448,12 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
         if(row.eff=="random"){ out$params$sigma=sigma; names(out$params$sigma)="sigma"}
         out$params$row.params <- row.params; names(out$params$row.params) <- rownames(out$y)
       }
-      if(family %in% c("negative.binomial","tweedie")) {
+      if(family %in% c("negative.binomial")) {
         out$params$phi <- 1/phis; names(out$params$phi) <- colnames(out$y);
         out$params$inv.phi <- phis; names(out$params$inv.phi) <- colnames(out$y);
+      }
+      if(family %in% c("gaussian","tweedie")) {
+        out$params$phi <- phis; names(out$params$phi) <- colnames(out$y);
       }
       if(family =="ZIP") {
         out$params$phi <- phis; names(out$params$phi) <- colnames(out$y);
@@ -558,15 +565,21 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
           colnames(se.theta) <- paste("LV", 1:num.lv, sep="");
           rownames(se.theta) <- colnames(out$y)
           out$sd$theta <- se.theta; se <- se[-(1:(p * num.lv - sum(0:(num.lv-1))))];
+          # diag(out$sd$theta) <- diag(out$sd$theta)*diag(out$params$theta) !!!
         }
         out$sd$beta0 <- se.beta0; names(out$sd$beta0)  <-  colnames(out$y);
         out$sd$B <- se.B; names(out$sd$B) <- colnames(Xd)
         if(row.eff=="fixed") {out$sd$row.params <- se.row.params}
 
-        if(family %in% c("negative.binomial","tweedie")) {
+        if(family %in% c("negative.binomial")) {
           se.lphis <- se[1:p];  out$sd$inv.phi <- se.lphis*out$params$inv.phi;
           out$sd$phi <- se.lphis*out$params$phi;
           names(out$sd$inv.phi) <- names(out$sd$phi) <- colnames(y);  se <- se[-(1:p)]
+        }
+        if(family %in% c("gaussian","tweedie")) {
+          se.lphis <- se[1:p];
+          out$sd$phi <- se.lphis*out$params$phi;
+          names(out$sd$phi) <- colnames(y);  se <- se[-(1:p)]
         }
         if(family %in% c("ZIP")) {
           se.phis <- se[1:p];
@@ -588,7 +601,19 @@ trait.TMB <- function(y, X = NULL,TR=NULL,formula=NULL, num.lv = 2, family = "po
   if(is.null(formula1)){ out$formula <- formula} else {out$formula <- formula1}
 
   out$D <- Xd
+  out$TMBfn <- objr1
+  out$TMBfn$par <- optr1$par #ensure params in this fn take final values
   out$logL <- -out$logL
+  
+  if(method == "VA"){
+    #if(num.lv > 0) out$logL = out$logL + n*0.5*num.lv
+    if(row.eff == "random") out$logL = out$logL + n*0.5
+    #if(!is.null(randomX)) out$logL = out$logL + p*0.5*ncol(xb)
+    if(family=="gaussian") {
+      out$logL <- out$logL - n*p*log(pi)/2
+    }
+  }
+
   return(out)
 }
 

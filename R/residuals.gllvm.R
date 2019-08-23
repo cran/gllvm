@@ -83,7 +83,9 @@ residuals.gllvm <- function(object, ...) {
     mu <- mu + 1e-10
   if (object$family == "binomial")
     mu <- binomial(link = object$link)$linkinv(eta.mat)
-
+  if (object$family == "gaussian")
+    mu <- (eta.mat)
+  
   ds.res <- matrix(NA, n, p)
   rownames(ds.res) <- rownames(y)
   colnames(ds.res) <- colnames(y)
@@ -93,6 +95,8 @@ residuals.gllvm <- function(object, ...) {
         a <- ppois(as.vector(unlist(y[i, j])) - 1, mu[i, j])
         b <- ppois(as.vector(unlist(y[i, j])), mu[i, j])
         u <- runif(n = 1, min = a, max = b)
+        if(u==1) u=1-1e-16
+        if(u==0) u=1e-16
         ds.res[i, j] <- qnorm(u)
       }
       if (object$family == "negative.binomial") {
@@ -100,18 +104,32 @@ residuals.gllvm <- function(object, ...) {
         a <- pnbinom(as.vector(unlist(y[i, j])) - 1, mu = mu[i, j], size = 1 / phis[j])
         b <- pnbinom(as.vector(unlist(y[i, j])), mu = mu[i, j], size = 1 / phis[j])
         u <- runif(n = 1, min = a, max = b)
+        if(u==1) u=1-1e-16
+        if(u==0) u=1e-16
+        ds.res[i, j] <- qnorm(u)
+      }
+      if (object$family == "gaussian") {
+        a <- pnorm(as.vector(unlist(y[i, j])) - 1, mu[i, j])
+        b <- pnorm(as.vector(unlist(y[i, j])), mu[i, j])
+        u <- runif(n = 1, min = a, max = b)
+        if(u==1) u=1-1e-16
+        if(u==0) u=1e-16
         ds.res[i, j] <- qnorm(u)
       }
       if (object$family == "ZIP") {
         a <- pzip(as.vector(unlist(y[i, j])) - 1, mu = mu[i, j], sigma = object$params$phi[j])
         b <- pzip(as.vector(unlist(y[i, j])), mu = mu[i, j], sigma = object$params$phi[j])
         u <- runif(n = 1, min = a, max = b)
+        if(u==1) u=1-1e-16
+        if(u==0) u=1e-16
         ds.res[i, j] <- qnorm(u)
       }
       if (object$family == "binomial") {
         a <- pbinom(as.vector(unlist(y[i, j])) - 1, 1, mu[i, j])
         b <- pbinom(as.vector(unlist(y[i, j])), 1, mu[i, j])
         u <- runif(n = 1, min = a, max = b)
+        if(u==1) u=1-1e-16
+        if(u==0) u=1e-16
         ds.res[i, j] <- qnorm(u)
       }
 
@@ -122,6 +140,8 @@ residuals.gllvm <- function(object, ...) {
           a<-0
         b <- fishMod::pTweedie(as.vector(unlist(y[i, j])), mu = mu[i, j], phi = phis[j], p = object$Power)
         u <- runif(n = 1, min = a, max = b)
+        if(u==1) u=1-1e-16
+        if(u==0) u=1e-16
         ds.res[i, j] <- qnorm(u)
       }
       if (object$family == "ordinal") {

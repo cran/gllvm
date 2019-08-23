@@ -8,6 +8,7 @@
 #' @param main  main title.
 #' @param which.lvs indices of two latent variables to be plotted if number of the latent variables is more than 2. A vector with length of two. Defaults to \code{c(1,2)}.
 #' @param jitter   if \code{TRUE}, jittering is applied on points.
+#' @param jitter.amount   numeric, positive value indicating an amount of jittering for each point, defaults to 0.2 (jitter range).
 #' @param s.colors colors for sites
 #' @param symbols logical, if \code{TRUE} sites are plotted using symbols, if \code{FALSE} (default) site numbers are used
 #' @param cex.spp size of species labels in biplot
@@ -23,7 +24,11 @@
 #' of latent variable coefficients to be plotted can be controlled by ind.spp. An argument alpha
 #' is used to control the relative scaling of the latent variables and their coefficients.
 #' If \code{alpha = 0.5}, the latent variables and their coefficients are on the same scale.
-#'
+#' For details for constructing a biplot, see Gabriel (1971).
+#' 
+#' @references 
+#' Gabriel, K. R. (1971). The biplot graphic display of matrices with application to principal component analysis. Biometrika, 58, 453-467.
+#' 
 #' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>, Francis K.C. Hui
 #'
 #' @examples
@@ -40,10 +45,10 @@
 #'@export
 #'@export ordiplot.gllvm
 ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, main = NULL, which.lvs = c(1, 2),
-                           jitter = FALSE, s.colors = 1, symbols = FALSE, cex.spp = 0.7, ...) {
+                           jitter = FALSE, jitter.amount = 0.2, s.colors = 1, symbols = FALSE, cex.spp = 0.7, ...) {
     if (any(class(object) != "gllvm"))
       stop("Class of the object isn't 'gllvm'.")
-
+    a <- jitter.amount
     n <- NROW(object$y)
     p <- NCOL(object$y)
     if (!is.null(ind.spp)) {
@@ -69,25 +74,28 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
       choose.lv.coefs <- do.svd$v * matrix(do.svd$d[1:object$num.lv] ^ (1 - alpha),
           nrow = p, ncol = object$num.lv, byrow = TRUE )
 
+      
       if (!biplot) {
-        plot(object$lvs[, which.lvs],
+        sdd<- diag(sqrt(diag(cov(object$lvs))), nrow = object$num.lv)
+        choose.lvs <- scale(choose.lvs)%*%sdd
+        plot(choose.lvs[, which.lvs],
           xlab = paste("Latent variable ", which.lvs[1]),
           ylab = paste("Latent variable ", which.lvs[2]),
           main = main , type = "n", ... )
         if (!jitter)
           if (symbols) {
-            points(object$lvs[, which.lvs], col = s.colors, ...)
+            points(choose.lvs[, which.lvs], col = s.colors, ...)
           } else {
-            text(object$lvs[, which.lvs], label = 1:n, cex = 1.2, col = s.colors)
+            text(choose.lvs[, which.lvs], label = 1:n, cex = 1.2, col = s.colors)
           }
         if (jitter)
           if (symbols) {
-            points(jitter(object$lvs[, which.lvs][, 1]), jitter(object$lvs[, which.lvs][, 2]), col =
+            points(choose.lvs[, which.lvs][, 1] + runif(n,-a,a), choose.lvs[, which.lvs][, 2] + runif(n,-a,a), col =
                      s.colors, ...)
           } else {
             text(
-              jitter(object$lvs[, which.lvs][, 1]),
-              jitter(object$lvs[, which.lvs][, 2]),
+              (choose.lvs[, which.lvs][, 1] + runif(n,-a,a)),
+              (choose.lvs[, which.lvs][, 2] + runif(n,-a,a)),
               label = 1:n, cex = 1.2, col = s.colors )
           }
       }
@@ -101,26 +109,32 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
           ylab = paste("Latent variable ", which.lvs[2]),
           main = main, type = "n", ... )
 
-        if (!jitter)
+        if (!jitter){
           if (symbols) {
             points(choose.lvs[, which.lvs], col = s.colors, ...)
           } else {
             text(choose.lvs[, which.lvs], label = 1:n, cex = 1.2, col = s.colors)
           }
-        if (jitter)
+          text(
+            matrix(choose.lv.coefs[largest.lnorms, which.lvs], nrow = length(largest.lnorms)),
+            label = rownames(object$params$theta)[largest.lnorms],
+            col = 4, cex = cex.spp )
+          }
+        if (jitter){
           if (symbols) {
-            points(jitter(choose.lvs[, which.lvs[1]]), jitter(choose.lvs[, which.lvs[2]]), col =
+            points(choose.lvs[, which.lvs[1]] + runif(n,-a,a), (choose.lvs[, which.lvs[2]] + runif(n,-a,a)), col =
                      s.colors, ...)
           } else {
             text(
-              jitter(choose.lvs[, which.lvs[1]]),
-              jitter(choose.lvs[, which.lvs[2]]),
+              (choose.lvs[, which.lvs[1]] + runif(n,-a,a)),
+              (choose.lvs[, which.lvs[2]] + runif(n,-a,a)),
               label = 1:n, cex = 1.2, col = s.colors )
           }
         text(
-          jitter(choose.lv.coefs[largest.lnorms, which.lvs], amount = 0.2),
-          label = rownames(object$params$theta[largest.lnorms, which.lvs]),
+          (matrix(choose.lv.coefs[largest.lnorms, which.lvs], nrow = length(largest.lnorms)) + runif(2*length(largest.lnorms),-a,a)),
+          label = rownames(object$params$theta)[largest.lnorms],
           col = 4, cex = cex.spp )
+        }
       }
 
     }

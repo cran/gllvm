@@ -8,7 +8,7 @@
 #' @param data data in long format, that is, matrix of responses, environmental and trait covariates and row index named as ’id’. When used, model needs to be defined using formula. This is alternative data input for y, X and TR.
 #' @param formula an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted.
 #' @param num.lv  number of latent variables, d, in gllvm model. Non-negative integer, less than number of response variables (m). Defaults to 2.
-#' @param family  distribution function for responses. Options are \code{poisson(link = "log")}, \code{"negative.binomial"} (with log link), \code{binomial(link = "probit")} (and also \code{binomial(link = "logit")} when \code{method = "LA"}), zero inflated poisson (\code{"ZIP"}) and Tweedie (\code{"tweedie"}) (with log link, only with \code{"LA"}-method), \code{"ordinal"} (only with \code{"VA"}-method).
+#' @param family  distribution function for responses. Options are \code{poisson(link = "log")}, \code{"negative.binomial"} (with log link), \code{binomial(link = "probit")} (and also \code{binomial(link = "logit")} when \code{method = "LA"}), zero inflated poisson (\code{"ZIP"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link, only with \code{"LA"}-method) and \code{"ordinal"} (only with \code{"VA"}-method).
 #' @param method  model can be fitted using Laplace approximation method (\code{method = "LA"}) or variational approximation method (\code{method = "VA"}). Defaults to \code{"VA"}.
 #' @param TMB  logical, if \code{TRUE} model will be fitted using Template Model Builder (TMB). TMB is always used if \code{method = "LA"}.  Defaults to \code{TRUE}.
 #' @param row.eff  \code{FALSE}, \code{TRUE} or \code{"random"}, Indicating whether row effects are included in the model as a fixed or as a random effects. Defaults to \code{FALSE} when row effects are not included.
@@ -75,10 +75,12 @@
 #'   \item{For biomass data \code{family = "tweedie"}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \phi_j*\mu_{ij}^\nu}, where \eqn{\nu} is a power parameter of Tweedie distribution. See details Dunn and Smyth (2005).}
 #'
 #'   \item{For ordinal data \code{family = "ordinal"}:}{ Cumulative probit model, see Hui et.al. (2016).}
-#'   }
+#'   
+#'   \item{For normal distributed data \code{family = gaussian()}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(y_{ij}) = \phi_j^2.}}
+#' }
 #' }
 #'
-#'
+#'@note If function gives warning: 'In f(x, order = 0) : value out of range in 'lgamma'', optimizer have visited an area where gradients become too big. It is automatically fixed by trying another step in the optimization process, and can be ignored if errors do not occur.
 #'
 #' @return An object of class "gllvm" includes the following components:
 #'
@@ -93,7 +95,7 @@
 #'    \item{Xcoef }{ coefficients related to environmental covariates X}
 #'    \item{B }{ coefficients in fourth corner model}
 #'    \item{row.params }{ row-specific intercepts}
-#'    \item{phi }{ dispersion parameters \eqn{\phi} for negative binomial or Tweedie family, or probability of zero inflation for ZIP family}
+#'    \item{phi }{ dispersion parameters \eqn{\phi} for negative binomial or Tweedie family, probability of zero inflation for ZIP family or standard deviation for gaussian family}
 #'    \item{inv.phi }{ dispersion parameters \eqn{1/\phi} for negative binomial}
 #'    }}
 #'  \item{Power }{ power parameter \eqn{\nu} for Tweedie family}
@@ -220,7 +222,7 @@
 #'@importFrom mvabund manyglm
 #'@importFrom graphics abline axis par plot segments text points boxplot panel.smooth lines polygon
 #'@importFrom grDevices rainbow
-#'@importFrom stats AIC binomial constrOptim dbinom dnorm factanal glm model.extract model.frame model.matrix model.response nlminb optim optimHess pbinom pnbinom pnorm ppois qnorm reshape residuals rnorm runif terms BIC qqline qqnorm sd pchisq formula ppoints quantile qchisq
+#'@importFrom stats AIC binomial constrOptim dbinom dnorm factanal glm model.extract model.frame model.matrix model.response nlminb optim optimHess pbinom rbinom pnbinom rnbinom pnorm ppois rpois qnorm reshape residuals rnorm runif terms BIC qqline qqnorm sd pchisq formula ppoints quantile qchisq gaussian cov
 #'@importFrom Matrix bdiag chol2inv diag
 #'@importFrom MASS ginv polr
 #'@importFrom mgcv gam predict.gam
@@ -321,8 +323,10 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL,
         frame1 <- mf
         X <- TR <- NULL
         if (length(attr(term, "term.labels")) > 0) {
-          datax <- frame1[, attr(term, "term.labels")[attr(term, "order") == 1]]
-          colnames(datax) <- attr(term, "term.labels")[attr(term, "order") == 1]
+          datax <- frame1[, colnames(frame1)!="y"]
+          colnames(datax) <- colnames(frame1)[colnames(frame1)!="y"]
+          #datax <- frame1[, attr(term, "term.labels")[attr(term, "order") == 1]]
+          # colnames(datax) <- attr(term, "term.labels")[attr(term, "order") == 1]
 
           for (k in 1:ncol(datax)) {
             lngth <- NULL
@@ -360,13 +364,13 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL,
     }
 
     if(any(colSums(y)==0))
-      stop("There are responses full of zeros, model can not be fitted. \n");
+      warning("There are responses full of zeros. \n");
 
     if(row.eff %in% c("fixed", "random", TRUE)){
       if(p<2)
         stop("There must be at least two responses in order to include row effects. \n");
       if(any(rowSums(y)==0))
-          stop("There are rows full of zeros in y, model can not be fitted. \n");
+        warning("There are rows full of zeros in y. \n");
       }
 
 
@@ -396,6 +400,11 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL,
     if (row.eff == "random" && !TMB) {
       cat("Random row effect model is not implemented without TMB, so 'TMB = TRUE' is used instead. \n")
       TMB <- TRUE
+    }
+    
+    if (family == "gaussian" && !TMB) {
+      TMB <- TRUE
+      cat("Only TMB implementation available for ", family, " family, so 'TMB = TRUE' is used instead. \n")
     }
 
 
@@ -506,6 +515,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL,
       }
 
       out$X.design <- fitg$X.design
+      out$TMBfn = fitg$TMBfn
       out$logL <- fitg$logL
       if (num.lv > 0)
         out$lvs <- fitg$lvs

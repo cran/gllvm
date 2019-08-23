@@ -13,7 +13,7 @@
 #' Instead, new sites can be specified in \code{newX}. If predictors \code{newX} (and \code{newTR}) are given, and \code{newLV} is not, latent variables are not used in the predictions.
 #' 
 #' @return A matrix containing requested predictor types.
-#' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>
+#' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>,  David Warton
 #'
 #' @examples
 #'# Load a dataset from the mvabund package
@@ -24,6 +24,8 @@
 #'fit <- gllvm(y = y, X, family = poisson())
 #'# fitted values
 #'predfit <- predict(fit, type = "response")
+#'
+#' \donttest{
 #'# linear predictors
 #'predlin <- predict(fit)
 #'# Predict new sites:
@@ -32,7 +34,6 @@
 #'colnames(xnew) <- colnames(X)
 #'predfit <- predict(fit, newX = xnew, type = "response")
 #'
-#' \donttest{
 #'TR <- (antTraits$tr[, 1:3])
 #'fitt <- gllvm(y = y, X, TR, family = poisson())
 #'# linear predictors
@@ -50,11 +51,14 @@
 #'@method predict gllvm
 #'@export
 #'@export predict.gllvm
+
 predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type ="link", ...){
   newdata <- newX
   p <- ncol(object$y)
-  n <- nrow(object$y)
+  n <- max(nrow(object$y),nrow(newdata), nrow(newLV))
   if(!is.null(newdata)) n <- nrow(newdata)
+  if(is.null(newdata) && !is.null(object$X) && !is.null(newLV) && (nrow(newLV) != nrow(object$y))) stop("Number of rows in newLV must equal to the number of rows in the response matrix, if environmental variables are included in the model and newX is not included.") 
+  
   formula <- formula(terms(object))
   
   b0 <- object$params$beta0
@@ -140,13 +144,16 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
       eta <- eta + object$lvs %*% t(theta)
     if(!is.null(newLV)) {
       if(ncol(newLV) != object$num.lv) stop("Number of latent variables in input doesn't equal to the number of latent variables in the model.")
-      if(nrow(newLV) != nrow(Xnew)) stop("Number of rows in newLV must equal to the number of rows in newX, if newX is included, otherwise same as number of rows in the response matrix.")
+      if(!is.null(newdata)) 
+      {  
+        if(nrow(newLV) != nrow(Xnew)) stop("Number of rows in newLV must equal to the number of rows in newX, if newX is included, otherwise same as number of rows in the response matrix.") 
+      }
       lvs <- newLV
       eta <- eta + lvs %*% t(theta)
     }
   }
   
-  if(object$row.eff %in% c("random", "fixed", "TRUE")) {
+  if(object$row.eff %in% c("random", "fixed", "TRUE") && nrow(eta)==length(object$params$row.params)) {
     r0 <- object$params$row.params
     eta <- eta + r0
   }
@@ -159,7 +166,10 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
     ilinkfun <- pnorm
   if(object$family == "ZIP")
     ilinkfun <- pnorm
+  if(object$family == "gaussian")
+    ilinkfun <- gaussian()$linkinv
   
+    
   out <- NULL
   preds <- NULL
   if("link" %in% type)
@@ -186,6 +196,8 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
       }}
     out <- preds
   }
+   try(rownames(out)<-1:NROW(out), silent = TRUE)
+  
   return(out)
 }
 

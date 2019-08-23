@@ -7,7 +7,8 @@
 \usage{
 \method{ordiplot}{gllvm}(object, biplot = FALSE, ind.spp = NULL,
   alpha = 0.5, main = NULL, which.lvs = c(1, 2), jitter = FALSE,
-  s.colors = 1, symbols = FALSE, cex.spp = 0.7, ...)
+  jitter.amount = 0.2, s.colors = 1, symbols = FALSE,
+  cex.spp = 0.7, ...)
 }
 \arguments{
 \item{object}{an object of class 'gllvm'.}
@@ -23,6 +24,8 @@
 \item{which.lvs}{indices of two latent variables to be plotted if number of the latent variables is more than 2. A vector with length of two. Defaults to \code{c(1,2)}.}
 
 \item{jitter}{if \code{TRUE}, jittering is applied on points.}
+
+\item{jitter.amount}{numeric, positive value indicating an amount of jittering for each point, defaults to 0.2 (jitter range).}
 
 \item{s.colors}{colors for sites}
 
@@ -45,6 +48,7 @@ variables if \code{biplot = TRUE}. They are labeled using the column names of y.
 of latent variable coefficients to be plotted can be controlled by ind.spp. An argument alpha
 is used to control the relative scaling of the latent variables and their coefficients.
 If \code{alpha = 0.5}, the latent variables and their coefficients are on the same scale.
+For details for constructing a biplot, see Gabriel (1971).
 }
 \examples{
 #'## Load a dataset from the mvabund package
@@ -56,6 +60,9 @@ ordiplot(fit)
 # Biplot with 10 species
 ordiplot(fit, biplot = TRUE, ind.spp = 10)
 
+}
+\references{
+Gabriel, K. R. (1971). The biplot graphic display of matrices with application to principal component analysis. Biometrika, 58, 453-467.
 }
 \author{
 Jenni Niku <jenni.m.e.niku@jyu.fi>, Francis K.C. Hui

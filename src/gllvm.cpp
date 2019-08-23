@@ -44,7 +44,9 @@ Type objective_function<Type>::operator() ()
 
   matrix<Type> eta(n,p);
   eta.fill(0.0);
-
+  matrix<Type> lam(n,p);
+  lam.fill(0.0);
+  
   matrix<Type> newlam(num_lv,p);
   if(num_lv>0){
 
@@ -58,12 +60,16 @@ Type objective_function<Type>::operator() ()
             newlam(i,j) = lambda(i+j+i*p-(i*(i-1))/2-2*i);
           }
         }
+        // set diag>0 !!!!!!!!!!!
+        /*if (j == i){
+          newlam(i,j) = exp(newlam(i,j));
+        }*/
       }
     }
 
     //To create lambda as matrix upper triangle
 
-    matrix<Type> lam = u*newlam;
+    lam += u*newlam;
     eta = lam;
   }
 
@@ -77,7 +83,7 @@ Type objective_function<Type>::operator() ()
 
     matrix<Type> cQ(n,p);
     cQ.fill(0.0);
-
+    
     if(random(0)>0){
       for (int i=0; i<n; i++) {
         Ar(i)=pow(Ar(i),2);
@@ -142,7 +148,7 @@ Type objective_function<Type>::operator() ()
         }
         nll -= 0.5*(log(Ar(i)) - Ar(i)/pow(sigma,2) - pow(r0(i)/sigma,2))*random(0);
       }
-    } else {
+    } else if(family<3) {
       for (int i=0; i<n; i++) {
         for (int j=0; j<p;j++){
           mu(i,j) = pnorm(Type(eta(i,j)),Type(0),Type(1));
@@ -150,9 +156,15 @@ Type objective_function<Type>::operator() ()
         }
         nll -= 0.5*(log(Ar(i)) - Ar(i)/pow(sigma,2) - pow(r0(i)/sigma,2))*random(0);
       }
+    } else {
+      for (int i=0; i<n; i++) {
+        for (int j=0; j<p;j++){
+          nll -= (y(i,j)*eta(i,j) - 0.5*eta(i,j)*eta(i,j) - cQ(i,j))/(iphi(j)*iphi(j)) - 0.5*(y(i,j)*y(i,j)/(iphi(j)*iphi(j)) + log(2*iphi(j)*iphi(j)));
+        }
+        nll -= 0.5*(log(Ar(i)) - Ar(i)/pow(sigma,2) - pow(r0(i)/sigma,2))*random(0);
+      }
     }
     nll -= -0.5*(u.array()*u.array()).sum() - n*log(sigma)*random(0);// -0.5*t(u_i)*u_i
-
 
   } else {
     eta += r0*xr + offset;
@@ -211,10 +223,16 @@ Type objective_function<Type>::operator() ()
       } else if(family<4){
         for (int j=0; j<p;j++){
           for (int i=0; i<n; i++) {
+            nll -= dnorm(y(i,j), eta(i,j), iphi(j), true); //gamma family
+          }
+        }
+      } else if(family<5){
+        for (int j=0; j<p;j++){
+          for (int i=0; i<n; i++) {
             nll -= dtweedie(y(i,j), exp(eta(i,j)),iphi(j),extra, true); //tweedie family
           }
         }
-      }else {
+      } else {
         iphi=iphi/(1+iphi);
         for (int j=0; j<p;j++){
           for (int i=0; i<n; i++) {
