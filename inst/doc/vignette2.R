@@ -3,8 +3,8 @@ knitr::opts_chunk$set(echo = TRUE, size="footnotesize", fig.width=5, fig.height=
 
 ## ------------------------------------------------------------------------
 library(gllvm)
-load(file = "microbialdata.RData")
-Ysoil <- microbialdata$Ysoil
+data("microbialdata")
+Ysoil <- microbialdata$Y
 Xenv <- microbialdata$Xenv
 dim(Ysoil)
 head(Xenv, 3)

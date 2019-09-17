@@ -59,7 +59,6 @@
 #'
 #' Models are implemented using TMB (Kristensen et al., 2015) applied to variational approximation (Hui et al., 2017) and Laplace approximation (Niku et al., 2017).
 #'
-#' An exception is ordinal family which is not implemented with TMB and therefore also \code{row.eff = "random"} does not work.
 #' With ordinal family response classes must start from 0 or 1.
 #'
 #' \subsection{Distributions}{
@@ -103,7 +102,7 @@
 #'  \item{prediction.errors }{ list of prediction covariances for latent variables and variances for random row effects when method \code{"LA"} is used}
 #'  \item{A, Ar }{ covariance matrices for variational densities of latent variables and variances for random row effects}
 #'
-#' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>, Wesley Brooks, Riki Herliansyah, Francis K.C. Hui, Sara Taskinen, David I. Warton
+#' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>, Wesley Brooks, Riki Herliansyah, Francis K.C. Hui, Sara Taskinen, David I. Warton, Bert van der Veen
 #' @references
 #' Brown, A. M., Warton, D. I., Andrew, N. R., Binns, M., Cassis, G., and Gibb, H. (2014). The fourth-corner solution - using predictive models to understand how species traits interact with the environment. Methods in Ecology and Evolution, 5:344-352.
 #'
@@ -374,16 +373,12 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL,
       }
 
 
-    if (row.eff == "random" && family == "ordinal") {
+    if (row.eff == "random" && family == "ordinal" && TMB==FALSE) {
       stop("Random row effect model is not implemented for ordinal family. \n")
     }
     if (method == "LA" && family == "ordinal") {
       cat("Laplace's method cannot yet handle ordinal data, so VA method is used instead. \n")
       method <- "VA"
-    }
-    if (family == "ordinal" && TMB) {
-      TMB <- FALSE
-      cat("TMB implementation method cannot handle", family, " data, so 'TMB = FALSE' is used instead. \n")
     }
 
     if (method == "LA" && !TMB) {

@@ -1,6 +1,6 @@
-8bb4bc4906135aa3f3a457d329f334e5 *DESCRIPTION
+e4e2eece7a223102cb77899d276e91a4 *DESCRIPTION
 e1739083b7b6c88cf80407ed0f95e3f2 *NAMESPACE
-bda444a0b51b366b52f23634dcb3050b *R/TMBtrait.R
+5241d94b12444363c8f87d0f21d39142 *R/TMBtrait.R
 524fbe19d4af3cae880b719ca82f4c4e *R/anova.gllvm.R
 f99bf2c71851dbb0faf62b49100cfa56 *R/coef.gllvm.R
 df99a2566ece247795ea7c424f780c2f *R/coefplot.gllvm.R
@@ -9,8 +9,8 @@ e6eae79c76e94370d3b74fe256ec46b1 *R/getLV.gllvm.R
 1faa9374bd7dd0e16f870f1d202dd587 *R/getPredictErr.gllvm.R
 26815d64f0e647df55a8b5b085cbfc5d *R/getResidualCor.gllvm.R
 a227f1e642f8d5984dcb970ee3757eb5 *R/getResidualCov.gllvm.R
-4a1ccb981fb6b1155294816f0ba98086 *R/gllvm.R
-08268c38a4751dc2244a530a9bc0a8f2 *R/gllvm.TMB.R
+e132d85274de6b9a98031be9a1a0def5 *R/gllvm.R
+cb7a1998bbb06ff0f7243603182130c6 *R/gllvm.TMB.R
 a75022719b0d4ce6ba8f2c672d7d1033 *R/gllvm.VA.R
 20bad6023b3774215a9b9bfe5f0a4064 *R/gllvm.auxiliary.R
 189519a17ae8d4d4782eb958572a11cd *R/logLik.gllvm.R
@@ -23,13 +23,14 @@ ada24da2435c99770c406deb74395a8d *R/residuals.gllvm.R
 d92899795645c2917085d9cde364f64f *R/simulate.gllvm.R
 6856f8eac147dc5b0e9ddce87658c891 *R/summary.gllvm.R
 fd5ada8e59adf5898a9cbfd5d3a26825 *build/vignette.rds
+c692bb7c67b7c0c0c7c3d404762cd056 *data/microbialdata.RData
 679ab05158bcfa841b9d210ae8b963f9 *data/sim_bacteria.RData
 e8ca38dca27de8b25421aaf040f63043 *inst/doc/vignette1.R
 8b56a4bbd4ea1de50f28c017f0c51c75 *inst/doc/vignette1.Rmd
-d0b6fe75e8e767d0e00fa80ff6d65b15 *inst/doc/vignette1.html
-ba9c24ac0b5bb590607301886d4d8eb8 *inst/doc/vignette2.R
-9757eeeebabae9e1a3b5559a05d94451 *inst/doc/vignette2.html
-b3429c7dabd37909c7d8c15a48796e0f *inst/doc/vignette2.rmd
+8ffc53355d36ca111be4488c605bb5b7 *inst/doc/vignette1.html
+d3224dc9aa7e0844835f6e5cdc1e15ff *inst/doc/vignette2.R
+da15766be87fb6832838e929844d7c9e *inst/doc/vignette2.html
+069a77f2a6f4ce259f20d1f69757be99 *inst/doc/vignette2.rmd
 98eea5d9e89c469715e63758f58c6782 *man/anova.gllvm.Rd
 f0327afdb787a9e4592929b2b92d65dc *man/coefplot.gllvm.Rd
 44594ed9a5f23f1a4ba74b0463905bd8 *man/confint.gllvm.Rd
@@ -37,8 +38,9 @@ f0327afdb787a9e4592929b2b92d65dc *man/coefplot.gllvm.Rd
 59eeeb14deef03c649ec8de2ab2d1d85 *man/getPredictErr.gllvm.Rd
 90ca1054f213d460d7617a496c7a4f0d *man/getResidualCor.gllvm.Rd
 a9c57b46379eaee122d5b25947808428 *man/getResidualCov.gllvm.Rd
-dd6462f790ec085c817c2c08da336b8c *man/gllvm.Rd
+9a97869e636e93b3c6ee07b88e334b26 *man/gllvm.Rd
 82bf5e4f6a9b1ba30c3788ecd8a6cbed *man/logLik.gllvm.Rd
+bfed3b9dd162a1aa536e52323c0f6ef8 *man/microbialdata.Rd
 310bfa0e226ed162e62bc8799667b9ca *man/ordiplot.gllvm.Rd
 3fc915b2b64f9faa907cf3b906181230 *man/plot.gllvm.Rd
 6c77ed7f61a9b46884fc0e3e164925bd *man/predict.gllvm.Rd
@@ -47,7 +49,7 @@ bc1228679fa84f49c69c1706a47ded88 *man/residuals.gllvm.Rd
 dac229b78108c6ea3b2b1a31d51ce079 *man/sim_bacteria.Rd
 d72dce472f1aa37cbb922620872063e3 *man/simulate.gllvm.Rd
 f5b155756636719527c4ab133721e01d *man/summary.gllvm.Rd
-8610d9280956c087cef4cdfebfd4e32a *src/gllvm.cpp
+37825ac456595a09e3fdf2f7a92ec0ab *src/gllvm.cpp
 f2cb2726455d8af109e4d5bdc15634e8 *tests/testthat.R
 bf874c51ec8abbbe843a7bda24a778b8 *tests/testthat/test-fitgllvm.R
 1d418f8c2d1516171d9ae5cba98495b7 *vignettes/ftNULL.RData
@@ -55,6 +57,5 @@ bf874c51ec8abbbe843a7bda24a778b8 *tests/testthat/test-fitgllvm.R
 013ebb8c9ef48b2e7a02c392aaa15e59 *vignettes/ftX.RData
 1a5a6b9baab197acb0705d0afe1a2fa1 *vignettes/ftXi.RData
 de8e6dc9158b6e0a54b7b9f2ce953cc6 *vignettes/ftXph.RData
-ec876e2b3b65ffbcb345e970559a1a85 *vignettes/microbialdata.RData
 8b56a4bbd4ea1de50f28c017f0c51c75 *vignettes/vignette1.Rmd
-b3429c7dabd37909c7d8c15a48796e0f *vignettes/vignette2.rmd
+069a77f2a6f4ce259f20d1f69757be99 *vignettes/vignette2.rmd
