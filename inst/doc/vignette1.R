@@ -146,29 +146,13 @@ rcov0 <- getResidualCov(fit3lv, adjust = 0)
 rcov0$trace; rcov$trace
 1 - rcov$trace / rcov0$trace
 
-## ---- eval=FALSE---------------------------------------------------------
-#  criterias4th <- NULL
-#  for(i in 0:5){
-#    fiti <- gllvm(y, X, TR, family = "negative.binomial", num.lv = i,
-#                  formula = y ~ (Bare.ground + Shrub.cover + Volume.lying.CWD) +
-#                    (Bare.ground + Shrub.cover + Volume.lying.CWD) :
-#                    (Pilosity + Polymorphism + Webers.length),
-#                  seed = 1234)
-#    criterias4th[i+1] <- summary(fiti)$AICc
-#    names(criterias4th)[i+1]= i
-#  }
-
-## ---- eval=FALSE---------------------------------------------------------
-#  # Compare AICc values
-#  criterias4th
-#  #>        0        1        2        3        4        5
-#  #> 3817.289 3710.570 3679.402 3662.244 3666.919 3683.995
-
 ## ---- warning=FALSE------------------------------------------------------
-fit_4th <- gllvm(y, X, TR, family = "negative.binomial", num.lv = 3, 
+fit_4th <- gllvm(y, X, TR, family = "negative.binomial", num.lv = 2, 
                  formula = y ~ (Bare.ground + Shrub.cover + Volume.lying.CWD) +
                 (Bare.ground + Shrub.cover + Volume.lying.CWD) : (Pilosity + 
-                Polymorphism + Webers.length))
+                Polymorphism + Webers.length), seed = 123,
+                row.eff = "random", n.init = 3, jitter.var = 0.01,
+                randomX = ~ Bare.ground + Shrub.cover + Volume.lying.CWD)
 
 ## ---- fig.show='hold', out.width='49%'-----------------------------------
 library(lattice)
@@ -182,14 +166,16 @@ plot.4th <- levelplot((as.matrix(fourth)), xlab = "Environmental Variables",
 plot.4th
 
 ## ---- warning=FALSE, eval=FALSE------------------------------------------
-#  fit_4th2 <- gllvm(y, X, TR, family = "negative.binomial", num.lv = 3,
-#          formula = y ~ (Bare.ground + Shrub.cover + Volume.lying.CWD), seed = 1234)
+#  fit_4th2 <- gllvm(y, X, TR, family = "negative.binomial", num.lv = 2,
+#          formula = y ~ (Bare.ground + Shrub.cover + Volume.lying.CWD), seed = 123,
+#                   row.eff = "random", n.init = 3, jitter.var = 0.01,
+#                   randomX = ~ Bare.ground + Shrub.cover + Volume.lying.CWD)
 #  # Test interactions using likelihood ratio test:
 #  anova(fit_4th, fit_4th2)
 #  #> Model  1 :  y ~ (Bare.ground + Shrub.cover + Volume.lying.CWD)
 #  #> Model  2 :  y ~ (Bare.ground + Shrub.cover +  Volume.lying.CWD) + (Bare.ground +
 #  #> Shrub.cover + Volume.lying.CWD):(Pilosity + Polymorphism + Webers.length)
 #  #>   Resid.Df        D Df.diff  P.value
-#  #> 1     1025  0.00000       0
-#  #> 2     1007 18.90272      18 0.397837
+#  #> 1     1055  0.00000       0
+#  #> 2     1037 21.10357      18 0.27422
 

@@ -46,33 +46,34 @@ Type objective_function<Type>::operator() ()
   int l = xb.cols();
   vector<Type> iphi = exp(lg_phi);
   //vector<Type> Ar = exp(lg_Ar);
-  vector<Type> sigma = log_sigma;
-  sigma(0) = exp(log_sigma(0));
+  Type sigma = exp(log_sigma(0));
   
   if(random(0)<1){  r0(0,0) = 0;}
   int nlvr = num_lv;
-  if(random(0)>0) nlvr++;
+  if(random(0)>0){  nlvr++;}
   
   matrix<Type> eta(n,p);
   eta.fill(0.0);
   matrix<Type> lam(n,p);
   lam.fill(0.0);
   matrix<Type> Cu(nlvr,nlvr); 
+  Cu.fill(0.0);
   
   matrix<Type> newlam(nlvr,p);
   if(nlvr>0){
     newlam.row(0).fill(1.0);
     Cu.diagonal().fill(1.0);
     if(random(0)>0){
-      Cu(0,0) = sigma(0)*sigma(0);
-      if(sigma.size()>1){
+      Cu(0,0) = sigma*sigma;
+      if(log_sigma.size()>1){
         for (int d=1; d<(nlvr); d++){
-          Cu(d,0) = sigma(d);
+          Cu(d,0) = log_sigma(d);
           Cu(0,d) = Cu(d,0);
         }
       }
     }
 
+    //To create lambda as matrix upper triangle
     if (num_lv>0){
       
     for (int j=0; j<p; j++){
@@ -86,14 +87,12 @@ Type objective_function<Type>::operator() ()
           }
         }
         // set diag>0 !!!!!!!!!!!
-        if (j == i){
-          newlam(i+nlvr-num_lv,j) = exp(newlam(i+nlvr-num_lv,j));
-        }
+        // if (j == i){
+        //   newlam(i+nlvr-num_lv,j) = exp(newlam(i+nlvr-num_lv,j));
+        // }
       }
     }
     }
-
-    //To create lambda as matrix upper triangle
 
     lam += u*newlam;
     eta = lam;
@@ -111,14 +110,6 @@ Type objective_function<Type>::operator() ()
 
     matrix<Type> cQ(n,p);
     cQ.fill(0.0);
-    
-    // if(random(0)>0){
-    //   for (int i=0; i<n; i++) {
-    //     Ar(i)=pow(Ar(i),2);
-    //     for (int j=0; j<p;j++){
-    //       cQ(i,j) = 0.5* Ar(i);//
-    //     }
-    //   }}
 
     if(nlvr>0){
       array<Type> A(nlvr,nlvr,n);
@@ -155,6 +146,7 @@ Type objective_function<Type>::operator() ()
     // Include random slopes if random(1)>0
     if(random(1)>0){
       matrix<Type> sds(l,l); 
+      sds.fill(0.0);
       sds.diagonal() = exp(sigmaB);
       matrix<Type> S=sds*UNSTRUCTURED_CORR(sigmaij).cov()*sds;
       
@@ -288,11 +280,11 @@ Type objective_function<Type>::operator() ()
     
     // Include random slopes if random(1)>0
     if(random(1)>0){
-      vector<Type> sds = exp(sigmaB);
+      vector<Type> sdsv = exp(sigmaB);
       density::UNSTRUCTURED_CORR_t<Type> neg_log_MVN(sigmaij);
       
       for (int j=0; j<p;j++){
-        nll += VECSCALE(neg_log_MVN,sds)(vector<Type>(Br.col(j)));
+        nll += VECSCALE(neg_log_MVN,sdsv)(vector<Type>(Br.col(j)));
       }
       eta += xb*Br;
     }
