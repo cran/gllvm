@@ -35,14 +35,21 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
       object$params$phi <- NULL
       object$sd$phi <- NULL
     }
-    parm_all <- c("theta", "beta0", "Xcoef", "B", "row.params", "sigma", "inv.phi", "phi", "p")
+    if (!is.null(object$params$sigmaB)) {
+      object$params$sigmaB <- sqrt(diag(object$params$sigmaB))
+      object$sd$corrpar <- NULL
+    }
+    
+    
+    parm_all <- c("theta", "beta0", "Xcoef", "B", "row.params", "sigma", "sigmaB", "inv.phi", "phi", "p","zeta")
     parmincl <- parm_all[parm_all %in% names(object$params)]
     cilow <- unlist(object$params[parmincl]) + qnorm(alfa) * unlist(object$sd[parmincl])
     ciup <- unlist(object$params[parmincl]) + qnorm(1 - alfa) * unlist(object$sd[parmincl])
     M <- cbind(cilow, ciup)
 
     colnames(M) <- c(paste(alfa * 100, "%"), paste((1 - alfa) * 100, "%"))
-    rnames <- names(unlist(object$params))
+    rnames <- names(unlist(object$params[parmincl]))
+    
     cal <- 0
     if (num.lv > 0) {
       nr <- rep(1:num.lv, each = p)
@@ -50,8 +57,13 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
       rnames[1:(num.lv * p)] <- paste(paste("theta.LV", nr, sep = ""), nc, sep = ".")
       cal <- cal + num.lv * p
     }
-    rnames[(cal + 1):(cal + p)] <- paste("Intercept",names(object$params$beta0), sep = ".")
-    cal <- cal + p
+    if(!object$beta0com){
+      rnames[(cal + 1):(cal + p)] <- paste("Intercept",names(object$params$beta0), sep = ".")
+      cal <- cal + p
+    } else {
+      rnames[(cal + 1)] <- paste("Intercept",names(object$params$beta0), sep = ".")
+      cal <- cal + 1
+    }
     if (!is.null(object$TR)) {
       nr <- names(object$params$B)
       rnames[(cal + 1):(cal + length(nr))] <- nr
@@ -71,12 +83,16 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
     }
     if (object$row.eff == "random") {
       rnames[(cal + 1)] <- "sigma"
-      cal <- cal + 1
+      cal <- cal + length(object$sd$sigma)
+    }
+    if (!is.null(object$randomX)) {
+      cal <- cal + length(object$params$sigmaB)
     }
     if(object$family == "negative.binomial"){
       s <- dim(M)[1]
       rnames[(cal + 1):s] <- paste("inv.phi", names(object$params$beta0), sep = ".")
     }
+    
     if(object$family == "tweedie"){
       s <- dim(M)[1]
       rnames[(cal + 1):s] <- paste("Dispersion phi", names(object$params$phi), sep = ".")
@@ -88,6 +104,10 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
     if(object$family == "gaussian"){
       s <- dim(M)[1]
       rnames[(cal + 1):s] <- paste("Standard deviations phi", names(object$params$phi), sep = ".")
+    }
+    if(object$family == "gamma"){
+      s <- dim(M)[1]
+      rnames[(cal + 1):s] <- paste("Shape phi", names(object$params$phi), sep = ".")
     }
     rownames(M) <- rnames
   } else {

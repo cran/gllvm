@@ -2,7 +2,7 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
         offset= NULL, trial.size = 1, num.lv = 0, start.lvs = NULL, 
         seed = NULL,power=NULL,starting.val="res",formula=NULL, 
         jitter.var=0,yXT=NULL, row.eff=FALSE, TMB=TRUE, 
-        link = "probit", randomX = NULL, beta0com = FALSE) {
+        link = "probit", randomX = NULL, beta0com = FALSE, zeta.struc=zeta.struc) {
   if(!is.null(seed)) set.seed(seed)
   N<-n <- nrow(y); p <- ncol(y); y <- as.matrix(y)
   num.T <- 0; if(!is.null(TR)) num.T <- dim(TR)[2]
@@ -46,13 +46,14 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
 
   if(family=="ZIP") family="poisson"
 
-  if(!(family %in% c("poisson","negative.binomial","binomial","ordinal","tweedie", "gaussian")))
+  if(!(family %in% c("poisson","negative.binomial","binomial","ordinal","tweedie", "gaussian", "gamma", "exponential")))
     stop("inputed family not allowed...sorry =(")
 
   if(num.lv > 0) {
     unique.ind <- which(!duplicated(y))
     if(is.null(start.lvs)) {
       index <- mvtnorm::rmvnorm(N, rep(0, num.lv));
+      colnames(index) <- paste("LV",1:num.lv, sep = "")
       unique.index <- as.matrix(index[unique.ind,])
     }
 
@@ -66,9 +67,11 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
 
   y <- as.matrix(y)
 
-  if(family == "ordinal") {
+  if(family == "ordinal" && zeta.struc == "species") {
     max.levels <- apply(y,2,function(x) length(min(x):max(x)));
     if(any(max.levels == 1) || all(max.levels == 2)) stop("Ordinal data requires all columns to have at least has two levels. If al columns only have two levels, please use family == binomial instead. Thanks")
+  }else if(family=="ordinal" && zeta.struc == "common"){
+    max.levels=length(min(y):max(y))
   }
 
   if(is.null(rownames(y))) rownames(y) <- paste("row",1:N,sep="")
@@ -86,7 +89,7 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
           fit.mva$phi <- fit.mva$params$phi
           resi <- NULL
           mu <- cbind(rep(1,n),fit.mva$X.design)%*%t(cbind(fit.mva$params$beta0, fit.mva$params$Xcoef))
-          if(family %in% c("poisson", "negative.binomial")) {
+          if(family %in% c("poisson", "negative.binomial", "gamma", "exponential")) {
             mu <- exp(mu)
           }
           if(family == "binomial") {
@@ -158,7 +161,7 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
           if(ncol(fit.mva$Xrandom)>1) sigmaij <- fit.mva$TMBfn$par[names(fit.mva$TMBfn$par)=="sigmaij"]#fit.mva$params$sigmaB[lower.tri(fit.mva$params$sigmaB)]
           mu <- mu + fit.mva$Xrandom%*%Br
         }
-        if(family %in% c("poisson", "negative.binomial")) {
+        if(family %in% c("poisson", "negative.binomial", "gamma", "exponential")) {
           mu <- exp(mu)
         }
         if(family == "binomial") {
@@ -209,7 +212,7 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
           inter <- rep(0, num.T * num.X)
           B <- c(env,trait,inter)
         }
-        params <- cbind(fit.mva$params$beta0, fit.mva$params$Xcoef, fit.mva$params$theta)
+        params <- t(fit.mva$coefficients)
         fit.mva$phi <- apply(fit.mva$residuals,2,sd)
       }
       #params <- t(fit.mva$coef) #!!
@@ -222,7 +225,7 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
 
   if(family == "negative.binomial") {
     phi <- fit.mva$phi  + 1e-5
-  } else if(family == "gaussian") {
+  } else if(family %in% c("gaussian", "gamma")) {
     phi <- fit.mva$phi
   } else { phi <- NULL }
   
@@ -251,8 +254,15 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
   if(family == "ordinal") {
     max.levels <- length(unique(c(y)))
     params <- matrix(NA,p,ncol(cbind(1,X))+num.lv)
-    zeta <- matrix(NA,p,max.levels - 1)
-    zeta[,1] <- 0 ## polr parameterizes as no intercepts and all cutoffs vary freely. Change this to free intercept and first cutoff to zero
+    if(zeta.struc == "species"){
+      zeta <- matrix(NA,p,max.levels - 1)
+      zeta[,1] <- 0 ## polr parameterizes as no intercepts and all cutoffs vary freely. Change this to free intercept and first cutoff to zero
+    }else{
+      cw.fit <- MASS::polr(factor(y) ~ 1, method = "probit")
+      zeta <- cw.fit$zeta
+      zeta[1] <- 0
+    }
+    
     for(j in 1:p) {
       y.fac <- factor(y[,j])
       if(length(levels(y.fac)) > 2) {
@@ -265,10 +275,14 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
         }
         if(starting.val=="random"){
           params[j,] <- c(cw.fit$zeta[1],-cw.fit$coefficients)
-          zeta[j,2:length(cw.fit$zeta)] <- cw.fit$zeta[-1]-cw.fit$zeta[1]
+          if(zeta.struc == "species"){
+            zeta[j,2:length(cw.fit$zeta)] <- cw.fit$zeta[-1]-cw.fit$zeta[1]
+          }
         }else{
           params[j,1:ncol(cbind(1,X))] <- c(cw.fit$zeta[1],-cw.fit$coefficients)
-          zeta[j,2:length(cw.fit$zeta)] <- cw.fit$zeta[-1]-cw.fit$zeta[1]
+          if(zeta.struc == "species"){
+            zeta[j,2:length(cw.fit$zeta)] <- cw.fit$zeta[-1]-cw.fit$zeta[1]
+          }
         }
       }
       if(length(levels(y.fac)) == 2) {
@@ -287,7 +301,7 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
       if(!is.null(X) && is.null(TR)) eta.mat <- eta.mat + (X %*% matrix(params[,2:(1+num.X)],num.X,p))
       mu <- eta.mat
       
-      lastart <- FAstart(eta.mat, family=family, y=y, num.lv = num.lv, zeta = zeta)
+      lastart <- FAstart(eta.mat, family=family, y=y, num.lv = num.lv, zeta = zeta, zeta.struc = zeta.struc)
       gamma<-lastart$gamma
       index<-lastart$index
       params[,(ncol(cbind(1,X))+1):ncol(params)]=gamma
@@ -358,7 +372,7 @@ start.values.gllvm.TMB <- function(y, X = NULL, TR=NULL, family,
 }
 
 
-FAstart <- function(mu, family, y, num.lv, zeta = NULL, phis = NULL, 
+FAstart <- function(mu, family, y, num.lv, zeta = NULL, zeta.struc = NULL, phis = NULL, 
                     jitter.var = 0, resi = NULL, row.eff = FALSE){
   n<-NROW(y); p <- NCOL(y)
   row.params <- NULL # !!!!
@@ -389,31 +403,63 @@ FAstart <- function(mu, family, y, num.lv, zeta = NULL, phis = NULL,
           ds.res[i, j] <- qnorm(u)
         }
         if (family == "gaussian") {
-          a <- pnorm(as.vector(unlist(y[i, j])) - 1, 1, mu[i, j], sd = phis[j])
-          b <- pnorm(as.vector(unlist(y[i, j])), 1, mu[i, j], sd = phis[j])
+          a <- pnorm(as.vector(unlist(y[i, j])), mu[i, j], sd = phis[j])
+          b <- pnorm(as.vector(unlist(y[i, j])), mu[i, j], sd = phis[j])
           u <- runif(n = 1, min = a, max = b)
           ds.res[i, j] <- qnorm(u)
         }
-        if (family == "ordinal") {
-          probK <- NULL
-          probK[1] <- pnorm(zeta[j,1]-mu[i,j],log.p = FALSE)
-          probK[max(y[,j])] <- 1 - pnorm(zeta[j,max(y[,j]) - 1] - mu[i,j])
-          if(max(y[,j]) > 2) {
-            j.levels <- 2:(max(y[,j])-1)
-            for(k in j.levels) { probK[k] <- pnorm(zeta[j,k] - mu[i,j]) - pnorm(zeta[j,k - 1] - mu[i,j]) }
-          }
-          probK <- c(0,probK)
-          cumsum.b <- sum(probK[1:(y[i,j]+1)])
-          cumsum.a <- sum(probK[1:(y[i,j])])
-          u <- runif(n = 1, min = cumsum.a, max = cumsum.b)
-          if (abs(u - 1) < 1e-05)
-            u <- 1
-          if (abs(u - 0) < 1e-05)
-            u <- 0
+        if (family == "gamma") {
+          a <- pgamma(as.vector(unlist(y[i, j])), shape = phis[j], scale = mu[i, j]/phis[j])
+          b <- pgamma(as.vector(unlist(y[i, j])), shape = phis[j], scale = mu[i, j]/phis[j])
+          u <- runif(n = 1, min = a, max = b)
           ds.res[i, j] <- qnorm(u)
         }
+        if (family == "exponential") {
+          a <- pexp(as.vector(unlist(y[i, j])), rate = 1/mu[i, j])
+          b <- pexp(as.vector(unlist(y[i, j])), rate = 1/mu[i, j])
+          u <- runif(n = 1, min = a, max = b)
+          ds.res[i, j] <- qnorm(u)
+        }
+      if (family == "ordinal") {
+      if(zeta.struc == "species"){
+        probK <- NULL
+        probK[1] <- pnorm(zeta[j,1]-mu[i,j],log.p = FALSE)
+        probK[max(y[,j])] <- 1 - pnorm(zeta[j,max(y[,j]) - 1] - mu[i,j])
+        if(max(y[,j]) > 2) {
+          j.levels <- 2:(max(y[,j])-1)
+          for(k in j.levels) { probK[k] <- pnorm(zeta[j,k] - mu[i,j]) - pnorm(zeta[j,k - 1] - mu[i,j]) }
+        }
+        probK <- c(0,probK)
+        cumsum.b <- sum(probK[1:(y[i,j]+1)])
+        cumsum.a <- sum(probK[1:(y[i,j])])
+        u <- runif(n = 1, min = cumsum.a, max = cumsum.b)
+        if (abs(u - 1) < 1e-05)
+          u <- 1
+        if (abs(u - 0) < 1e-05)
+          u <- 0
+        ds.res[i, j] <- qnorm(u)
+      }else{
+        probK <- NULL
+        probK[1] <- pnorm(zeta[1] - mu[i, j], log.p = FALSE)
+        probK[max(y)] <- 1 - pnorm(zeta[max(y) - 1] - mu[i,j])
+          levels <- 2:(max(y) - min(y))#
+          for (k in levels) {
+            probK[k] <- pnorm(zeta[k] - mu[i, j]) - pnorm(zeta[k - 1] - mu[i, j])
+          }
+        probK <- c(0, probK)
+        cumsum.b <- sum(probK[1:(y[i, j] + 2 - min(y))])
+        cumsum.a <- sum(probK[1:(y[i, j])])
+        u <- runif(n = 1, min = cumsum.a, max = cumsum.b)
+        if (abs(u - 1) < 1e-05)
+          u <- 1
+        if (abs(u - 0) < 1e-05)
+          u <- 0
+        ds.res[i, j] <- qnorm(u)
       }
-    }
+  }
+}
+  }
+    
   } else {
     ds.res <- resi
   }
@@ -1190,14 +1236,19 @@ getFourthCorner<- function(object){
   nams2=nams[fourth.index]
   fourth.corner=object$params$B[fourth.index]
 
+  splitsnam <- sapply(nams2,strsplit, split = ":")
+  isinvec <- function(vec, ob =""){
+    ob %in% vec
+  }
   i=1; j=1;
   fourth<-matrix(0,length(n1),length(n2))
   for (i in 1:length(n1)) {
     for (j in 1:length(n2)) {
-      fur=(grepl(n1[i], nams2)+grepl(n2[j], nams2))>1
+      fur=(unlist(lapply(splitsnam, isinvec, ob = n1[i])) + unlist(lapply(splitsnam, isinvec, ob = n2[j]))) >1
       if(any(fur)){ fourth[i,j]=fourth.corner[fur]}
     }
   }
+  
   colnames(fourth)=n2
   rownames(fourth)=n1
   return(fourth)
@@ -1282,7 +1333,7 @@ start.values.randomX <- function(y, Xb, family, starting.val, power = NULL) {
 # Calculates adjusted prediction errors for random effects
 sdA<-function(fit){
   n<-nrow(fit$y)
-  A<- -fit$Hess$cov.mat.mod  #
+  A<- fit$Hess$cov.mat.mod  #
   B<- fit$Hess$Hess.full[fit$Hess$incl, fit$Hess$incla]
   C<- fit$Hess$Hess.full[fit$Hess$incla, fit$Hess$incl]
   D<- solve(fit$Hess$Hess.full[fit$Hess$incla, fit$Hess$incla])

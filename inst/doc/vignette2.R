@@ -53,16 +53,16 @@ pchr[Xenv$Region == "NyA"] = 2
 pchr[Xenv$Region == "Aus"] = 3
 
 # Ordination plots. Dark color indicates high environmental covariate value.
-ordiplot(ftNULL, main = "Ordination of sites, color: pH", xlim = c(-2.5, 2.5), 
-         ylim = c(-2.5, 2.5), symbols = TRUE, pch = pchr, s.colors = Colorsph)
+ordiplot(ftNULL, main = "Ordination of sites, color: pH",
+         symbols = TRUE, pch = pchr, s.colors = Colorsph)
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 
-ordiplot(ftNULL, main = "Ordination of sites, color: SOM", xlim = c(-2.5, 2.5), 
-         ylim = c(-2.5, 2.5), symbols = TRUE, pch = pchr, s.colors = Colorssom)
+ordiplot(ftNULL, main = "Ordination of sites, color: SOM", 
+         symbols = TRUE, pch = pchr, s.colors = Colorssom)
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 
-ordiplot(ftNULL, main = "Ordination of sites, color: phosphorous", xlim = c(-2.5, 2.5), 
-         ylim = c(-2.5, 2.5), symbols = TRUE, pch = pchr, s.colors = Colorsphosp)
+ordiplot(ftNULL, main = "Ordination of sites, color: phosphorous",
+         symbols = TRUE, pch = pchr, s.colors = Colorsphosp)
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 
 
@@ -75,7 +75,7 @@ legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3),
 ## ----fig.height=8, fig.width=8-------------------------------------------
 # Plot the species using column indices of the species:
 rownames(ftNULL$params$theta) <- 1:ncol(Ysoil)
-ordiplot(ftNULL, main = "Ordination of sites and species", xlim = c(-7, 5), 
+ordiplot(ftNULL, main = "Ordination of sites and species", xlim = c(-6, 5), 
          ylim = c(-4, 4), symbols = TRUE, pch = pchr, s.colors = Colorsph, 
          biplot = TRUE, ind.spp = 15, cex.spp = 0.9)
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch=c(1, 2, 3), bty = "n")
@@ -95,7 +95,7 @@ ftXph
 coefplot(ftXph, cex.ylab = 0.5, y.label = FALSE)
 
 ## ---- out.width='70%'----------------------------------------------------
-ordiplot(ftXph, main = "Ordination of sites", xlim = c(-2.5, 2.5), ylim = c(-2.5, 2.5), 
+ordiplot(ftXph, main = "Ordination of sites", 
          symbols = TRUE, pch = pchr, s.colors = Colorsph)
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 
@@ -109,7 +109,7 @@ ftX
 coefplot(ftX, cex.ylab = 0.5, y.label = FALSE, mar = c(4, 2, 2, 1))
 
 ## ---- out.width='70%'----------------------------------------------------
-ordiplot(ftX, main = "Ordination of sites", xlim = c(-2.5, 2.5), ylim = c(-2.5, 2.5), 
+ordiplot(ftX, main = "Ordination of sites", 
          symbols = TRUE, pch = pchr, s.colors = Colorsph)
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 
@@ -123,7 +123,7 @@ legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 ftXi
 
 ## ---- warning=FALSE, out.width='70%'-------------------------------------
-ordiplot(ftXi, main = "Ordination of sites", xlim = c(-2.5, 2.5), ylim = c(-2.5, 2.5), 
+ordiplot(ftXi, main = "Ordination of sites",  
          symbols = TRUE, pch = pchr, s.colors = Colorsph)
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 
@@ -134,5 +134,5 @@ legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 1 - dev2/dev1
 
 ## ------------------------------------------------------------------------
-1 - getResidualCov(ftX)$tr/getResidualCov(ftNULL)$tr
+1 - getResidualCov(ftX)$trace/getResidualCov(ftNULL)$trace
 

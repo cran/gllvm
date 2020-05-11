@@ -64,7 +64,12 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
   b0 <- object$params$beta0
   eta <- matrix(b0, n, p, byrow = TRUE)
   if(!is.null(newTR)) if(nrow(newTR) != p) stop("Number of rows in newTR must match to the number of responses in the original data matrix.")
-  
+
+  if(is.null(colnames(object$y))){
+    colnames(object$y) <- paste("y",1:p, sep = "")
+  }
+    
+    
   if(!is.null(object$X) && is.null(object$TR)) {
     B <- object$params$Xcoef
     X.d <- Xnew <- object$X
@@ -91,7 +96,8 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
     if(!is.null(newdata) && !is.null(newTR)) {
       Xnew <- newdata
       TRnew <- newTR
-      y1 <- object$y[1:nrow(Xnew), ]
+      y1 <- object$y[sample(1:nrow(object$y),nrow(Xnew), replace = TRUE), ]
+      # y1 <- object$y[1:nrow(Xnew), ]
       yX <- reshape(data.frame(cbind(y1, Xnew)), direction = "long", varying = colnames(y1), v.names = "y")
       TR2 <- data.frame(time = 1:p, TRnew)
       yXT <- merge(yX, TR2, by = "time")
@@ -109,7 +115,7 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
       Xnew <- as.matrix(model.matrix(formula1, data = data.frame(newdata)))
       
       TRnew <- object$TR
-      y1 <- object$y[1:nrow(Xnew), ]
+      y1 <- object$y[sample(1:nrow(object$y),nrow(Xnew), replace = TRUE), ]
       yX <- reshape(data.frame(cbind(y1, Xnew)), direction = "long", varying = colnames(y1), v.names = "y")
       TR2 <- data.frame(time = 1:p, TRnew)
       yXT <- merge(yX, TR2, by = "time")
@@ -127,7 +133,8 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
       formula1 <- formula(formula1)
       TRnew <- as.matrix(model.matrix(formula1, data = data.frame(newTR)))
       Xnew <- object$X
-      y1 <- object$y[1:nrow(Xnew), ]
+      y1 <- object$y[sample(1:nrow(object$y),nrow(Xnew), replace = TRUE), ]
+      # y1 <- object$y[1:nrow(Xnew), ]
       yX <- reshape(data.frame(cbind(y1, Xnew)), direction = "long", varying = colnames(y1), v.names = "y")
       TR2 <- data.frame(time = 1:p, TRnew)
       yXT <- merge(yX, TR2, by = "time")
@@ -158,7 +165,7 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
     eta <- eta + r0
   }
   
-  if(object$family %in% c("poisson", "negative.binomial", "tweedie"))
+  if(object$family %in% c("poisson", "negative.binomial", "tweedie", "gamma", "exponential"))
     ilinkfun <- exp
   if(object$family == "binomial")
     ilinkfun <- binomial(link = object$link)$linkinv
@@ -180,6 +187,7 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
     out <- object$logL
     
   if (object$family == "ordinal" && type == "response") {
+  if (object$zeta.struc == "species"){
     k.max <- apply(object$params$zeta,1,function(x)length(x[!is.na(x)])) + 1
     preds <- array(NA, dim = c(max(k.max), nrow(eta), p), dimnames = list(paste("level", 1:max(k.max), sep = ""), NULL, NULL))
     
@@ -195,6 +203,22 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
         preds[, i, j] <- c(probK, rep(NA, max(k.max) -k.max[j] ))
       }}
     out <- preds
+  }else{
+    k.max <- length(object$params$zeta) + 1
+    preds <- array(NA, dim = c(k.max, nrow(eta), p), dimnames = list(paste("level", 1:max(k.max), sep = ""), NULL, NULL))
+    
+    for (i in 1:n) {
+      for (j in 1:p) {
+        probK <- NULL
+        probK[1] <- pnorm(object$params$zeta[1] - eta[i, j], log.p = FALSE)
+        probK[k.max] <- 1 - pnorm(object$params$zeta[k.max - 1] - eta[i, j])
+          levels <- 2:(k.max - 1)
+          for(k in levels) { probK[k] <- pnorm(object$params$zeta[k] - eta[i, j]) - pnorm(object$params$zeta[k - 1] - eta[i, j]) }
+        preds[, i, j] <- c(probK)
+      }}
+    out <- preds
+  }
+    dimnames(preds)[[3]] <- colnames(object$y)
   }
    try(rownames(out)<-1:NROW(out), silent = TRUE)
   
