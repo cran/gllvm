@@ -5,12 +5,26 @@
 \alias{ordiplot}
 \title{Plot latent variables from gllvm model}
 \usage{
-\method{ordiplot}{gllvm}(object, biplot = FALSE, ind.spp = NULL,
-  alpha = 0.5, main = NULL, which.lvs = c(1, 2),
-  predict.region = FALSE, level = 0.95, jitter = FALSE,
-  jitter.amount = 0.2, s.colors = 1, symbols = FALSE,
-  cex.spp = 0.7, lwd.ellips = 0.5, col.ellips = 4, lty.ellips = 1,
-  ...)
+\method{ordiplot}{gllvm}(
+  object,
+  biplot = FALSE,
+  ind.spp = NULL,
+  alpha = 0.5,
+  main = NULL,
+  which.lvs = c(1, 2),
+  predict.region = FALSE,
+  level = 0.95,
+  jitter = FALSE,
+  jitter.amount = 0.2,
+  s.colors = 1,
+  symbols = FALSE,
+  cex.spp = 0.7,
+  spp.colors = "blue",
+  lwd.ellips = 0.5,
+  col.ellips = 4,
+  lty.ellips = 1,
+  ...
+)
 }
 \arguments{
 \item{object}{an object of class 'gllvm'.}
@@ -39,6 +53,8 @@
 
 \item{cex.spp}{size of species labels in biplot}
 
+\item{spp.colors}{colors for sites, defaults to \code{"blue"}}
+
 \item{lwd.ellips}{line width for prediction ellipses. See graphical parameter lwd.}
 
 \item{col.ellips}{colors for prediction ellipses.}
@@ -66,6 +82,14 @@ For details for constructing a biplot, see Gabriel (1971).
 - If error is occurred when using \code{ordiplot()}, try full name of the function \code{ordiplot.gllvm()} as functions named 'ordiplot' might be found in other packages as well.
 }
 \examples{
+#'# Extract subset of the microbial data to be used as an example
+data(microbialdata)
+y <- microbialdata$Y[, order(colMeans(microbialdata$Y > 0), 
+                     decreasing = TRUE)[21:40]]
+fit <- gllvm(y, family = poisson())
+fit$logL
+ordiplot(fit, predict.region = TRUE)
+\dontrun{
 #'## Load a dataset from the mvabund package
 data(antTraits)
 y <- as.matrix(antTraits$abund)
@@ -74,7 +98,7 @@ fit <- gllvm(y, family = poisson())
 ordiplot(fit)
 # Biplot with 10 species
 ordiplot(fit, biplot = TRUE, ind.spp = 10)
-
+}
 }
 \references{
 Gabriel, K. R. (1971). The biplot graphic display of matrices with application to principal component analysis. Biometrika, 58, 453-467.

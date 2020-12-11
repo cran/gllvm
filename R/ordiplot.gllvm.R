@@ -12,6 +12,7 @@
 #' @param s.colors colors for sites
 #' @param symbols logical, if \code{TRUE} sites are plotted using symbols, if \code{FALSE} (default) site numbers are used
 #' @param cex.spp size of species labels in biplot
+#' @param spp.colors colors for sites, defaults to \code{"blue"}
 #' @param predict.region logical, if \code{TRUE} prediction regions for the predicted latent variables are plotted, defaults to \code{FALSE}.
 #' @param level level for prediction regions.
 #' @param lty.ellips line type for prediction ellipses. See graphical parameter lty.
@@ -40,6 +41,14 @@
 #' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>, Francis K.C. Hui
 #'
 #' @examples
+#' #'# Extract subset of the microbial data to be used as an example
+#'data(microbialdata)
+#'y <- microbialdata$Y[, order(colMeans(microbialdata$Y > 0), 
+#'                      decreasing = TRUE)[21:40]]
+#'fit <- gllvm(y, family = poisson())
+#'fit$logL
+#'ordiplot(fit, predict.region = TRUE)
+#' \dontrun{
 #' #'## Load a dataset from the mvabund package
 #'data(antTraits)
 #'y <- as.matrix(antTraits$abund)
@@ -48,12 +57,12 @@
 #'ordiplot(fit)
 #'# Biplot with 10 species
 #'ordiplot(fit, biplot = TRUE, ind.spp = 10)
-#'
+#'}
 #'@aliases ordiplot ordiplot.gllvm
 #'@export
 #'@export ordiplot.gllvm
 ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, main = NULL, which.lvs = c(1, 2), predict.region = FALSE, level =0.95,
-                           jitter = FALSE, jitter.amount = 0.2, s.colors = 1, symbols = FALSE, cex.spp = 0.7, lwd.ellips = 0.5, col.ellips = 4, lty.ellips = 1,...) {
+                           jitter = FALSE, jitter.amount = 0.2, s.colors = 1, symbols = FALSE, cex.spp = 0.7, spp.colors = "blue", lwd.ellips = 0.5, col.ellips = 4, lty.ellips = 1,...) {
   if (any(class(object) != "gllvm"))
     stop("Class of the object isn't 'gllvm'.")
   a <- jitter.amount
@@ -64,6 +73,11 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
     ind.spp <- min(c(p, ind.spp))
   } else {
     ind.spp <- p
+  }
+  if(length(spp.colors)==1){
+    spp.colors <- rep(spp.colors,p)
+  }else if(length(spp.colors)!=p){
+    stop("spp.colors needs to be of length p or 1.")
   }
   if (object$num.lv == 0)
     stop("No latent variables to plot.")
@@ -198,10 +212,11 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
         } else {
           text(choose.lvs[, which.lvs], label = 1:n, cex = 1.2, col = s.colors)
         }
+        spp.colors <- spp.colors[largest.lnorms][1:ind.spp]
         text(
           matrix(choose.lv.coefs[largest.lnorms, which.lvs], nrow = length(largest.lnorms)),
           label = rownames(object$params$theta)[largest.lnorms],
-          col = 4, cex = cex.spp )
+          col = spp.colors, cex = cex.spp )
       }
       if (jitter){
         if (symbols) {
@@ -213,10 +228,11 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
             (choose.lvs[, which.lvs[2]] + runif(n,-a,a)),
             label = 1:n, cex = 1.2, col = s.colors )
         }
+        spp.colors <- spp.colors[largest.lnorms][1:ind.spp]
         text(
           (matrix(choose.lv.coefs[largest.lnorms, which.lvs], nrow = length(largest.lnorms)) + runif(2*length(largest.lnorms),-a,a)),
           label = rownames(object$params$theta)[largest.lnorms],
-          col = 4, cex = cex.spp )
+          col = spp.colors, cex = cex.spp )
       }
     }
     

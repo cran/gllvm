@@ -5,8 +5,7 @@
 \alias{predict}
 \title{Predict Method for gllvm Fits}
 \usage{
-\method{predict}{gllvm}(object, newX = NULL, newTR = NULL,
-  newLV = NULL, type = "link", ...)
+\method{predict}{gllvm}(object, newX = NULL, newTR = NULL, newLV = NULL, type = "link", ...)
 }
 \arguments{
 \item{object}{an object of class 'gllvm'.}
@@ -32,6 +31,7 @@ If \code{newX}, \code{newTR} and \code{newLV} are omitted the predictions are ba
 Instead, new sites can be specified in \code{newX}. If predictors \code{newX} (and \code{newTR}) are given, and \code{newLV} is not, latent variables are not used in the predictions.
 }
 \examples{
+\donttest{
 # Load a dataset from the mvabund package
 data(antTraits)
 y <- as.matrix(antTraits$abund)
@@ -41,7 +41,6 @@ fit <- gllvm(y = y, X, family = poisson())
 # fitted values
 predfit <- predict(fit, type = "response")
 
-\donttest{
 # linear predictors
 predlin <- predict(fit)
 # Predict new sites:

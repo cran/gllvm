@@ -10,6 +10,15 @@
 #' @author Francis K.C. Hui, Jenni Niku, David I. Warton
 #'
 #' @examples
+#' #'# Extract subset of the microbial data to be used as an example
+#'data(microbialdata)
+#'y <- microbialdata$Y[, order(colMeans(microbialdata$Y > 0), 
+#'                      decreasing = TRUE)[21:40]]
+#'fit <- gllvm(y, family = poisson())
+#'fit$logL
+#'cr <- getResidualCor(fit)
+#'cr[1:5,1:5]
+#'\dontrun{
 #'# Load a dataset from the mvabund package
 #'data(antTraits)
 #'y <- as.matrix(antTraits$abund)
@@ -17,7 +26,6 @@
 #'fit <- gllvm(y = y, family = poisson())
 #'# residual correlations:
 #'cr <- getResidualCor(fit)
-#'\dontrun{
 #'# Plot residual correlations:
 #'install.packages("corrplot", "gclus")
 #'library(corrplot)

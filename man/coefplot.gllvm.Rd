@@ -5,9 +5,17 @@
 \alias{coefplot}
 \title{Plot covariate coefficients and confidence intervals}
 \usage{
-\method{coefplot}{gllvm}(object, y.label = TRUE, which.Xcoef = NULL,
-  cex.ylab = 0.5, mfrow = NULL, mar = c(4, 6, 2, 1),
-  xlim.list = NULL, ...)
+\method{coefplot}{gllvm}(
+  object,
+  y.label = TRUE,
+  which.Xcoef = NULL,
+  order = TRUE,
+  cex.ylab = 0.5,
+  mfrow = NULL,
+  mar = c(4, 6, 2, 1),
+  xlim.list = NULL,
+  ...
+)
 }
 \arguments{
 \item{object}{an object of class 'gllvm'.}
@@ -15,6 +23,8 @@
 \item{y.label}{logical, if \code{TRUE} (default) colnames of y with respect to coefficients are added to plot.}
 
 \item{which.Xcoef}{vector indicating which covariate coefficients will be plotted. Can be vector of covariate names or numbers. Default is \code{NULL} when all covariate coefficients are plotted.}
+
+\item{order}{logical, whether or not coefficients are ordered, defaults to \code{TRUE}.}
 
 \item{cex.ylab}{the magnification to be used for axis annotation relative to the current setting of cex.}
 
@@ -30,6 +40,14 @@
 Plots covariate coefficients and their confidence intervals.
 }
 \examples{
+# Extract subset of the microbial data to be used as an example
+data(microbialdata)
+X <- microbialdata$Xenv
+y <- microbialdata$Y[, order(colMeans(microbialdata$Y > 0), 
+                     decreasing = TRUE)[21:40]]
+fit <- gllvm(y, X, formula = ~ pH + Phosp, family = poisson())
+coefplot(fit)
+\dontrun{
 ## Load a dataset from the mvabund package
 data(antTraits)
 y <- as.matrix(antTraits$abund)
@@ -39,7 +57,6 @@ fit <- gllvm(y, X, formula = ~ Bare.ground + Shrub.cover,
             family = poisson())
 coefplot.gllvm(fit)
 
-\donttest{
 # Fit model with all environmental covariates
 fitx <- gllvm(y, X, family = "negative.binomial")
 coefplot(fitx, mfrow = c(3,2))

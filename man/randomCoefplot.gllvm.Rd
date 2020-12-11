@@ -5,9 +5,16 @@
 \alias{randomCoefplot}
 \title{Plot random slope coefficients}
 \usage{
-\method{randomCoefplot}{gllvm}(object, y.label = TRUE, cex.ylab = 0.5,
-  mfrow = NULL, mar = c(4, 6, 2, 1), xlim.list = NULL,
-  order = FALSE, ...)
+\method{randomCoefplot}{gllvm}(
+  object,
+  y.label = TRUE,
+  cex.ylab = 0.5,
+  mfrow = NULL,
+  mar = c(4, 6, 2, 1),
+  xlim.list = NULL,
+  order = FALSE,
+  ...
+)
 }
 \arguments{
 \item{object}{an object of class 'gllvm'.}
@@ -30,6 +37,7 @@
 Plots random slopes and their prediction intervals.
 }
 \examples{
+\dontrun{
 ## Load a dataset from the mvabund package
 data(antTraits)
 y <- as.matrix(antTraits$abund)
@@ -40,6 +48,7 @@ fitF <- gllvm(y = y, X = X, TR = TR,
  formula = ~ Bare.ground + Bare.ground : Webers.length,
  family = poisson(), randomX = ~ Bare.ground)
 randomCoefplot(fitF)
+}
 
 }
 \author{

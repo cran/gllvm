@@ -100,6 +100,7 @@ Type objective_function<Type>::operator() ()
   }
   
   matrix<Type> mu(n,p);
+  mu.fill(0.0);
   
   using namespace density;
   
@@ -112,8 +113,9 @@ Type objective_function<Type>::operator() ()
     matrix<Type> cQ(n,p);
     cQ.fill(0.0);
     
-    if(nlvr>0){
+    if(nlvr>0){// log-Cholesky parametrization for A_i:s
       array<Type> A(nlvr,nlvr,n);
+      A.fill(0.0);
       for (int d=0; d<(nlvr); d++){
         for(int i=0; i<n; i++){
           A(d,d,i)=exp(Au(d*n+i));
@@ -125,7 +127,7 @@ Type objective_function<Type>::operator() ()
           for (int r=c+1; r<(nlvr); r++){
             for(int i=0; i<n; i++){
               A(r,c,i)=Au(nlvr*n+k*n+i);
-              A(c,r,i)=A(r,c,i);
+              // A(c,r,i)=A(r,c,i);
             }
             k++;
           }}
@@ -134,10 +136,10 @@ Type objective_function<Type>::operator() ()
        A is a num.lv x nmu.lv x n array, theta is p x num.lv matrix*/
       for (int i=0; i<n; i++) {
         for (int j=0; j<p;j++){
-          cQ(i,j) += 0.5*((newlam.col(j)).transpose()*(A.col(i).matrix()*newlam.col(j))).sum();
+          cQ(i,j) += 0.5*((newlam.col(j)).transpose()*((A.col(i).matrix()*A.col(i).matrix().transpose()).matrix()*newlam.col(j))).sum();
         }
-        if(nlvr == num_lv) nll -= 0.5*(log(A.col(i).matrix().determinant()) - (A.col(i).matrix()).diagonal().sum()-(u.row(i)*u.row(i).transpose()).sum());
-        if(nlvr>num_lv) nll -= 0.5*(log(A.col(i).matrix().determinant()) - (Cu.inverse()*A.col(i).matrix()).diagonal().sum()-((u.row(i)*Cu.inverse())*u.row(i).transpose()).sum());
+        if(nlvr == num_lv) nll -= 0.5*(log((A.col(i).matrix()*A.col(i).matrix().transpose()).matrix().determinant()) - ((A.col(i).matrix()*A.col(i).matrix().transpose()).matrix()).diagonal().sum()-(u.row(i)*u.row(i).transpose()).sum());
+        if(nlvr>num_lv) nll -= 0.5*(log((A.col(i).matrix()*A.col(i).matrix().transpose()).matrix().determinant()) - (Cu.inverse()*(A.col(i).matrix()*A.col(i).matrix().transpose()).matrix()).diagonal().sum()-((u.row(i)*Cu.inverse())*u.row(i).transpose()).sum());
         // log(det(A_i))-sum(trace(Cu^(-1)*A_i))*0.5 sum.diag(A)
       }
       nll -= -0.5*n*log(Cu.determinant())*random(0);//n*
@@ -146,12 +148,14 @@ Type objective_function<Type>::operator() ()
     
     // Include random slopes if random(1)>0
     if(random(1)>0){
-      matrix<Type> sds(l,l); 
+      matrix<Type> sds(l,l);
       sds.fill(0.0);
       sds.diagonal() = exp(sigmaB);
       matrix<Type> S=sds*UNSTRUCTURED_CORR(sigmaij).cov()*sds;
-      
+       
+       // log-Cholesky parametrization for A_bj:s
       array<Type> Ab(l,l,p);
+      Ab.fill(0.0);
       for (int dl=0; dl<(l); dl++){
         for(int j=0; j<p; j++){
           Ab(dl,dl,j)=exp(Abb(dl*p+j));
@@ -163,7 +167,7 @@ Type objective_function<Type>::operator() ()
           for (int r=c+1; r<(l); r++){
             for(int j=0; j<p; j++){
               Ab(r,c,j)=Abb(l*p+k*p+j);
-              Ab(c,r,j)=Ab(r,c,j);
+              // Ab(c,r,j)=Ab(r,c,j);
             }
             k++;
           }}
@@ -173,9 +177,9 @@ Type objective_function<Type>::operator() ()
        A is a num.lv x nmu.lv x n array, theta is p x num.lv matrix*/
       for (int j=0; j<p;j++){
         for (int i=0; i<n; i++) {
-          cQ(i,j) += 0.5*((xb.row(i))*(Ab.col(j).matrix()*xb.row(i).transpose())).sum();
+          cQ(i,j) += 0.5*((xb.row(i))*((Ab.col(j).matrix()*Ab.col(j).matrix().transpose()).matrix()*xb.row(i).transpose())).sum();
         }
-        nll -= 0.5*(log(Ab.col(j).matrix().determinant()) - (S.inverse()*Ab.col(j).matrix()).diagonal().sum()-(Br.col(j).transpose()*(S.inverse()*Br.col(j))).sum());// log(det(A_bj))-sum(trace(S^(-1)A_bj))*0.5 + a_bj*(S^(-1))*a_bj
+        nll -= 0.5*(log((Ab.col(j).matrix()*Ab.col(j).matrix().transpose()).matrix().determinant()) - (S.inverse()*(Ab.col(j).matrix()*Ab.col(j).matrix().transpose()).matrix()).diagonal().sum()-(Br.col(j).transpose()*(S.inverse()*Br.col(j))).sum());// log(det(A_bj))-sum(trace(S^(-1)A_bj))*0.5 + a_bj*(S^(-1))*a_bj
       }
       eta += xb*Br;
       nll -= -0.5*p*log(S.determinant());//n*
@@ -197,21 +201,21 @@ Type objective_function<Type>::operator() ()
       }
     }
     //likelihood
-    if(family==0){
+    if(family==0){//poisson
       for (int i=0; i<n; i++) {
         for (int j=0; j<p;j++){
           nll -= dpois(y(i,j), exp(eta(i,j)+cQ(i,j)), true)-y(i,j)*cQ(i,j);
         }
         // nll -= 0.5*(log(Ar(i)) - Ar(i)/pow(sigma,2) - pow(r0(i)/sigma,2))*random(0);
       }
-    } else if(family==1){
+    } else if(family==1){//NB
       for (int i=0; i<n; i++) {
         for (int j=0; j<p;j++){
           nll -= y(i,j)*(eta(i,j)-cQ(i,j)) - (y(i,j)+iphi(j))*log(iphi(j)+exp(eta(i,j)-cQ(i,j))) + lgamma(y(i,j)+iphi(j)) - iphi(j)*cQ(i,j) + iphi(j)*log(iphi(j)) - lgamma(iphi(j)) -lfactorial(y(i,j));
         }
         // nll -= 0.5*(log(Ar(i)) - Ar(i)/pow(sigma,2) - pow(r0(i)/sigma,2))*random(0);
       }
-    } else if(family==2) {
+    } else if(family==2) {//binomial probit
       for (int i=0; i<n; i++) {
         for (int j=0; j<p;j++){
           mu(i,j) = pnorm(Type(eta(i,j)),Type(0),Type(1));
@@ -219,7 +223,7 @@ Type objective_function<Type>::operator() ()
         }
         // nll -= 0.5*(log(Ar(i)) - Ar(i)/pow(sigma,2) - pow(r0(i)/sigma,2))*random(0);
       }
-    } else if(family==3) {
+    } else if(family==3) {//gaussian
       for (int i=0; i<n; i++) {
         for (int j=0; j<p;j++){
           nll -= (y(i,j)*eta(i,j) - 0.5*eta(i,j)*eta(i,j) - cQ(i,j))/(iphi(j)*iphi(j)) - 0.5*(y(i,j)*y(i,j)/(iphi(j)*iphi(j)) + log(2*iphi(j)*iphi(j)));
@@ -233,7 +237,7 @@ Type objective_function<Type>::operator() ()
         }
         // nll -= 0.5*(log(Ar(i)) - Ar(i)/pow(sigma,2) - pow(r0(i)/sigma,2))*random(0);
       }
-    } else if(family==7 && zetastruc == 1){
+    } else if(family==7 && zetastruc == 1){//ordinal
       int ymax =  CppAD::Integer(y.maxCoeff());
       int K = ymax - 1;
       

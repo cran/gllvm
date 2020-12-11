@@ -16,6 +16,7 @@
 #' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>,  David Warton
 #'
 #' @examples
+#' \donttest{
 #'# Load a dataset from the mvabund package
 #'data(antTraits)
 #'y <- as.matrix(antTraits$abund)
@@ -25,7 +26,6 @@
 #'# fitted values
 #'predfit <- predict(fit, type = "response")
 #'
-#' \donttest{
 #'# linear predictors
 #'predlin <- predict(fit)
 #'# Predict new sites:
@@ -172,7 +172,7 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
   if(object$family == "ordinal")
     ilinkfun <- pnorm
   if(object$family == "ZIP")
-    ilinkfun <- pnorm
+    ilinkfun <- function(eta) exp(eta)*(1-matrix(object$params$phi, n, p, byrow = TRUE))
   if(object$family == "gaussian")
     ilinkfun <- gaussian()$linkinv
   

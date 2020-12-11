@@ -5,7 +5,7 @@
 
 gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson",
       method="VA",Lambda.struc="unstructured", row.eff = FALSE, reltol = 1e-6,
-      seed = NULL,maxit = 1000, start.lvs = NULL, offset=NULL, sd.errors = TRUE,
+      seed = NULL,maxit = 1000, start.lvs = NULL, offset=NULL, sd.errors = FALSE,
       trace=FALSE,link="logit",n.init=1,restrict=30,start.params=NULL,
       optimizer="optim",starting.val="res",Power=1.5,diag.iter=1, dependent.row = FALSE,
       Lambda.start=c(0.1,0.5), jitter.var=0, zeta.struc = "species") {
@@ -35,14 +35,15 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
   if (is.null(colnames(y)))
     colnames(y) <- paste("Col", 1:p, sep = "")
   if(family == "ordinal") {
-    y00<-y
+     y00<-y
     if(min(y)==0){ y=y+1}
     max.levels <- apply(y,2,function(x) length(min(x):max(x)))
     if(any(max.levels == 1)&zeta.struc=="species" || all(max.levels == 2)&zeta.struc=="species")
       stop("Ordinal data requires all columns to have at least has two levels. If all columns only have two levels, please use family == binomial instead. Thanks")
     if(any(!apply(y,2,function(x)all(diff(sort(unique(x)))==1)))&zeta.struc=="species")
       stop("Can't fit ordinal model if there are species with missing classes. Please reclassify per species or use zeta.struc = `common` ")
-    
+    if(!all(min(y)==apply(y,2,min))&zeta.struc=="species")
+      stop("For ordinal data and zeta.struc=`species` all species must have the same minimum category. Please reclassify per species or use zeta.struc = `common`.")
     if(any(diff(sort(unique(c(y))))!=1)&zeta.struc=="common")
       stop("Can't fit ordinal model if there are missing classes. Please reclassify.")
   }
@@ -92,7 +93,7 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
 
   n.i <- 1
 
-  out <- list( y = y, X = X, logL = Inf, X.design = X)
+  out <- list( y = y, X = X, logL = Inf, num.lv = num.lv, row.eff = row.eff, family = family, X.design = X, method = method, zeta.struc = zeta.struc)
   if (n.init > 1)
     seed <- sample(1:10000, n.init)
 
@@ -160,10 +161,10 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
     phis <- NULL
     if (family == "negative.binomial") {
       phis <- fit$phi
-      if (any(phis > 25))
-        phis[phis > 25] <- 25
-      if (any(phis < 0.04))
-        phis[phis < 0.04] <- 0.04
+      if (any(phis > 100))
+        phis[phis > 100] <- 100
+      if (any(phis < 0.01))
+        phis[phis < 0.01] <- 0.01
       fit$phi <- phis
       phis <- 1/phis
     }
@@ -217,7 +218,13 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
     
     q <- num.lv
 
+    map.list <- list()    
+    map.list$B <- map.list$Br <- map.list$sigmaB <- map.list$sigmaij <- map.list$Abb <- factor(NA)
     xb<-Br<-matrix(0); sigmaB=diag(1);sigmaij=0; Abb=0
+#    if(row.eff==FALSE) map.list$r0 <- factor(rep(NA,n))
+    if(family %in% c("poisson","binomial","ordinal","exponential")) map.list$lg_phi <- factor(rep(NA,p))
+    if(family != "ordinal") map.list$zeta <- factor(NA)
+    
     randoml=c(0,0)
     if(row.eff=="fixed"){xr <- matrix(1,1,p)} else {xr <- matrix(0,1,p)}
     if(row.eff=="random") randoml[1]=1
@@ -229,7 +236,7 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
     optr<-NULL
     timeo<-NULL
     se <- NULL
-    
+
 
     if(method=="VA" && (nlvr>0)){
       if(nlvr>0){
@@ -263,34 +270,32 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
       if(family == "ordinal") {familyn=7}
       if(family == "exponential") {familyn=8}
       
+      data.list = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=0,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0))
       
       if(row.eff=="random"){
         if(dependent.row) sigma<-c(log(sigma), rep(0, num.lv))
-        
         if(num.lv>0){
           u<-cbind(r0,u)
-          
-          objr <- TMB::MakeADFun(
-            data = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=0,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0)), silent=TRUE,
-            parameters = list(r0 = matrix(r0), b = rbind(a,b), B = matrix(0), Br=Br,lambda = lambda, u = u,lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=sigma,Au=Au,Abb=0,zeta=zeta),
-            inner.control=list(mgcmax = 1e+200,maxit = maxit),
-            DLL = "gllvm")
+          #parameter.list = list(r0 = matrix(r0), b = rbind(a,b), B = matrix(0), Br=Br,lambda = lambda, u = u,lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=sigma,Au=Au,Abb=0, zeta=zeta)
         } else {
           u<-cbind(r0)
-          
-          objr <- TMB::MakeADFun(
-            data = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=0,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0)), silent=TRUE,
-            parameters = list(r0=matrix(r0), b = rbind(a,b),B=matrix(0), Br=Br,lambda = 0, u = u,lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=sigma,Au=Au,Abb=0, zeta=zeta),
-            inner.control=list(mgcmax = 1e+200,maxit = maxit),
-            DLL = "gllvm")##GLLVM
+          lambda = 0
+          map.list$lambda = factor(NA)
+          #parameter.list = list(r0 = matrix(r0), b = rbind(a,b), B = matrix(0), Br=Br,lambda = 0, u = u,lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=sigma,Au=Au,Abb=0, zeta=zeta)
         }
       } else {
-        objr <- TMB::MakeADFun(
-          data = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=0,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0)), silent=TRUE,
-          parameters = list(r0=matrix(r0), b = rbind(a,b),B=matrix(0), Br=Br,lambda = lambda, u = u,lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=0,Au=Au,Abb=0, zeta=zeta),
-          inner.control=list(mgcmax = 1e+200,maxit = maxit),
-          DLL = "gllvm")##GLLVM
+        sigma = 0 
+        map.list$log_sigma = factor(NA)
+        #parameter.list = list(r0 = matrix(r0), b = rbind(a,b), B = matrix(0), Br=Br,lambda = lambda, u = u,lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=0,Au=Au,Abb=0, zeta=zeta)
       }
+      parameter.list = list(r0 = matrix(r0), b = rbind(a,b), B = matrix(0), Br=Br,lambda = lambda, u = u,lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=sigma,Au=Au,Abb=0, zeta=zeta)
+      
+      objr <- TMB::MakeADFun(
+        data = data.list, silent=TRUE,
+        parameters = parameter.list, map = map.list,
+        inner.control=list(maxit = maxit), #mgcmax = 1e+200,
+        DLL = "gllvm")##GLLVM
+      
       if(optimizer=="nlminb") {
         timeo <- system.time(optr <- try(nlminb(objr$par, objr$fn, objr$gr,control = list(rel.tol=reltol)),silent = TRUE))
       }
@@ -298,6 +303,7 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
         timeo <- system.time(optr <- try(optim(objr$par, objr$fn, objr$gr,method = "BFGS",control = list(reltol=reltol,maxit=maxit),hessian = FALSE),silent = TRUE))
       }
       if(inherits(optr,"try-error")) warning(optr[1]);
+      
       if(diag.iter>0 && Lambda.struc=="unstructured" && nlvr>1 && !inherits(optr,"try-error")){
         objr1 <- objr
         optr1 <- optr
@@ -307,36 +313,23 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
         b1 <- matrix(param1[nam=="b"],num.X+1,p)
         lambda1 <- param1[nam=="lambda"]
         u1 <- matrix(param1[nam=="u"],n,nlvr)
-        lg_phi1 <- param1[nam=="lg_phi"]
+        if(family %in% c("poisson","binomial","ordinal","exponential")){ lg_phi1 <- log(phi)} else {lg_phi1 <- param1[nam=="lg_phi"]} #cat(range(exp(param1[nam=="lg_phi"])),"\n")
         sigmaB1 <- param1[nam=="sigmaB"]
         sigmaij1 <- param1[nam=="sigmaij"]
-        log_sigma1 <- param1[nam=="log_sigma"]
-        
+        if(row.eff == "random"){log_sigma1 <- param1[nam=="log_sigma"]} else {log_sigma1 = 0}
         Au1<- c(pmax(param1[nam=="Au"],rep(log(1e-6), nlvr*n)), rep(0,nlvr*(nlvr-1)/2*n))
-        zeta <- param1[nam=="zeta"]
+        if(family == "ordinal"){ zeta <- param1[nam=="zeta"] } else { zeta <- 0 }
         
+        data.list = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=0,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0))
 
-        if(row.eff == "random"){
-          if(num.lv>0){
-            objr <- TMB::MakeADFun(
-              data = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=0,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0)), silent=TRUE,
-              parameters = list(r0=r1, b = b1,B=matrix(0), Br=Br,lambda = lambda1, u = u1,lg_phi=lg_phi1,sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=log_sigma1,Au=Au1,Abb=0, zeta=zeta), #log(phi)
-              inner.control=list(mgcmax = 1e+200,maxit = maxit),
-              DLL = "gllvm")
-          } else {
-            objr <- TMB::MakeADFun(
-              data = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=0,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0)), silent=TRUE,
-              parameters = list(r0=r1, b = b1,B=matrix(0), Br=Br,lambda = lambda1, u = u1,lg_phi=lg_phi1,sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=log_sigma1,Au=Au1,Abb=0, zeta=zeta), #log(phi)
-              inner.control=list(mgcmax = 1e+200,maxit = maxit),
-              DLL = "gllvm")
-          }
-        } else {
-          objr <- TMB::MakeADFun(
-            data = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=0,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0)), silent=TRUE,
-            parameters = list(r0=r1, b = b1,B=matrix(0), Br=Br,lambda = lambda1, u = u1,lg_phi=lg_phi1,sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=0,Au=Au1,Abb=0, zeta=zeta), #log(phi)
-            inner.control=list(mgcmax = 1e+200,maxit = maxit),
-            DLL = "gllvm")#GLLVM#
-        }
+        parameter.list = list(r0=r1, b = b1,B=matrix(0), Br=Br,lambda = lambda1, u = u1,lg_phi=lg_phi1,sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=log_sigma1,Au=Au1,Abb=0, zeta=zeta)
+        
+        objr <- TMB::MakeADFun(
+          data = data.list, silent=TRUE,
+          parameters = parameter.list, map = map.list,
+          inner.control=list(maxit = maxit), #mgcmax = 1e+200,
+          DLL = "gllvm")
+        
         if(optimizer=="nlminb") {
           timeo <- system.time(optr <- try(nlminb(objr$par, objr$fn, objr$gr,control = list(rel.tol=reltol)),silent = TRUE))
         }
@@ -370,7 +363,7 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
           idx<-idx+k
         }
         zetanew[,1] <- 0 
-        row.names(zetanew) <- colnames(y00); colnames(zetanew) <- paste(min(y):(max(y00)-1),"|",(min(y00)+1):max(y00),sep="")
+        row.names(zetanew) <- colnames(y00); colnames(zetanew) <- paste(min(y00):(max(y00)-1),"|",(min(y00)+1):max(y00),sep="")
         }else{
           zetanew <- c(0,zetas)
           names(zetanew) <- paste(min(y00):(max(y00)-1),"|",(min(y00)+1):max(y00),sep="")
@@ -407,7 +400,9 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
       new.loglik <- objr$env$value.best[1]
 
     }
-
+    
+    
+## Laplace method / nlvr==0
     if(method=="LA" || (nlvr==0 && method=="VA" && row.eff!="random")){
       if(!is.null(X)){Xd=cbind(1,X)} else {Xd=matrix(1,n)}
       extra=0
@@ -424,38 +419,34 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
       if(family == "ordinal"){ familyn=7}
       if(family == "exponential"){ familyn=8}
       
+      data.list = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=1,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0))
+      randomp <- "u"
+      map.list$Au <- map.list$Abb <- factor(NA)
+      
       if(row.eff=="random"){
         if(dependent.row) sigma<-c(log(sigma), rep(0, num.lv))
         if(num.lv>0){
           u<-cbind(r0,u)
-          objr <- TMB::MakeADFun(
-            data = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=1,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0)), silent=!trace,
-            parameters = list(r0=matrix(r0), b = rbind(a,b),B=matrix(0), Br=Br,lambda = lambda, u = u,lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=c(sigma),Au=0,Abb=0, zeta=zeta),
-            inner.control=list(mgcmax = 1e+200,maxit = 1000,tol10=0.01),
-            random = "u", DLL = "gllvm")
         }else{
           u<-cbind(r0)
-          objr <- TMB::MakeADFun(
-            data = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=1,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0)), silent=!trace,
-            parameters = list(r0=matrix(r0), b = rbind(a,b),B=matrix(0), Br=Br,lambda = 0, u = u,lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=c(sigma),Au=0,Abb=0, zeta=zeta),
-            inner.control=list(mgcmax = 1e+200,maxit = 1000,tol10=0.01),
-            random = "u", DLL = "gllvm")
+          lambda = 0
         }
       } else {
-        if(num.lv>0){
-          objr <- TMB::MakeADFun(
-            data = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=1,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0)), silent=!trace,
-            parameters = list(r0=matrix(r0), b = rbind(a,b),B=matrix(0), Br=Br,lambda = lambda, u = u,lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=0,Au=0,Abb=0, zeta=zeta),
-            inner.control=list(mgcmax = 1e+200,maxit = 1000,tol10=0.01),
-            random = c("u"), DLL = "gllvm")
-        }else{
-          objr <- TMB::MakeADFun(
-            data = list(y = y, x = Xd,xr=xr,xb=xb,offset=offset, num_lv = num.lv,family=familyn,extra=extra,method=1,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0)), silent=!trace,
-            parameters = list(r0=matrix(r0), b = rbind(a,b),B=matrix(0), Br=Br,lambda = 0, u = matrix(0),lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=0,Au=0,Abb=0, zeta=zeta),
-            inner.control=list(mgcmax = 1e+200,maxit = 1000,tol10=0.01),
-            DLL = "gllvm")
+        sigma=0
+        if(num.lv == 0){
+          u = matrix(0)
+          lambda = 0
+          randomp <- NULL
         }
       }
+      parameter.list = list(r0=matrix(r0), b = rbind(a,b),B=matrix(0), Br=Br,lambda = lambda, u = u, lg_phi=log(phi),sigmaB=log(diag(sigmaB)),sigmaij=sigmaij,log_sigma=c(sigma),Au=0,Abb=0, zeta=zeta)
+
+      objr <- TMB::MakeADFun(
+        data = data.list, silent=!trace,
+        parameters = parameter.list, map = map.list,
+        inner.control=list(mgcmax = 1e+200,maxit = maxit,tol10=0.01),
+        random = randomp, DLL = "gllvm")
+      
       if(family=="ZIP" && FALSE) {
         m <- length(objr$par)
         low <- rep(-restrict,m); upp=rep(restrict,m);
@@ -575,6 +566,9 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
               }
             }
           }
+          for(i in 1:n){
+            A[i,,] <- A[i,,]%*%t(A[i,,])
+          }
           out$A <- A
         }
         }
@@ -582,29 +576,56 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
 
     n.i <- n.i+1;
   }
+  
+  
+  if(is.null(formula1)){ out$formula <- formula} else {out$formula <- formula1}
+  
+  
+  # DW, 7/5/19: adding TMBfn to output:
+  out$TMBfn <- objrFinal
+  out$TMBfn$par <- optrFinal$par #ensure params in this fn take final values
+  out$convergence <- optrFinal$convergence == 0
+  out$logL <- -out$logL
+  
+  if(method == "VA"){
+    if(num.lv > 0) out$logL = out$logL + n*0.5*num.lv
+    if(row.eff == "random") out$logL = out$logL + n*0.5
+    if(family=="gaussian") {
+      out$logL <- out$logL - n*p*log(pi)/2
+    }
+  }
+  
+  
   tr<-try({
     if(sd.errors && !is.infinite(out$logL)) {
       if(trace) cat("Calculating standard errors for parameters...\n")
-
+      out$TMB <- TRUE
+      # out <- c(out, se.gllvm(out))
+      
       if(family=="ZIP") {
         p0i <- names(pars)=="lg_phi"
         p0 <- pars[p0i]
         p0 <- p0+runif(p,0,0.001)
         pars[p0i] <- p0
       }
-      sdr <- optimHess(pars, objrFinal$fn, objrFinal$gr, control = list(reltol=reltol,maxit=maxit))#maxit=maxit
+      if(method == "VA"){
+        sdr <- objrFinal$he(pars)
+      }
+      if(method == "LA"){
+        sdr <- optimHess(pars, objrFinal$fn, objrFinal$gr, control = list(reltol=reltol,maxit=maxit))#maxit=maxit
+      }
       m <- dim(sdr)[1]; incl <- rep(TRUE,m); incld <- rep(FALSE,m); inclr <- rep(FALSE,m)
       incl[names(objrFinal$par)=="B"] <- FALSE
       incl[names(objrFinal$par)%in%c("Br","sigmaB","sigmaij")] <- FALSE
       incl[names(objrFinal$par)=="Abb"]=FALSE;
-      
+
       if(familyn!=7) incl[names(objrFinal$par)=="zeta"] <- FALSE
-      
+
       if(method=="LA" || (num.lv==0 && method=="VA" && row.eff!="random")){
         incl[names(objrFinal$par)=="Au"] <- FALSE;
         if(row.eff=="random") {
           incl[names(objrFinal$par)=="r0"] <- FALSE; incld[names(objrFinal$par)=="r0"] <- FALSE
-        } 
+        }
         if(row.eff=="fixed"){ incl[1] <- FALSE; incl[names(objrFinal$par)=="log_sigma"] <- FALSE}
         if(row.eff==FALSE) {incl[names(objrFinal$par)=="r0"] <- FALSE; incl[names(objrFinal$par)=="log_sigma"] <- FALSE}
         if(familyn==0 || familyn==2 || familyn==7 || familyn==8) incl[names(objrFinal$par)=="lg_phi"] <- FALSE
@@ -633,7 +654,7 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
               prediction.errors$row.params <- cov.lvs[,1,1]
               if(num.lv > 0) cov.lvs <- array(cov.lvs[,-1,-1], dim = c(n, num.lv, num.lv))
             }
-            
+
             prediction.errors$lvs <- cov.lvs
             #sd.random <- sd.random[-(1:(n*num.lv))]
           }
@@ -660,7 +681,7 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
           incl[names(objrFinal$par)=="lambda"] <- FALSE;
         }
         if(familyn==0 || familyn==2 || familyn==7 || familyn==8) incl[names(objrFinal$par)=="lg_phi"] <- FALSE
-        
+
         A.mat <- sdr[incl, incl] # a x a
         D.mat <- sdr[incld, incld] # d x d
         B.mat <- sdr[incl, incld] # a x d
@@ -670,7 +691,7 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
         incla<-rep(FALSE, length(incl))
         incla[names(objrFinal$par)=="u"] <- TRUE
         out$Hess <- list(Hess.full=sdr, incla = incla, incl=incl, incld=incld, cov.mat.mod=cov.mat.mod)
-        
+
       }
 
       if(row.eff == "fixed") { se.row.params <- c(0,se[1:(n-1)]); names(se.row.params) <- rownames(out$y); se <- se[-(1:(n-1))] }
@@ -680,7 +701,7 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
         colnames(se.lambdas) <- paste("LV", 1:num.lv, sep="");
         rownames(se.lambdas) <- colnames(out$y)
         out$sd$theta <- se.lambdas; se <- se[-(1:(p * num.lv - sum(0:(num.lv-1))))];
-        diag(out$sd$theta) <- diag(out$sd$theta)*diag(out$params$theta) 
+        diag(out$sd$theta) <- diag(out$sd$theta)*diag(out$params$theta)
       }
       out$sd$beta0 <- sebetaM[,1]; names(out$sd$beta0) <- colnames(out$y);
       if(!is.null(X)){
@@ -704,10 +725,10 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
         out$sd$phi <- se.phis*exp(lp0)/(1+exp(lp0))^2;#
         names(out$sd$phi) <- colnames(y);  se <- se[-(1:p)]
       }
-      if(row.eff=="random") { 
-        out$sd$sigma <- se[1:length(out$params$sigma)]*c(out$params$sigma[1],rep(1,length(out$params$sigma)-1)); 
-        se=se[-(1:length(out$sd$sigma))] 
-        names(out$sd$sigma) <- "sigma" 
+      if(row.eff=="random") {
+        out$sd$sigma <- se[1:length(out$params$sigma)]*c(out$params$sigma[1],rep(1,length(out$params$sigma)-1));
+        se=se[-(1:length(out$sd$sigma))]
+        names(out$sd$sigma) <- "sigma"
         }
       if(family %in% c("ordinal")){
         se.zetanew <- se.zetas <- se;
@@ -719,39 +740,25 @@ gllvm.TMB <- function(y, X = NULL, formula = NULL, num.lv = 2, family = "poisson
           if(k>0){
             for(l in 1:k){
               se.zetanew[j,l+1]<-se.zetas[idx+l]
-            } 
+            }
           }
           idx<-idx+k
         }
         se.zetanew[,1] <- 0
         out$sd$zeta <- se.zetanew
         row.names(out$sd$zeta) <- colnames(y00); colnames(out$sd$zeta) <- paste(min(y00):(max(y00)-1),"|",(min(y00)+1):max(y00),sep="")
-        
+
         }else{
           se.zetanew <- c(0, se.zetanew)
           out$sd$zeta <- se.zetanew
           names(out$sd$zeta) <- paste(min(y00):(max(y00)-1),"|",(min(y00)+1):max(y00),sep="")
-          
+
         }
          }
 
     }}, silent=T)
   if(inherits(tr, "try-error")) { cat("Standard errors for parameters could not be calculated, due to singular fit.\n") }
 
-  if(is.null(formula1)){ out$formula <- formula} else {out$formula <- formula1}
-
-  
-  # DW, 7/5/19: adding TMBfn to output:
-  out$TMBfn <- objrFinal
-  out$TMBfn$par <- optrFinal$par #ensure params in this fn take final values
-  out$logL <- -out$logL
-  
-  if(method == "VA"){
-    if(row.eff == "random") out$logL = out$logL + n*0.5
-    if(family=="gaussian") {
-      out$logL <- out$logL - n*p*log(pi)/2
-    }
-  }
 
   return(out)
 }

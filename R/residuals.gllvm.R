@@ -27,6 +27,7 @@
 #' Hui, F. K. C., Taskinen, S., Pledger, S., Foster, S. D., and Warton, D. I. (2015).  Model-based approaches to unconstrained ordination. Methods in Ecology and Evolution, 6:399-411.
 #'
 #' @examples
+#' \dontrun{
 #'# Load a dataset from the mvabund package
 #'data(antTraits)
 #'y <- as.matrix(antTraits$abund)
@@ -34,7 +35,7 @@
 #'fit <- gllvm(y = y, family = poisson())
 #'# residuals
 #'res <- residuals(fit)
-#'
+#'}
 #'@export
 
 
@@ -170,7 +171,7 @@ residuals.gllvm <- function(object, ...) {
             probK <- NULL
             probK[1] <- pnorm(object$params$zeta[j, 1] - eta.mat[i, j], log.p = FALSE)
             probK[max(y[, j]) + 1 - min(y[, j])] <- 1 - pnorm(object$params$zeta[j, max(y[, j]) - min(y[, j])] - eta.mat[i, j])
-            if(max(y[, j]) > 2) {
+            if(length(unique(y[,j]))>2) {
               j.levels <- 2:(max(y[, j]) - min(y[, j]))#
               for (k in j.levels) {
                 probK[k] <- pnorm(object$params$zeta[j, k] - eta.mat[i, j]) - pnorm(object$params$zeta[j, k - 1] - eta.mat[i, j])

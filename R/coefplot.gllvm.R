@@ -4,6 +4,7 @@
 #' @param object an object of class 'gllvm'.
 #' @param y.label logical, if \code{TRUE} (default) colnames of y with respect to coefficients are added to plot.
 #' @param which.Xcoef vector indicating which covariate coefficients will be plotted. Can be vector of covariate names or numbers. Default is \code{NULL} when all covariate coefficients are plotted.
+#' @param order logical, whether or not coefficients are ordered, defaults to \code{TRUE}.
 #' @param cex.ylab the magnification to be used for axis annotation relative to the current setting of cex.
 #' @param mfrow same as \code{mfrow} in \code{par}. If \code{NULL} (default) it is determined automatically.
 #' @param mar vector of length 4, which defines the margin sizes: \code{c(bottom, left, top, right)}. Defaults to \code{c(4,5,2,1)}.
@@ -13,6 +14,14 @@
 #' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>, Francis K.C. Hui, Sara Taskinen
 #'
 #' @examples
+#'# Extract subset of the microbial data to be used as an example
+#'data(microbialdata)
+#'X <- microbialdata$Xenv
+#'y <- microbialdata$Y[, order(colMeans(microbialdata$Y > 0), 
+#'                      decreasing = TRUE)[21:40]]
+#'fit <- gllvm(y, X, formula = ~ pH + Phosp, family = poisson())
+#'coefplot(fit)
+#'\dontrun{
 #'## Load a dataset from the mvabund package
 #'data(antTraits)
 #'y <- as.matrix(antTraits$abund)
@@ -22,7 +31,6 @@
 #'             family = poisson())
 #'coefplot.gllvm(fit)
 #'
-#'\donttest{
 #'# Fit model with all environmental covariates
 #'fitx <- gllvm(y, X, family = "negative.binomial")
 #'coefplot(fitx, mfrow = c(3,2))
@@ -36,7 +44,7 @@
 #'@aliases coefplot coefplot.gllvm
 #'@export
 #'@export coefplot.gllvm
-coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, cex.ylab = 0.5, mfrow = NULL, mar = c(4,6,2,1), xlim.list = NULL, ...)
+coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, order = TRUE, cex.ylab = 0.5, mfrow = NULL, mar = c(4,6,2,1), xlim.list = NULL, ...)
 {
 
   if (any(class(object) != "gllvm"))
@@ -66,7 +74,7 @@ coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, cex.ylab 
       sdXcoef <- as.matrix(object$sd$Xcoef[, which.Xcoef])
       lower <- Xc - 1.96 * sdXcoef[, i]
       upper <- Xc + 1.96 * sdXcoef[, i]
-      Xc <- sort(Xc)
+      if(order) Xc <- sort(Xc)
       lower <- lower[names(Xc)]
       upper <- upper[names(Xc)]
 
@@ -99,7 +107,7 @@ coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, cex.ylab 
     sdXcoef <- object$sd$B
     lower <- Xc - 1.96 * sdXcoef
     upper <- Xc + 1.96 * sdXcoef
-    Xc <- sort(Xc)
+    if(order) Xc <- sort(Xc)
     lower <- lower[names(Xc)]
     upper <- upper[names(Xc)]
 
