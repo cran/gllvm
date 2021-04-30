@@ -3,7 +3,7 @@
 #'
 #' @param object an object of class 'gllvm'.
 #' @param level the confidence level. Scalar between 0 and 1.
-#' @param parm a specification of which parameters are to be given confidence intervals, a vector of names. If missing, all parameters are considered.
+#' @param parm a specification of which parameters are to be given confidence intervals, a vector of names. Examples of options are "beta0", "Xcoef",theta", "phi". If missing, all parameters are considered.
 #' @param ...	not used.
 #'
 #' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>
@@ -25,9 +25,10 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
   if(is.logical(object$sd)) stop("Standard errors for parameters haven't been calculated, so confidence intervals can not be calculated.");
   n <- NROW(object$y)
   p <- NCOL(object$y)
-  nX <- 0; if(!is.null(object$X)) nX <- dim(object$X)[2]
+  nX <- 0; if(!is.null(object$X)) nX <- dim(object$X.design)[2]
   nTR <- 0; if(!is.null(object$TR)) nTR <- dim(object$TR)[2]
   num.lv <- object$num.lv
+  quadratic <- object$quadratic
   alfa <- (1 - level) / 2
   if(object$row.eff == "random") object$params$row.params = NULL
 
@@ -55,8 +56,14 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
     if (num.lv > 0) {
       nr <- rep(1:num.lv, each = p)
       nc <- rep(1:p, num.lv)
-      rnames[1:(num.lv * p)] <- paste(paste("theta.LV", nr, sep = ""), nc, sep = ".")
-      cal <- cal + num.lv * p
+      if(quadratic == FALSE)
+        rnames[1:(num.lv * p)] <- paste(paste("theta.LV", nr, sep = ""), nc, sep = ".")
+      if(quadratic != FALSE)
+        rnames[1:(num.lv * p *2)] <- c(paste(paste("theta.LV", nr, sep = ""), nc, sep = "."), paste(paste("theta.LV", nr, "^2",
+                                                                                                          sep = ""
+        ), nc, sep = "."))
+      if(quadratic==FALSE)cal <- cal + num.lv * p
+      if(quadratic!=FALSE)cal <- cal + num.lv * p * 2
     }
     if(!object$beta0com){
       rnames[(cal + 1):(cal + p)] <- paste("Intercept",names(object$params$beta0), sep = ".")
@@ -72,7 +79,7 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
     }
 
     if (is.null(object$TR) && !is.null(object$X)) {
-      cnx <- rep(colnames(object$X), each = p)
+      cnx <- rep(colnames(object$X.design), each = p)
       rnc <- rep(rownames(object$params$Xcoef), nX)
       newnam <- paste(cnx, rnc, sep = ":")
       rnames[(cal + 1):(cal + nX * p)] <- paste("Xcoef", newnam, sep = ".")
@@ -117,9 +124,25 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
       object$sd$Intercept = object$sd$beta0
       parm[parm=="beta0"] = "Intercept"
     }
+    
     cilow <- unlist(object$params[parm]) + qnorm(alfa) * unlist(object$sd[parm])
     ciup <- unlist(object$params[parm]) + qnorm(1 - alfa) * unlist(object$sd[parm])
+    
+    if("theta"%in%parm){
+      if(object$quadratic==FALSE){
+        names(cilow)[gsub("theta.*","theta",names(unlist(object$sd[parm])))%in%"theta"] <- paste(rep(paste("theta.LV", 1:num.lv, sep = ""),each=p),1:p,sep=".")
+        names(ciup)[gsub("theta.*","theta",names(unlist(object$sd[parm])))%in%"theta"] <-   paste(rep(paste("theta.LV", 1:num.lv, sep = ""),each=p),1:p,sep=".")
+      }else{
+        names(cilow)[gsub("theta.*","theta",names(unlist(object$sd[parm])))%in%"theta"] <-c(paste(rep(paste("theta.LV", 1:num.lv, sep = ""),each=p),1:p,sep="."),paste(rep(paste("theta.LV", 1:num.lv, "^2",sep = ""),each=p),1:p,sep="."))
+        names(ciup)[gsub("theta.*","theta",names(unlist(object$sd[parm])))%in%"theta"] <-   c(paste(rep(paste("theta.LV", 1:num.lv, sep = ""),each=p),1:p,sep="."),paste(rep(paste("theta.LV", 1:num.lv, "^2",sep = ""),each=p),1:p,sep="."))
+      }
+      
+      
+    }
+      
+    
     M <- cbind(cilow, ciup)
+    
 
   }
   return(M)

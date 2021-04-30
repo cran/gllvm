@@ -27,11 +27,11 @@ ftNULLpois
 
 ## ----fig.height=4, fig.width=8------------------------------------------------
 par(mfrow = c(1, 2))
-plot(ftNULL, which = 1:2, var.colors = 1, xlim = c(-9, 5), n.plot = 100)
+plot(ftNULL, which = 1:2, var.colors = 1, n.plot = 100)
 
 ## ----fig.height=4, fig.width=8------------------------------------------------
 par(mfrow = c(1, 2))
-plot(ftNULLpois, which = 1:2, var.colors = 1, xlim = c(-9, 5), n.plot = 100)
+plot(ftNULLpois, which = 1:2, var.colors = 1, n.plot = 100)
 
 ## ---- out.width='70%'---------------------------------------------------------
 # Define colors according to the values of pH, SOM and phosp

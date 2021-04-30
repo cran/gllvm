@@ -44,10 +44,11 @@ residuals.gllvm <- function(object, ...) {
   p <- NCOL(object$y)
 
   num.lv <- object$num.lv
-  X <- object$X
+  quadratic <- object$quadratic
+  if(!is.null(object$X)) X <- as.matrix(object$X.design[1:n,]) else X=NULL
   y <- object$y
 
-  num.X <- ncol(object$X)
+  num.X <- ncol(object$X.design)
   num.T <- ncol(object$TR)
 
   pzip <- function(y, mu, sigma)
@@ -72,20 +73,22 @@ residuals.gllvm <- function(object, ...) {
 
   eta.mat <- matrix(object$params$beta0, n, p, byrow = TRUE) + offset
   if (!is.null(object$X) && is.null(object$TR))
-    eta.mat <- eta.mat + (X %*% matrix(t(object$params$Xcoef), num.X, p))
+    eta.mat <- eta.mat + (object$X.design %*% matrix(t(object$params$Xcoef), num.X, p))
   if (!is.null(object$TR))
     eta.mat <- eta.mat + matrix(object$X.design %*% c(object$params$B) , n, p)
   if (object$row.eff != FALSE)
     eta.mat <- eta.mat + matrix(object$params$row.params, n, p, byrow = FALSE)
   if (num.lv > 0)
-    eta.mat <- eta.mat  + object$lvs %*% t(object$params$theta)
+    eta.mat <- eta.mat  + object$lvs %*% t(object$params$theta[,1:num.lv,drop=F])
+  if(quadratic != FALSE)
+    eta.mat <- eta.mat  + object$lvs^2 %*% t(object$params$theta[,-c(1:num.lv),drop=F])
   if (!is.null(object$randomX))
     eta.mat <- eta.mat + (object$Xrandom %*% object$params$Br)
   
   mu <- exp(eta.mat)
   if (any(mu == 0))
     mu <- mu + 1e-10
-  if (object$family == "binomial")
+  if (object$family == "binomial" || object$family == "beta")
     mu <- binomial(link = object$link)$linkinv(eta.mat)
   if (object$family == "gaussian")
     mu <- (eta.mat)
@@ -125,6 +128,14 @@ residuals.gllvm <- function(object, ...) {
         phis <- object$params$phi # - 1
         a <- pgamma(as.vector(unlist(y[i, j])), shape = phis[j], scale = mu[i, j]/phis[j])
         b <- pgamma(as.vector(unlist(y[i, j])), shape = phis[j], scale = mu[i, j]/phis[j])
+        u <- runif(n = 1, min = a, max = b)
+        if(u==1) u=1-1e-16
+        if(u==0) u=1e-16
+        ds.res[i, j] <- qnorm(u)
+      }
+      if (object$family == "beta") {
+        a <- pbeta(as.vector(unlist(y[i, j])), shape1 = object$params$phi[j]*mu[i, j], shape2 = object$params$phi[j]*(1-mu[i, j]))
+        b <- pbeta(as.vector(unlist(y[i, j])), shape1 = object$params$phi[j]*mu[i, j], shape2 = object$params$phi[j]*(1-mu[i, j]))
         u <- runif(n = 1, min = a, max = b)
         if(u==1) u=1-1e-16
         if(u==0) u=1e-16

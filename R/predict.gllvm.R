@@ -74,18 +74,23 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
     B <- object$params$Xcoef
     X.d <- Xnew <- object$X
     if(!is.null(newdata)) {
+      if(is.null(object$call$formula)){
+        n1 <- colnames(newdata)
+        formula1 <- paste("~ ", n1[1], sep = "")
+        if(length(n1) > 1){
+          for(i1 in 2:length(n1)){
+            formula1 <- paste(formula1, n1[i1], sep = "+")
+          }}
+        formula1 <- paste(formula1, "1", sep = "-")
+        formula1 <- formula(formula1)
+        Xnew <- as.matrix(model.matrix(formula1, data = data.frame(newdata)))
+      }
       formula <- formula(object$formula)
-      n1 <- colnames(newdata)
-      formula1 <- paste("~ ", n1[1], sep = "")
-      if(length(n1) > 1){
-        for(i1 in 2:length(n1)){
-          formula1 <- paste(formula1, n1[i1], sep = "+")
-        }}
-      formula1 <- formula(formula1)
-      Xnew <- as.matrix(model.matrix(formula1, data = data.frame(newdata)))
       xb <- as.matrix(model.matrix(formula, data = data.frame(Xnew)))
       X.d <- as.matrix(xb[, !(colnames(xb) %in% c("(Intercept)"))])
       colnames(X.d) <- colnames(xb)[!(colnames(xb) %in% c("(Intercept)"))]
+    } else {
+      X.d <- object$X.design
       }
     eta <- eta + X.d %*% t(B)
   }
@@ -98,57 +103,79 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
       TRnew <- newTR
       y1 <- object$y[sample(1:nrow(object$y),nrow(Xnew), replace = TRUE), ]
       # y1 <- object$y[1:nrow(Xnew), ]
-      yX <- reshape(data.frame(cbind(y1, Xnew)), direction = "long", varying = colnames(y1), v.names = "y")
-      TR2 <- data.frame(time = 1:p, TRnew)
-      yXT <- merge(yX, TR2, by = "time")
+      yX <- reshape(data.frame(cbind(y1, Xnew)), direction = "long", varying = colnames(data.frame(y1)), v.names = "y", timevar = "species")
+      TR2 <- data.frame(species = 1:p, TRnew)
+      yXT <- merge(yX, TR2, by = "species")
       X.d <- as.matrix(model.matrix(formula, data = yXT))
     }
     if(!is.null(newdata) && is.null(newTR)) {
       formula <- formula(object$formula)
-      n1 <- colnames(newdata)
-      formula1 <- paste("~", n1[1], sep = "")
-      if(length(n1) > 1){
-        for(i1 in 2:length(n1)){
-          formula1 <- paste(formula1, n1[i1], sep = "+")
-        }}
-      formula1 <- formula(formula1)
-      Xnew <- as.matrix(model.matrix(formula1, data = data.frame(newdata)))
-      
+      # if(is.null(object$call$formula)){
+        n1 <- colnames(newdata)
+        formula1 <- paste("~", n1[1], sep = "")
+        if(length(n1) > 1){
+          for(i1 in 2:length(n1)){
+            formula1 <- paste(formula1, n1[i1], sep = "+")
+          }}
+        formula1 <- paste(formula1, "1", sep = "-")
+        formula1 <- formula(formula1)
+        Xnew <- as.matrix(model.matrix(formula1, data = data.frame(newdata)))
+      # }
       TRnew <- object$TR
       y1 <- object$y[sample(1:nrow(object$y),nrow(Xnew), replace = TRUE), ]
-      yX <- reshape(data.frame(cbind(y1, Xnew)), direction = "long", varying = colnames(y1), v.names = "y")
-      TR2 <- data.frame(time = 1:p, TRnew)
-      yXT <- merge(yX, TR2, by = "time")
+      yX <- reshape(data.frame(cbind(y1, Xnew)), direction = "long", varying = colnames(data.frame(y1)), v.names = "y", timevar = "species")
+      TR2 <- data.frame(species = 1:p, TRnew)
+      yXT <- merge(yX, TR2, by = "species")
       X.d <- as.matrix(model.matrix(formula, data = yXT))
     }
     if(is.null(newdata) && !is.null(newTR)) {
       if(nrow(newTR) != p) stop("Number of rows in TRnew must equal to the number of response variables.")
       formula <- formula(object$formula)
-      n1 <- colnames(newTR)
-      formula1 <- paste("~", n1[1], sep = "")
-      if(length(n1) > 1){
-        for(i1 in 2:length(n1)){
-          formula1 <- paste(formula1, n1[i1], sep = "+")
-        }}
-      formula1 <- formula(formula1)
-      TRnew <- as.matrix(model.matrix(formula1, data = data.frame(newTR)))
+      TRnew <- newTR
+      # if(is.null(object$call$formula)){
+        n1 <- colnames(newTR)
+        formula1 <- paste("~", n1[1], sep = "")
+        if(length(n1) > 1){
+          for(i1 in 2:length(n1)){
+            formula1 <- paste(formula1, n1[i1], sep = "+")
+          }}
+        formula1 <- paste(formula1, "1", sep = "-")
+        formula1 <- formula(formula1)
+        TRnew <- as.matrix(model.matrix(formula1, data = data.frame(newTR)))
+      # }
       Xnew <- object$X
       y1 <- object$y[sample(1:nrow(object$y),nrow(Xnew), replace = TRUE), ]
       # y1 <- object$y[1:nrow(Xnew), ]
-      yX <- reshape(data.frame(cbind(y1, Xnew)), direction = "long", varying = colnames(y1), v.names = "y")
-      TR2 <- data.frame(time = 1:p, TRnew)
-      yXT <- merge(yX, TR2, by = "time")
+      yX <- reshape(data.frame(cbind(y1, Xnew)), direction = "long", varying = colnames(data.frame(y1)), v.names = "y", timevar = "species")
+      TR2 <- data.frame(species = 1:p, TRnew)
+      yXT <- merge(yX, TR2, by = "species")
       X.d <- as.matrix(model.matrix(formula, data = yXT))
     }
     X.d<- as.matrix(X.d[, colnames(X.d)!= "(Intercept)"])
     eta <- eta + matrix(X.d %*% B, n, p)
+    if(!is.null(object$randomX)){
+      if(!is.null(newdata)) {
+        tr<-try(X.xr <- as.matrix(model.matrix(object$randomX, data = yXT)), silent = TRUE)
+        if(inherits(tr, "try-error")) { X.xr <- as.matrix(yXT[, colnames(object$Xrandom)]); colnames(X.xr)<-colnames(object$Xrandom) }
+        rnam <- colnames(X.xr)[!(colnames(X.xr) %in% c("(Intercept)"))]
+        xr <- as.matrix(X.xr[1:n,!(colnames(X.xr) %in% c("(Intercept)"))])
+        # xr <- as.matrix(xr[, rnam]); #as.matrix(X.new[, rnam])
+        if(NCOL(xr) == 1) colnames(xr) <- rnam
+      } else {
+        xr <- object$Xrandom
+      }
+      eta <- eta + matrix(xr %*% object$params$Br, n, p)
+    }
   }
   
   
   if(object$num.lv > 0) {
-    theta <- object$params$theta
-    if(is.null(newLV) && is.null(newdata) && is.null(newTR))
+    theta <- object$params$theta[,1:object$num.lv]
+    if(is.null(newLV) && is.null(newdata) && is.null(newTR)){
       eta <- eta + object$lvs %*% t(theta)
+    if(object$quadratic != FALSE)
+      eta <- eta + object$lvs^2 %*% t(object$params$theta[,-c(1:object$num.lv),drop=F])
+    }
     if(!is.null(newLV)) {
       if(ncol(newLV) != object$num.lv) stop("Number of latent variables in input doesn't equal to the number of latent variables in the model.")
       if(!is.null(newdata)) 
@@ -157,6 +184,9 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
       }
       lvs <- newLV
       eta <- eta + lvs %*% t(theta)
+      if(object$quadratic != FALSE)
+        eta <- eta + lvs^2 %*% t(object$params$theta[,-c(1:object$num.lv),drop=F])
+     
     }
   }
   
@@ -167,7 +197,7 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
   
   if(object$family %in% c("poisson", "negative.binomial", "tweedie", "gamma", "exponential"))
     ilinkfun <- exp
-  if(object$family == "binomial")
+  if(object$family == "binomial" || object$family == "beta")
     ilinkfun <- binomial(link = object$link)$linkinv
   if(object$family == "ordinal")
     ilinkfun <- pnorm

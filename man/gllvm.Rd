@@ -14,6 +14,7 @@ gllvm(
   family,
   row.eff = FALSE,
   offset = NULL,
+  quadratic = FALSE,
   sd.errors = TRUE,
   method = "VA",
   randomX = NULL,
@@ -21,18 +22,19 @@ gllvm(
   beta0com = FALSE,
   zeta.struc = "species",
   plot = FALSE,
-  la.link.bin = "probit",
+  link = "probit",
   Power = 1.1,
   seed = NULL,
   scale.X = TRUE,
   return.terms = TRUE,
   gradient.check = FALSE,
   control = list(reltol = 1e-10, TMB = TRUE, optimizer = "optim", max.iter = 200, maxit
-    = 4000, trace = FALSE),
+    = 4000, trace = FALSE, optim.method = NULL),
   control.va = list(Lambda.struc = "unstructured", Ab.struct = "unstructured",
     diag.iter = 1, Ab.diag.iter = 0, Lambda.start = c(0.3, 0.3, 0.3)),
   control.start = list(starting.val = "res", n.init = 1, jitter.var = 0, start.fit =
-    NULL, start.lvs = NULL, randomX.start = "res"),
+    NULL, start.lvs = NULL, randomX.start = "zero", quad.start = 0.01, start.struc =
+    "LV"),
   ...
 )
 }
@@ -43,21 +45,23 @@ gllvm(
 
 \item{TR}{matrix or data.frame of trait covariates.}
 
-\item{data}{data in long format, that is, matrix of responses, environmental and trait covariates and row index named as ’id’. When used, model needs to be defined using formula. This is alternative data input for y, X and TR.}
+\item{data}{data in long format, that is, matrix of responses, environmental and trait covariates and row index named as "id". When used, model needs to be defined using formula. This is alternative data input for y, X and TR.}
 
 \item{formula}{an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted.}
 
 \item{num.lv}{number of latent variables, d, in gllvm model. Non-negative integer, less than number of response variables (m). Defaults to 2.}
 
-\item{family}{distribution function for responses. Options are \code{poisson(link = "log")}, \code{"negative.binomial"} (with log link), \code{binomial(link = "probit")} (and also \code{binomial(link = "logit")} when \code{method = "LA"}), zero inflated poisson (\code{"ZIP"}), \code{gaussian(link = "identity")}, \code{"gamma"} (with log link), \code{"exponential"} (with log link), Tweedie (\code{"tweedie"}) (with log link, only with \code{"LA"}-method) and \code{"ordinal"} (only with \code{"VA"}-method).}
+\item{family}{distribution function for responses. Options are \code{poisson(link = "log")}, \code{"negative.binomial"} (with log link), \code{binomial(link = "probit")} (and also \code{binomial(link = "logit")} when \code{method = "LA"}), zero inflated poisson (\code{"ZIP"}), \code{gaussian(link = "identity")}, \code{"gamma"} (with log link), \code{"exponential"} (with log link), Tweedie (\code{"tweedie"}) (with log link, for \code{"LA"} and \code{"EVA"}-method), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method) and \code{"ordinal"} (only with \code{"VA"}-method).}
 
 \item{row.eff}{\code{FALSE}, \code{fixed} or \code{"random"}, Indicating whether row effects are included in the model as a fixed or as a random effects. Defaults to \code{FALSE} when row effects are not included.}
 
 \item{offset}{vector or matrix of offset terms.}
 
+\item{quadratic}{either \code{FALSE}(default), \code{TRUE}, or \code{LV}. If \code{FALSE} models species responses as a linear function of the latent variables. If \code{TRUE} models species responses as a quadratic function of the latent variables. If \code{LV} assumes species all have the same quadratic coefficient per latent variable.}
+
 \item{sd.errors}{logical. If \code{TRUE} (default) standard errors for parameter estimates are calculated.}
 
-\item{method}{model can be fitted using Laplace approximation method (\code{method = "LA"}) or variational approximation method (\code{method = "VA"}). Defaults to \code{"VA"}.}
+\item{method}{model can be fitted using Laplace approximation method (\code{method = "LA"}) or variational approximation method (\code{method = "VA"}), or with extended variational approximation method (\code{method = "EVA"}) when VA is not applicable. If particular model has not been implemented using the selected method, model is fitted using the alternative method as a default. Defaults to \code{"VA"}.}
 
 \item{randomX}{formula for species specific random effects of environmental variables in fourth corner model. Defaults to \code{NULL}, when random slopes are not included.}
 
@@ -69,7 +73,7 @@ gllvm(
 
 \item{plot}{logical, if \code{TRUE} ordination plots will be printed in each iteration step when \code{TMB = FALSE}. Defaults to \code{FALSE}.}
 
-\item{la.link.bin}{link function for binomial family if \code{method = "LA"}. Options are "logit" and "probit.}
+\item{link}{link function for binomial family if \code{method = "LA"} and beta family. Options are "logit" and "probit.}
 
 \item{Power}{fixed power parameter in Tweedie model. Scalar from interval (1,2). Defaults to 1.1.}
 
@@ -86,9 +90,10 @@ gllvm(
  \item{\emph{reltol}: }{ convergence criteria for log-likelihood, defaults to 1e-8.}
  \item{\emph{TMB}: }{ logical, if \code{TRUE} model will be fitted using Template Model Builder (TMB). TMB is always used if \code{method = "LA"}.  Defaults to \code{TRUE}.}
  \item{\emph{optimizer}: }{ if \code{TMB=TRUE}, log-likelihood can be optimized using \code{"\link{optim}"} (default) or \code{"\link{nlminb}"}.}
- \item{\emph{max.iter}: }{ maximum number of iterations when \code{TMB = FALSE}, defaults to 200.}
- \item{\emph{maxit}: }{ maximum number of iterations within \code{optim} function, defaults to 1000.}
+ \item{\emph{max.iter}: }{ maximum number of iterations when \code{TMB = FALSE} or for \code{optimizer = "nlminb"} when \code{TMB = TRUE}, defaults to 200.}
+ \item{\emph{maxit}: }{ maximum number of iterations for optimizer, defaults to 4000.}
  \item{\emph{trace}: }{ logical, if \code{TRUE} in each iteration step information on current step will be printed. Defaults to \code{FALSE}. Only with \code{TMB = FALSE}.}
+ \item{\emph{optim.method}: }{ optimization method to be used if optimizer is \code{"\link{optim}"}. Defaults to \code{"BFGS"}, and \code{"L-BFGS-B"} to Tweedie family due the limited-memory use.}
 }}
 
 \item{control.va}{A list with the following arguments controlling the variational approximation method:
@@ -107,7 +112,9 @@ gllvm(
   \item{\emph{start.fit}: }{ object of class 'gllvm' which can be given as starting parameters for count data (poisson, NB, or ZIP).}
   \item{\emph{start.lvs}: }{ initialize starting values for latent variables with (n x num.lv) matrix. Defaults to \code{NULL}.}
   \item{\emph{jitter.var}: }{ jitter variance for starting values of latent variables. Defaults to 0, meaning no jittering.}
-  \item{\emph{randomX.start}: }{ Starting value method for the random slopes. Options are \code{"zero"} and \code{"res"}. Defaults to \code{"res"}.}
+  \item{\emph{randomX.start}: }{ Starting value method for the random slopes. Options are \code{"zero"} and \code{"res"}. Defaults to \code{"zero"}.}
+  \item{\emph{start.struc}: }{ Starting value method for the quadratic term. Options are \code{"LV"}(default) and \code{"all"}.}
+  \item{\emph{quad.start}: }{ Starting values for quadratic coefficients. Defaults to 0.01.}
 }}
 
 \item{...}{Not used.}
@@ -149,10 +156,18 @@ where \eqn{g(.)} is a known link function, \eqn{u_i} are \eqn{d}-variate latent 
 at site \eqn{i}, and it can be fixed or random effect, \eqn{\beta_{0j}} is an intercept term for species \eqn{j}, \eqn{\beta_j} and \eqn{\theta_j} are column
 specific coefficients related to covariates and the latent variables, respectively.
 
+Alternatively, a more complex version of the model can be fitted with \code{quadratic = TRUE}, where species are modeled as a quadratic function of the latent variables:
+\deqn{g(\mu_{ij}) = \eta_{ij} = \alpha_i + \beta_{0j} + x_i'\beta_j + u_i'\theta_j - u_i' D_j u_i}.
+Here, D_j is a diagonal matrix of positive only quadratic coefficients, so that the model generates concave shapes only. This implementation follows
+the ecological theoretical model where species are generally recognized to exhibit non-linear response curves.
+For a model with quadratic responses, quadratic coefficients are assumed to be the same for all species: \deqn{D_j = D}. This model requires less information
+per species and can be expected to be more applicable to most datasets. The quadratic coefficients D can be used to calculate the length of 
+ecological gradients.
+
 An alternative model is the fourth corner model (Brown et al., 2014, Warton et al., 2015) which will be fitted if also trait covariates
 are included. The expectation of response \eqn{Y_{ij}} is
 
-\deqn{g(\mu_{ij}) = \alpha_i + \beta_{0j} + x_i'(\beta_x + b_j) + TR_j'\beta_t + vec(B)*kronecker(TR_j,X_i) + u_i'\theta_j}
+\deqn{g(\mu_{ij}) = \alpha_i + \beta_{0j} + x_i'(\beta_x + b_j) + TR_j'\beta_t + vec(B)*kronecker(TR_j,X_i) + u_i'\theta_j - u_i'D_ju_i}
 
 where g(.), \eqn{u_i}, \eqn{\beta_{0j}} and \eqn{\theta_j} are defined as above. Vectors \eqn{\beta_x} and \eqn{\beta_t} are the main effects
 or coefficients related to environmental and trait covariates, respectively, matrix \eqn{B} includes interaction terms. Vectors \eqn{b_j} are 
@@ -160,10 +175,18 @@ optional species-specific random slopes for environmental covariates.
 The interaction/fourth corner terms are optional as well as are the main effects of trait covariates.
 
 
+
 The method is sensitive for the choices of initial values of the latent variables. Therefore it is
 recommendable to use multiple runs and pick up the one giving the highest log-likelihood value.
 However, sometimes this is computationally too demanding, and default option
 \code{starting.val = "res"} is recommended. For more details on different starting value methods, see Niku et al., (2018).
+ 
+For quadratic responses, it can be useful to provide the latent variables estimated with a GLLVM with linear responses, or estimated with (Detrended) Correspondence Analaysis.
+The latent variables can then be passed to the \code{start.lvs} argument inside the \code{control.start} list, which in many cases gives good results. 
+For a GLLVM with quadratic responses and poisson distribution, it is recommended to fit GLLVM with linear responses and a negative binomial distribution, or using a Poisson distribution with random row-effects, instead.
+This is because the quadratic term can account for overdispersion in the Poisson case, which needs to be separately accounted for with linear responses.
+As a result, it should rarely be required to fit a GLLVM with quadratic responses and negative binomial distribution (or row-effects).
+
 
 Models are implemented using TMB (Kristensen et al., 2015) applied to variational approximation (Hui et al., 2017) and Laplace approximation (Niku et al., 2017).
 
@@ -178,6 +201,8 @@ With ordinal family response classes must start from 0 or 1.
   \item{ \code{family = "ZIP"}:}{ Expectation \eqn{E[Y_{ij}] = (1-p)\mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-p)(1+\mu_{ij}p)}.}
 
   \item{For binary data \code{family = binomial()}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-\mu_{ij})}.}
+  
+  \item{For percent cover data \eqn{0 < Y_{ij} < 1} \code{family = "beta"}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-\mu_{ij})//(1+\phi_j)}.}
 
   \item{For positive continuous data \code{family = "gamma"}:}{Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}^2/\phi_j}, where \eqn{\phi_j} is species specific shape parameter.}
   
