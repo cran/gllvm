@@ -31,14 +31,15 @@
 predictLVs.gllvm <- function (object, newX = NULL, newY=object$y, ...) 
 {
   # predictLVs.gllvm <- function (object, newX = if(is.null(object$X)) NULL else object$X, newY=object$y, ...) 
-    if(object$quadratic!=FALSE)stop("Quadratic model not yet implemented.")
+  #  if(object$quadratic!=FALSE)stop("Quadratic model not yet implemented.")
   # create a gllvm object which refits the model using newX and newY:
   assign(as.character(object$call[2]),newY)
   if(is.null(newX)==FALSE)
     assign(as.character(object$call[3]),newX)
   objectTest=eval(object$call)
-  nlvr <- (objectTest$num.lv + (objectTest$row.eff=="random")*1)
-
+  nlvr <- num.lv <- objectTest$num.lv #(objectTest$num.lv + (objectTest$row.eff=="random")*1)
+  num.lv.c <- objectTest$num.lv.c
+  nlvr <- nlvr+num.lv.c
   # now optimise for LV parameters, keeping all else constant:
   whichLVs = names(objectTest$TMBfn$par)=="u" | names(objectTest$TMBfn$par)=="Au"
   objParam = objectTest$TMBfn$par[whichLVs]
@@ -49,36 +50,36 @@ predictLVs.gllvm <- function (object, newX = NULL, newY=object$y, ...)
   n <- dim(objectTest$y)[1]
   lvs <- (matrix(optLVs$par[ui],n,nlvr))
   rownames(lvs) <- rownames(objectTest$y);
-  if(objectTest$num.lv>1 && nlvr==objectTest$num.lv){ 
-    colnames(lvs) <- paste("LV", 1:objectTest$num.lv, sep="");
-  } else if(objectTest$num.lv > 1 && nlvr > objectTest$num.lv) {
-    colnames(lvs) <- c("row", paste("LV", 1:objectTest$num.lv, sep=""));
-    }
-
+  if((objectTest$num.lv+objectTest$num.lv.c)>1 && nlvr==(objectTest$num.lv+objectTest$num.lv.c)){ 
+    colnames(lvs) <- paste("LV", 1:(objectTest$num.lv+objectTest$num.lv.c), sep="");
+  } else if((objectTest$num.lv+objectTest$num.lv.c) > 1 && nlvr > (objectTest$num.lv+objectTest$num.lv.c)) {
+    colnames(lvs) <- c("row", paste("LV", 1:(objectTest$num.lv+objectTest$num.lv.c), sep=""));
+  }
+  
   out <- list(lvs=lvs,logL=-optLVs$value)
-  # and their sds: (assuming method="VA")
-  if(nlvr>0 && object$method=="VA")
+  # and their sds: (assuming (object$method %in% c("VA", "EVA")))
+  if((objectTest$num.lv+objectTest$num.lv.c)>0 && (object$method %in% c("VA", "EVA")))
   {
     Au <- optLVs$par[names(optLVs$par)=="Au"]
-    A <- array(0,dim=c(n,nlvr,nlvr))
-    for (d in 1:nlvr)
+    A <- array(0,dim=c(n,(objectTest$num.lv+objectTest$num.lv.c),(objectTest$num.lv+objectTest$num.lv.c)))
+    for (d in 1:(objectTest$num.lv+objectTest$num.lv.c))
     {
       for(i in 1:n)
       {
         A[i,d,d] <- exp(Au[(d-1)*n+i]);
       }
     }
-    if(length(Au)>nlvr*n)
+    if(length(Au)>(objectTest$num.lv+objectTest$num.lv.c)*n)
     {
       k <- 0;
-      for (c1 in 1:nlvr)
+      for (c1 in 1:(objectTest$num.lv+objectTest$num.lv.c))
       {
         r <- c1+1;
-        while (r <=nlvr)
+        while (r <=(objectTest$num.lv+objectTest$num.lv.c))
         {
           for(i in 1:n)
           {
-            A[i,r,c1] <- Au[nlvr*n+k*n+i];
+            A[i,r,c1] <- Au[(objectTest$num.lv+objectTest$num.lv.c)*n+k*n+i];
             # A[i,c1,r] <- A[i,r,c1];
           }
           k <- k+1; r <- r+1;
@@ -91,13 +92,13 @@ predictLVs.gllvm <- function (object, newX = NULL, newY=object$y, ...)
     }
     out$A <- A
   }
-  if(object$method == "VA"){
+  if((object$method %in% c("VA", "EVA"))){
     n<-nrow(newY)
     p<-ncol(newY)
-    if(object$row.eff == "random") out$logL = out$logL + n*0.5
-    if(object$family=="gaussian") {
-      out$logL <- out$logL - n*p*log(pi)/2
-    }
+    # if(object$row.eff == "random") out$logL = out$logL + n*0.5
+    # if(object$family=="gaussian") {
+    #   out$logL <- out$logL - n*p*log(pi)/2
+    # }
   }
   return(out)
 }
@@ -118,7 +119,7 @@ objParamGrad = function(pars,objectTest,object)
   tpar = getPars(pars,objectTest,object)
   # compute new gradient function
   gr=objectTest$TMBfn$gr(tpar)
-    whichLVs = names(objectTest$TMBfn$par)=="u" | names(objectTest$TMBfn$par)=="Au"
+  whichLVs = names(objectTest$TMBfn$par)=="u" | names(objectTest$TMBfn$par)=="Au"
   return(gr[whichLVs])
 }
 
@@ -131,21 +132,26 @@ getPars = function(pars,objectTest,object)
   tpar = objectTest$TMBfn$par
   
   # set row effects and their variances to their mean value
-  # r0s=tpar[names(tpar)=="r0"]
-  # tpar[names(tpar)=="r0"] = mean(r0s)
-  # if(object$method =="VA") lg_Ars=tpar[names(tpar)=="lg_Ar"]
-  # if(object$method =="VA") tpar[names(tpar)=="lg_Ar"] = mean(lg_Ars)
+  # r0s=opar[names(tpar)=="r0"]
+  tpar[names(tpar)=="r0"] = opar[names(tpar)=="r0"]
+  tpar[names(tpar)=="lg_Ar"] = opar[names(opar)=="lg_Ar"]
+  # if((object$method %in% c("VA", "EVA"))) lg_Ars=tpar[names(tpar)=="lg_Ar"]
+  # if((object$method %in% c("VA", "EVA"))) tpar[names(tpar)=="lg_Ar"] = mean(lg_Ars)
   
   # replace LVs and their estimated se's with input values
   tpar[names(tpar)=="u"] = pars[names(pars)=="u"]
-  # if(object$method =="VA") 
-    tpar[names(tpar)=="Au"] = pars[names(pars)=="Au"]
+  # if((object$method %in% c("VA", "EVA"))) 
+  tpar[names(tpar)=="Au"] = pars[names(pars)=="Au"]
   
   # replace other params with training values
   tpar[names(tpar)=="b"] = opar[names(opar)=="b"]
   tpar[names(tpar)=="B"] = opar[names(opar)=="B"]
+  tpar[names(tpar)=="b_lv"] = opar[names(opar)=="b_lv"]
   tpar[names(tpar)=="lambda"] = opar[names(opar)=="lambda"]
+  tpar[names(tpar)=="lambda2"] = opar[names(opar)=="lambda2"]
+  
   tpar[names(tpar)=="lg_phi"] = opar[names(opar)=="lg_phi"]
+  tpar[names(tpar)=="sigmaLV"] = opar[names(opar)=="sigmaLV"]
   tpar[names(tpar)=="log_sigma"] = opar[names(opar)=="log_sigma"]
   tpar[names(tpar)=="sigmaB"] = opar[names(opar)=="sigmaB"]
   if(length(tpar[names(tpar)=="sigmaB"]))   tpar[names(tpar)=="sigmaij"] = opar[names(opar)=="sigmaij"]
@@ -156,10 +162,10 @@ getPars = function(pars,objectTest,object)
 
 
 predictLogL.gllvm = function (object, newX = if(is.null(object$X)) NULL else object$X, newY=object$y, nRuns=1, ...) 
-# function to give predictive log-likelihood for new observations, using parameters from a fitted gllvm object.
-# Because TMB returns a sum of logL's, this function loops through the new dataset getting one prediction at a time
-# on order to return logLs separately for each new observation
-# these values are numerically unstable, try ramping up nRuns to get a better estimate
+  # function to give predictive log-likelihood for new observations, using parameters from a fitted gllvm object.
+  # Because TMB returns a sum of logL's, this function loops through the new dataset getting one prediction at a time
+  # on order to return logLs separately for each new observation
+  # these values are numerically unstable, try ramping up nRuns to get a better estimate
 {
   # ensure newX and newY are dataframes (potherwise error on subsetting to rows)
   newX = data.frame(newX)

@@ -10,7 +10,10 @@ gllvm(
   TR = NULL,
   data = NULL,
   formula = NULL,
-  num.lv = 2,
+  lv.formula = NULL,
+  num.lv = NULL,
+  num.lv.c = 0,
+  num.RR = 0,
   family,
   row.eff = FALSE,
   offset = NULL,
@@ -23,13 +26,15 @@ gllvm(
   zeta.struc = "species",
   plot = FALSE,
   link = "probit",
+  dist = 0,
+  corWithin = FALSE,
   Power = 1.1,
   seed = NULL,
   scale.X = TRUE,
   return.terms = TRUE,
   gradient.check = FALSE,
-  control = list(reltol = 1e-10, TMB = TRUE, optimizer = "optim", max.iter = 200, maxit
-    = 4000, trace = FALSE, optim.method = NULL),
+  control = list(reltol = 1e-10, TMB = TRUE, optimizer = "optim", max.iter = 2000,
+    maxit = 4000, trace = FALSE, optim.method = NULL),
   control.va = list(Lambda.struc = "unstructured", Ab.struct = "unstructured",
     diag.iter = 1, Ab.diag.iter = 0, Lambda.start = c(0.3, 0.3, 0.3)),
   control.start = list(starting.val = "res", n.init = 1, jitter.var = 0, start.fit =
@@ -47,13 +52,19 @@ gllvm(
 
 \item{data}{data in long format, that is, matrix of responses, environmental and trait covariates and row index named as "id". When used, model needs to be defined using formula. This is alternative data input for y, X and TR.}
 
-\item{formula}{an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted.}
+\item{formula}{an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for fixed-effects predictors).}
 
-\item{num.lv}{number of latent variables, d, in gllvm model. Non-negative integer, less than number of response variables (m). Defaults to 2.}
+\item{lv.formula}{an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for latent variables).}
 
-\item{family}{distribution function for responses. Options are \code{poisson(link = "log")}, \code{"negative.binomial"} (with log link), \code{binomial(link = "probit")} (and also \code{binomial(link = "logit")} when \code{method = "LA"}), zero inflated poisson (\code{"ZIP"}), \code{gaussian(link = "identity")}, \code{"gamma"} (with log link), \code{"exponential"} (with log link), Tweedie (\code{"tweedie"}) (with log link, for \code{"LA"} and \code{"EVA"}-method), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method) and \code{"ordinal"} (only with \code{"VA"}-method).}
+\item{num.lv}{number of latent variables, d, in gllvm model. Non-negative integer, less than number of response variables (m). Defaults to 0.}
 
-\item{row.eff}{\code{FALSE}, \code{fixed} or \code{"random"}, Indicating whether row effects are included in the model as a fixed or as a random effects. Defaults to \code{FALSE} when row effects are not included.}
+\item{num.lv.c}{number of latent variables, d, in gllvm model to constrain, with residual term. Non-negative integer, less than number of response (m) and equal to, or less than, the number of predictor variables (k). Defaults to 0. Requires specification of "lv.formula" in combination with "X" or "datayx". Can be used in combination with num.lv and fixed-effects, but not with traits.}
+
+\item{num.RR}{number of latent variables, d, in gllvm model to constrain, without residual term (reduced rank regression). Cannot yet be combined with traits.}
+
+\item{family}{distribution function for responses. Options are \code{"negative.binomial"} (with log link), \code{poisson(link = "log")}, \code{binomial(link = "probit")} (and also with \code{link = "logit"} when \code{method = "LA"} or \code{method = "EVA"}), zero inflated poisson (\code{"ZIP"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link, for \code{"LA"} and \code{"EVA"}-method), \code{"gamma"} (with log link), \code{"exponential"} (with log link), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method) and \code{"ordinal"} (only with \code{"VA"}-method).}
+
+\item{row.eff}{\code{FALSE}, \code{fixed}, \code{"random"} or formula to define the structure for the row parameters. Indicating whether row effects are included in the model as a fixed or as a random effects. Defaults to \code{FALSE} when row effects are not included. Structured random row effects can be defined via formula, eg. \code{~(1|groups)}, when unique row effects are set for each group, not for all rows, grouping variable need to be included in \code{X}. Correlation structure between random group effects/intercepts can also be set using \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentielly decaying, see argument '\code{dist}') and \code{corCS} (compound symmetry). Correlation structure can be set between or within groups, see argument '\code{corWithin}'.}
 
 \item{offset}{vector or matrix of offset terms.}
 
@@ -74,6 +85,10 @@ gllvm(
 \item{plot}{logical, if \code{TRUE} ordination plots will be printed in each iteration step when \code{TMB = FALSE}. Defaults to \code{FALSE}.}
 
 \item{link}{link function for binomial family if \code{method = "LA"} and beta family. Options are "logit" and "probit.}
+
+\item{dist}{coordinates or time points used for row parameters correlation structure \code{corExp}.}
+
+\item{corWithin}{logical. If \code{TRUE}, correlation is set between row effects of the observation units within group. Correlation and groups can be defined using \code{row.eff}. Defaults to \code{FALSE}, when correlation is set for row parameters between groups.}
 
 \item{Power}{fixed power parameter in Tweedie model. Scalar from interval (1,2). Defaults to 1.1.}
 
@@ -113,7 +128,7 @@ gllvm(
   \item{\emph{start.lvs}: }{ initialize starting values for latent variables with (n x num.lv) matrix. Defaults to \code{NULL}.}
   \item{\emph{jitter.var}: }{ jitter variance for starting values of latent variables. Defaults to 0, meaning no jittering.}
   \item{\emph{randomX.start}: }{ Starting value method for the random slopes. Options are \code{"zero"} and \code{"res"}. Defaults to \code{"zero"}.}
-  \item{\emph{start.struc}: }{ Starting value method for the quadratic term. Options are \code{"LV"}(default) and \code{"all"}.}
+  \item{\emph{start.struc}: }{ Starting value method for the quadratic term. Options are \code{"LV"} (default) and \code{"all"}.}
   \item{\emph{quad.start}: }{ Starting values for quadratic coefficients. Defaults to 0.01.}
 }}
 
@@ -129,6 +144,7 @@ An object of class "gllvm" includes the following components:
  \item{params}{list of parameters
  \itemize{
    \item{theta }{ coefficients related to latent variables}
+   \item{LvXcoef }{ Covariate coefficients related to constrained latent variables}
    \item{beta0 }{ column specific intercepts}
    \item{Xcoef }{ coefficients related to environmental covariates X}
    \item{B }{ coefficients in fourth corner model}
@@ -153,9 +169,10 @@ site related environmental covariates are used, the expectation of response \eqn
 \deqn{g(\mu_{ij}) = \eta_{ij} = \alpha_i + \beta_{0j} + x_i'\beta_j + u_i'\theta_j,}
 
 where \eqn{g(.)} is a known link function, \eqn{u_i} are \eqn{d}-variate latent variables (\eqn{d}<<\eqn{m}), \eqn{\alpha_i} is an optional row effect
-at site \eqn{i}, and it can be fixed or random effect, \eqn{\beta_{0j}} is an intercept term for species \eqn{j}, \eqn{\beta_j} and \eqn{\theta_j} are column
+at site \eqn{i}, and it can be fixed or random effect (also other structures are possible, see below), \eqn{\beta_{0j}} is an intercept term for species \eqn{j}, \eqn{\beta_j} and \eqn{\theta_j} are column
 specific coefficients related to covariates and the latent variables, respectively.
 
+\subsection{Quadratic model}{
 Alternatively, a more complex version of the model can be fitted with \code{quadratic = TRUE}, where species are modeled as a quadratic function of the latent variables:
 \deqn{g(\mu_{ij}) = \eta_{ij} = \alpha_i + \beta_{0j} + x_i'\beta_j + u_i'\theta_j - u_i' D_j u_i}.
 Here, D_j is a diagonal matrix of positive only quadratic coefficients, so that the model generates concave shapes only. This implementation follows
@@ -163,7 +180,19 @@ the ecological theoretical model where species are generally recognized to exhib
 For a model with quadratic responses, quadratic coefficients are assumed to be the same for all species: \deqn{D_j = D}. This model requires less information
 per species and can be expected to be more applicable to most datasets. The quadratic coefficients D can be used to calculate the length of 
 ecological gradients.
+For quadratic responses, it can be useful to provide the latent variables estimated with a GLLVM with linear responses, or estimated with (Detrended) Correspondence Analysis.
+The latent variables can then be passed to the \code{start.lvs} argument inside the \code{control.start} list, which in many cases gives good results. 
+}
 
+\subsection{Constrained ordination}{
+For GLLVMs with both linear and quadratic response model, the latent variable can be constrained to a series of covariates \eqn{x_lv}:
+
+\deqn{g(\mu_{ij}) = \alpha_i + \beta_{0j} + x_i'\beta_j + (z_i+X_lv\beta_lv)' \gamma_j - (z_i+X_lv\beta_lv)' D_j (z_i+X_lv\beta_lv) + u_i'\theta_j - u_i' D_j u_i ,}
+where \eqn{z_i+X_lv\beta_lv} are constrained latent variables, which account for variation that can be explained by some covariates \eqn{X_lv} after accounting for
+the effects of covariates included in the fixed-effects part of the model \eqn{X}, and  \eqn{u_i} are unconstrained latent variables that account for any remaining residual variation.
+}
+
+\subsection{Fourth corner model}{
 An alternative model is the fourth corner model (Brown et al., 2014, Warton et al., 2015) which will be fitted if also trait covariates
 are included. The expectation of response \eqn{Y_{ij}} is
 
@@ -173,22 +202,34 @@ where g(.), \eqn{u_i}, \eqn{\beta_{0j}} and \eqn{\theta_j} are defined as above.
 or coefficients related to environmental and trait covariates, respectively, matrix \eqn{B} includes interaction terms. Vectors \eqn{b_j} are 
 optional species-specific random slopes for environmental covariates.
 The interaction/fourth corner terms are optional as well as are the main effects of trait covariates.
+}
 
+\subsection{Structured row effects}{
+In addition to the site-specific random effects, \eqn{\alpha_i}, it is also possible to set arbitrary structure/design for the row effects. 
+That is, assume that observations / rows \eqn{i=1,...,n} in the data matrix are from groups \eqn{t=1,...,T}, so that each row \eqn{i} belongs to one of the groups, denote \eqn{G(i) \in \{1,...,T\}}. Each group \eqn{t} has a number of observations \eqn{n_t}, so that \eqn{\sum_{t=1}^{T} n_t =n}.
+Now we can set random intercept for each group \eqn{t}, (see argument '\code{row.eff}'):
 
+ \deqn{g(\mu_{ij}) = \eta_{ij} = \alpha_{G(i)} + \beta_{0j} + x_i'\beta_j + u_i'\theta_j,}
+ 
+ There is also a possibility to set correlation structure for the random intercepts between groups, so that \eqn{(\alpha_{1},...,\alpha_{T})^\top \sim N(0, \Sigma_r)}. That might be the case, for example, when the groups are spatially or temporally dependent.
+ Another option is to set row specific random intercepts \eqn{\alpha_i}, but to set the correlation structure for the observations within groups, (see argument '\code{corWithin}'). That is, we can set \eqn{corr(\alpha_{i},\alpha_{i'}) = C(i,i') \neq 0} according to some correlation function \eqn{C}, when \eqn{G(i)=G(i')}.
+ This model is restricted to the case, where each group has equal number of observations (rows), that is \eqn{n_t=n_{t'}} for all \eqn{t,t' \in \{1,...,T\}}.
+ 
+ The correlation structures available in the package are 
+\itemize{
+  \item{\code{corAR1}} { autoregressive process of order 1.}
+  \item{\code{corExp}} { exponentially decaying, see argument '\code{dist}'.}
+  \item{\code{corCS}} { compound symmetry.}
+}  
+}
 
+\subsection{Starting values}{
 The method is sensitive for the choices of initial values of the latent variables. Therefore it is
-recommendable to use multiple runs and pick up the one giving the highest log-likelihood value.
+recommendable to use multiple runs and pick up the one giving the highest log-likelihood value (see argument '\code{n.init}').
 However, sometimes this is computationally too demanding, and default option
 \code{starting.val = "res"} is recommended. For more details on different starting value methods, see Niku et al., (2018).
- 
-For quadratic responses, it can be useful to provide the latent variables estimated with a GLLVM with linear responses, or estimated with (Detrended) Correspondence Analaysis.
-The latent variables can then be passed to the \code{start.lvs} argument inside the \code{control.start} list, which in many cases gives good results. 
-For a GLLVM with quadratic responses and poisson distribution, it is recommended to fit GLLVM with linear responses and a negative binomial distribution, or using a Poisson distribution with random row-effects, instead.
-This is because the quadratic term can account for overdispersion in the Poisson case, which needs to be separately accounted for with linear responses.
-As a result, it should rarely be required to fit a GLLVM with quadratic responses and negative binomial distribution (or row-effects).
-
-
-Models are implemented using TMB (Kristensen et al., 2015) applied to variational approximation (Hui et al., 2017) and Laplace approximation (Niku et al., 2017).
+}
+Models are implemented using TMB (Kristensen et al., 2015) applied to variational approximation (Hui et al., 2017), extended variational approximation (Korhonen et al., 2021) and Laplace approximation (Niku et al., 2017).
 
 With ordinal family response classes must start from 0 or 1.
 
@@ -243,13 +284,21 @@ fit <- gllvm(y, X, formula = ~ Bare.ground + Shrub.cover,
 ordiplot(fit)
 coefplot(fit)
 
-## Example 1: Fit model with two latent variables
+## Example 1: Fit model with two unconstrained latent variables
 # Using variational approximation:
 fitv0 <- gllvm(y, family = "negative.binomial", method = "VA")
 ordiplot(fitv0)
 plot(fitv0, mfrow = c(2,2))
 summary(fitv0)
 confint(fitv0)
+
+## Example 1a: Fit model with two constrained latent variables and with 
+# quadratic response model
+# We scale and centre the  predictors to improve convergence
+fity1 <- gllvm(y, X = scale(X), family = "negative.binomial", 
+              num.lv.c=2, method="VA")
+ordiplot(fity1, biplot = TRUE)
+
 # Using Laplace approximation: (this line may take about 30 sec to run)
 fitl0 <- gllvm(y, family = "negative.binomial", method = "LA")
 ordiplot(fitl0)
@@ -257,8 +306,10 @@ ordiplot(fitl0)
 # Poisson family:
 fit.p <- gllvm(y, family = poisson(), method = "LA")
 ordiplot(fit.p)
-# Use poisson model as a starting parameters for ZIP-model, this line may take few minutes to run
-fit.z <- gllvm(y, family = "ZIP", method = "LA", control.start =list(start.fit = fit.p))
+# Use poisson model as a starting parameters for ZIP-model, this line 
+# may take few minutes to run
+fit.z <- gllvm(y, family = "ZIP", method = "LA", 
+              control.start = list(start.fit = fit.p))
 ordiplot(fit.z)
 
 
@@ -344,6 +395,8 @@ Hui, F. K. C., Warton, D., Ormerod, J., Haapaniemi, V., and Taskinen, S. (2017).
 
 Kasper Kristensen, Anders Nielsen, Casper W. Berg, Hans Skaug, Bradley M. Bell (2016). TMB: Automatic Differentiation and Laplace Approximation. Journal of Statistical Software, 70(5), 1-21.
 
+Korhonen, P., Hui, F. K. C., Niku, J., and Taskinen, S. (2021). Fast, universal estimation of latent variable models using extended variational approximations. Submitted.
+
 Niku, J., Warton,  D. I., Hui, F. K. C., and Taskinen, S. (2017). Generalized linear latent variable models for multivariate count and biomass data in ecology. Journal of Agricultural, Biological, and Environmental Statistics, 22:498-522.
 
 Niku, J., Brooks, W., Herliansyah, R., Hui, F. K. C., Taskinen, S., and Warton,  D. I. (2018). Efficient estimation of generalized linear latent variable models. PLoS One, 14(5):1-20.
@@ -351,7 +404,7 @@ Niku, J., Brooks, W., Herliansyah, R., Hui, F. K. C., Taskinen, S., and Warton, 
 Warton, D. I., Guillaume Blanchet, F., O'Hara, R. B., Ovaskainen, O., Taskinen, S., Walker, S. C. and Hui, F. K. C. (2015). So many variables: Joint modeling in community ecology. Trends in Ecology & Evolution, 30:766-779.
 }
 \seealso{
-\code{\link{coefplot.gllvm}}, \code{\link{confint.gllvm}}, \code{\link{ordiplot.gllvm}}, \code{\link{plot.gllvm}}, \code{\link{residuals.gllvm}}, \code{\link{summary.gllvm}}.
+\code{\link{coefplot.gllvm}}, \code{\link{confint.gllvm}}, \code{\link{ordiplot.gllvm}}, \code{\link{plot.gllvm}}, \code{\link{summary.gllvm}}.
 }
 \author{
 Jenni Niku <jenni.m.e.niku@jyu.fi>, Wesley Brooks, Riki Herliansyah, Francis K.C. Hui, Sara Taskinen, David I. Warton, Bert van der Veen

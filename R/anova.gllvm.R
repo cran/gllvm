@@ -34,6 +34,9 @@
 
 anova.gllvm <- function(object, ... ,which="multi",method="holm") {
   objects <- list(object, ...)
+  if(which=="uni"){
+    warning("This function is still in active development, please interpret with caution. \n")
+  }
   if (length(objects) < 2)
     stop("At least two objects are needed for tests.")
   if (any(!(sapply(objects, function(x)inherits(x,"gllvm")))))
@@ -41,7 +44,7 @@ anova.gllvm <- function(object, ... ,which="multi",method="holm") {
 
   tt <- sapply(objects, function(x)
     x$method)
-  if (!(all(tt == "VA") == !all(tt == "LA")))
+  if (!(all(tt == "VA") | all(tt == "LA") | all(tt == "EVA")))
     stop("The objects are not comparable when they are fitted using different methods.")
 
   y <- object$y
@@ -91,7 +94,7 @@ anova.gllvm <- function(object, ... ,which="multi",method="holm") {
     df.list <- sapply(objects_order, function(x) {
       df <- attr(logLik.gllvm(x), "df")
       
-      df <- df - p*x$num.lv +  x$num.lv * (x$num.lv - 1) / 2
+      df <- df - p*(x$num.lv +  x$num.lv.c)+ (x$num.lv+x$num.lv.c) * ((x$num.lv+x$num.lv.c) - 1) / 2
       
       if(length(x$params$beta0)==1){
         df <- df-1
@@ -101,6 +104,7 @@ anova.gllvm <- function(object, ... ,which="multi",method="holm") {
       df <- df-n-1
     }else if(x$row.eff=="random"){
       df<-df-length(x$params$sigma)
+      if(!is.null(x$params$rho)) df<-df-length(x$params$rho)
     }
       if(x$family=="ordinal"){
     if(x$zeta.struc=="common"){
@@ -123,6 +127,7 @@ anova.gllvm <- function(object, ... ,which="multi",method="holm") {
       df <- df+n-1
     }else if(x$row.eff=="random"){
       df<-df+length(x$params$sigma)
+      if(!is.null(x$params$rho)) df<-df+length(x$params$rho)
     }
     if(x$family=="ordinal"){
     if(x$zeta.struc=="common"){
@@ -139,7 +144,7 @@ anova.gllvm <- function(object, ... ,which="multi",method="holm") {
     }
 
     
-    df <- df + sapply(1:p,function(j)sum(!x$params$theta[j,1:x$num.lv]==0))
+    df <- df + sapply(1:p,function(j)sum(!x$params$theta[j,1:(x$num.lv+x$num.lv.c)]==0))
     #still add terms for traits..
     return(df)
     })
@@ -147,13 +152,14 @@ anova.gllvm <- function(object, ... ,which="multi",method="holm") {
   ll.list <- sapply(objects_order, function(x){
     LL<--colSums(x$TMBfn$report()$nll)
     
-    if(x$method == "VA"){
-      if(x$num.lv > 0) LL = LL + n*0.5*x$num.lv
-      if(x$row.eff == "random") LL = LL + n*0.5
-      if(x$family=="gaussian") {
-        LL <- LL - n*p*log(pi)/2
-      }
-    }
+
+    # if(x$method == "VA"){
+    #   if(x$num.lv > 0) LL = LL + n*0.5*x$num.lv
+    #   if(x$row.eff == "random") LL = LL + length(x$params$row.params)*0.5
+    #   if(x$family=="gaussian") {
+    #     LL <- LL - n*p*log(pi)/2
+    #   }
+    # }
     return(LL)
   }
     )
