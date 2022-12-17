@@ -140,9 +140,9 @@ getResidualCov.gllvm = function(object, adjust = 1, site.index = NULL, ...)
   if(adjust > 0 && object$family %in% c("negative.binomial", "binomial", "gaussian")){
   if(object$family == "negative.binomial"){ 
     if(adjust == 1) {
-        ResCov <- ResCov + diag(log(object$params$phi + 1))
+        ResCov <- ResCov + diag(log(object$params$phi + 1), ncol=ncol(ResCov))
       }else if(adjust == 2){
-        ResCov <- ResCov + diag(trigamma(1/object$params$phi))
+        ResCov <- ResCov + diag(trigamma(1/object$params$phi), ncol=ncol(ResCov))
      }
     
   }
@@ -171,13 +171,13 @@ getResidualCov.gllvm = function(object, adjust = 1, site.index = NULL, ...)
   
   if(object$quadratic==F){
     if(object$num.lv.c>0){
-      if(any(object$params$sigma.lv<0.1)){
+      if(any(ResCov.q[1:object$num.lv.c]<0.1)){
         warning("The residual variance of ",paste(colnames(object$lvs)[which(ResCov.q[1:object$num.lv.c]<0.01)],collapse=", and ")," is very small. This might indicate that the latent variable is nearly perfectly represented by covariates alone. \n")
       }
     }  
   }else{
     if(object$num.lv.c>0){
-      if(any(object$params$sigma.lv<0.01)){
+      if(any((ResCov.q+ResCov.q2)[1:object$num.lv.c]<0.01)){
         warning("The residual variance related to ",paste(colnames(object$lvs)[which((ResCov.q+ResCov.q2)[1:object$num.lv.c]<0.01)],collapse=", and ")," is very small. This might indicate that the latent variable is nearly perfectly represented by covariates alone. \n")
       }
     }  

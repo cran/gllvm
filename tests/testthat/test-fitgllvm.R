@@ -46,9 +46,49 @@ test_that("binomial works", {
 })
 
 test_that("ZIP works", {
-  data(microbialdata)
-  y <- microbialdata$Y[1:10, order(colMeans(microbialdata$Y > 0), decreasing = TRUE)[301:306]]
-  fz0<-gllvm(y, family = "ZIP", seed = 999, method = "LA")
-  expect_equal( length(fz0$params$beta0), 6 )
+  data(spider)
+  y <- spider$abund[order(rowSums(spider$abund>0), decreasing = TRUE)[1:20],1:8]
+  fz0<-gllvm(y, family = "ZIP", seed = 999, method = "LA", num.lv = 1)
+  expect_equal( length(fz0$params$beta0), 8 )
   expect_true( is.finite(fz0$logL))
+})
+
+test_that("quadratic models work", {
+  data(spider)
+  X <- scale(spider$x)
+  y <- spider$abund
+  fq0<-gllvm(y, num.lv = 2, family = "poisson", seed = 999)
+  fq1<-gllvm(y, X, num.lv = 2, family = "poisson", seed = 999)
+  fq2<-gllvm(y, X, num.lv = 2, family = "poisson", row.eff="random", seed = 999)
+  expect_true(is.finite(fq0$logL))
+  expect_true(is.finite(fq1$logL))
+  expect_true(is.finite(fq2$logL))
+})
+
+test_that("constrained ordination models work", {
+  data(spider)
+  X <- scale(spider$x)
+  y <- spider$abund
+  fc0<-gllvm(y, X, num.RR = 2, family = "poisson", seed = 999)
+  fc1<-gllvm(y, X, num.RR = 2, family = "poisson", seed = 999, randomB="LV")
+  fc2<-gllvm(y, X, num.RR = 2, family = "poisson", seed = 999, randomB="LV", row.eff="random")
+  fc3<-gllvm(y, X, num.RR = 2, quadratic=T, family = "poisson", seed = 9226, randomB="LV", row.eff="random")
+  expect_true(is.finite(fc0$logL))
+  expect_true(is.finite(fc1$logL))
+  expect_true(is.finite(fc2$logL))
+  expect_true(is.finite(fc3$logL))
+})
+
+test_that("concurrent ordination models work", {
+  data(spider)
+  X <- scale(spider$x)
+  y <- spider$abund
+  fc0<-gllvm(y, X, num.lv.c = 2, family = "poisson", seed = 999)
+  fc1<-gllvm(y, X, num.lv.c = 2, family = "poisson", seed = 999, randomB="LV")
+  fc2<-gllvm(y, X, num.lv.c = 2, family = "poisson", seed = 999, randomB="LV", row.eff="random")
+  fc3<-gllvm(y, X, num.lv.c = 2, quadratic=T, family = "poisson", seed = 999, randomB="LV")
+  expect_true(is.finite(fc0$logL))
+  expect_true(is.finite(fc1$logL))
+  expect_true(is.finite(fc2$logL))
+  expect_true(is.finite(fc3$logL))
 })

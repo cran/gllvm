@@ -17,17 +17,23 @@
   jitter = FALSE,
   jitter.amount = 0.2,
   s.colors = 1,
+  s.cex = 1.2,
   symbols = FALSE,
   cex.spp = 0.7,
   spp.colors = "blue",
   arrow.scale = 0.8,
+  arrow.spp.scale = 0.8,
   arrow.ci = TRUE,
+  arrow.lty = "solid",
   spp.arrows = NULL,
+  spp.arrows.lty = "dashed",
   cex.env = 0.7,
   lab.dist = 0.1,
   lwd.ellips = 0.5,
   col.ellips = 4,
   lty.ellips = 1,
+  type = NULL,
+  rotate = TRUE,
   ...
 )
 }
@@ -44,7 +50,7 @@
 
 \item{which.lvs}{indices of two latent variables to be plotted if number of the latent variables is more than 2. A vector with length of two. Defaults to \code{c(1,2)}.}
 
-\item{predict.region}{logical, if \code{TRUE} prediction regions for the predicted latent variables are plotted, defaults to \code{FALSE}.}
+\item{predict.region}{if \code{TRUE} or \code{"sites"} prediction regions for the predicted latent variables are plotted, defaults to \code{FALSE}. EXTENSION UNDER DEVELOPMENT: if \code{"species"} uncertainty estimate regions for the estimated latent variable loadings are plotted. Works only if \code{biplot = TRUE}.}
 
 \item{level}{level for prediction regions.}
 
@@ -54,6 +60,8 @@
 
 \item{s.colors}{colors for sites}
 
+\item{s.cex}{size of site labels}
+
 \item{symbols}{logical, if \code{TRUE} sites are plotted using symbols, if \code{FALSE} (default) site numbers are used}
 
 \item{cex.spp}{size of species labels in biplot}
@@ -62,11 +70,17 @@
 
 \item{arrow.scale}{positive value, to scale arrows}
 
-\item{arrow.ci}{represent statistical uncertainty for arrows in constrained ordinatioon using confidence interval? Defaults to \code{TRUE}}
+\item{arrow.spp.scale}{positive value, to scale arrows of species}
+
+\item{arrow.ci}{represent statistical uncertainty for arrows in constrained or concurrent ordination using confidence or prediction interval? Defaults to \code{TRUE}}
+
+\item{arrow.lty}{linetype for arrows in constrained}
 
 \item{spp.arrows}{plot species scores as arrows if outside of the range of the plot? Defaults to \code{FALSE} for linear response models and \code{TRUE} for quadratic response models.}
 
-\item{cex.env}{size of labels for arrows in constrianed ordination}
+\item{spp.arrows.lty}{linetype for species arrows}
+
+\item{cex.env}{size of labels for arrows in constrained ordination}
 
 \item{lab.dist}{distance between label and arrow heads. Value between 0 and 1}
 
@@ -75,6 +89,10 @@
 \item{col.ellips}{colors for prediction ellipses.}
 
 \item{lty.ellips}{line type for prediction ellipses. See graphical parameter lty.}
+
+\item{type}{which type of ordination plot to construct. Options are "residual", "conditional", and "marginal". Defaults to "residual" for GLLVMs with unconstrained latent variables and "conditional" otherwise.}
+
+\item{rotate}{logical, if \code{TRUE} (default) latent variables are rotated to their principal direction using singular value decomposition}
 
 \item{...}{additional graphical arguments.}
 }
@@ -95,8 +113,6 @@ is used to control the relative scaling of the latent variables and their coeffi
 If \code{alpha = 0.5}, the latent variables and their coefficients are on the same scale.
 For details for constructing a biplot, see Gabriel (1971).
 
-Latent variable scores are always scaled by their estimated standard deviations, for plotting.
-
 For a quadratic response model, species optima are plotted. Any species scores that are outside the range 
 of the predicted site scores are not directly plotted, but their main direction is indicated with arrows instead.
 This ensures that the plot remains on a reasonable scale.
@@ -107,6 +123,13 @@ but so that the relative contribution of predictors is maintained.
 If standard errors are available in the provided model, the slopes of environmental variables
 for which the 95% confidence intervals do not include zero are shown as red, while others 
 are slightly less intensely coloured.
+
+For constrained ordination, a conditional plot includes both fixed- and random-effects to 
+optimally represent species co-occurrence patterns, corresponding to "conditional" site scores in \code{\link{getLV.gllvm}}.
+Marginal corresponds to an ordination plot that excludes residual patterns (i.e. excluding the random-effect),
+so that it is only available with num.lv.c>0 or num.RR>0. A conditional plot requires num.lv.c>0. 
+The "residual" type corresponds to an ordination diagram of only residual patterns. 
+See \link{getLV.gllvm} for details.
 }
 \note{
 - If error is occurred when using \code{ordiplot()}, try full name of the function \code{ordiplot.gllvm()} as functions named 'ordiplot' might be found in other packages as well.
@@ -133,6 +156,9 @@ ordiplot(fit, biplot = TRUE, ind.spp = 10)
 \references{
 Gabriel, K. R. (1971). The biplot graphic display of matrices with application to principal component analysis. Biometrika, 58, 453-467.
 }
+\seealso{
+\code{\link{getLV.gllvm}}.
+}
 \author{
-Jenni Niku <jenni.m.e.niku@jyu.fi>, Francis K.C. Hui
+Jenni Niku <jenni.m.e.niku@jyu.fi>, Francis K.C. Hui, Bert van der Veen
 }
