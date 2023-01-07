@@ -81,17 +81,17 @@ ordiplot(fit_ord, biplot = TRUE, ind.spp = 15, xlim = c(-3, 3), ylim = c(-2, 1.6
          main = "Biplot", jitter = TRUE, cex.spp = 0.8)
 
 ## ---- eval = FALSE, warning = FALSE-------------------------------------------
-#  criterias <- NULL
+#  criteria <- NULL
 #  for(i in 1:5){
 #    fiti <- gllvm(y, X, family = "negative.binomial", num.lv = i, sd.errors = FALSE,
 #                  formula = ~ Bare.ground + Canopy.cover + Volume.lying.CWD, seed = 1234)
-#    criterias[i] <- summary(fiti)$AICc
-#    names(criterias)[i] = i
+#    criteria[i] <- summary(fiti)$AICc
+#    names(criteria)[i] = i
 #  }
 
 ## ---- eval = FALSE, warning = FALSE-------------------------------------------
 #  # Compare AICc values
-#  criterias
+#  criteria
 #  #>        1        2        3        4        5
 #  #> 4163.565 4215.446 4311.091 4462.069 4612.805
 

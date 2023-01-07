@@ -1,8 +1,14 @@
+Version 1.4.1
+==============
+
+### Bug Fixes
+* Valgrind error fixed
+
 Version 1.4.0
 ==============
 
 ### New Features
-* For CRAN release 1.4.0's new features see features descripted for versions 1.3.2-1.3.3
+* For CRAN release 1.4.0's new features see features described for versions 1.3.2-1.3.3
 
 ### Bug Fixes
 * For bug fixes to CRAN release 1.4.0 see versions 1.3.2-1.3.3
