@@ -330,7 +330,7 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
 
           sdb<-CMSEPf(object, type = type)$A
           
-          if((object$row.eff=="random") && (dim(object$A)[2]>(object$num.lv.c+object$num.lv)) & (object$num.lvcor==0)){
+          if((object$row.eff=="random") && (object$num.lv.c+object$num.lv)>0 && (dim(object$A)[2]>(object$num.lv.c+object$num.lv)) & (object$num.lvcor==0)){
             object$A<- object$A[,-1,-1]
           }
           
@@ -344,12 +344,12 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
             if(type!="marginal"&num.RR==0) A <- object$A
           } else {A<-object$A}
           
-          if((object$num.lvcor > 1) && (object$Lambda.struc %in% c("diag_unstructured","NN_unstructured","unstructured_unstructured"))) { #Not used at the moment, under development
+          if((object$num.lvcor > 1) && (object$Lambda.struc %in% c("diagU","UNN","UU"))) { #Not used at the moment, under development
             A<-array(diag(object$A[,,1]), dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
             for (i in 1:dim(A)[1]) {
               A[i,,]<-A[i,,]*object$AQ
             }
-          } else if((object$num.lvcor > 0) & (object$corP$cstruc !="diag")) {#Not used at the moment, under development
+          } else if((object$num.lvcor > 0) & (object$corP$cstruc[2] !="diag")) {#Not used at the moment, under development
             A<-array(0, dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
             for (i in 1:object$num.lvcor) {
               A[,i,i]<- diag(object$A[,,i])
@@ -458,7 +458,7 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
 
           sdb<-CMSEPf(object, type = type)$A
           
-          if((object$row.eff=="random") && (dim(object$A)[2]>(object$num.lv.c+object$num.lv)) & (object$num.lvcor==0)){
+          if((object$row.eff=="random") && (object$num.lv.c+object$num.lv)>0  && (dim(object$A)[2]>(object$num.lv.c+object$num.lv)) & (object$num.lvcor==0)){
             object$A<- object$A[,-1,-1]
           }
           
@@ -473,12 +473,12 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
             # A <- array(0,dim=c(Nlv,num.lv.c+num.RR+num.lv,num.lv.c+num.RR+num.lv))
             # A[,-c((num.lv.c+1):(num.lv.c+num.RR)),-c((num.lv.c+1):(num.lv.c+num.RR))] <- object$A
           # } else 
-          if((object$num.lvcor > 1) && (object$Lambda.struc %in% c("diag_unstructured","NN_unstructured","unstructured_unstructured"))) {#Not used at the moment, under development
+          if((object$num.lvcor > 1) && (object$Lambda.struc %in% c("diagU","UNN","UU"))) {#Not used at the moment, under development
             A<-array(diag(object$A[,,1]), dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
             for (i in 1:dim(A)[1]) {
               A[i,,]<-A[i,,]*object$AQ
             }
-          } else if((object$num.lvcor > 0) & (object$corP$cstruc !="diag")) {#Not used at the moment, under development
+          } else if((object$num.lvcor > 0) & (object$corP$cstruc[2] !="diag")) {#Not used at the moment, under development
             A<-array(0, dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
             for (i in 1:object$num.lvcor) {
               A[,i,i]<- diag(object$A[,,i])

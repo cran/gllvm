@@ -57,41 +57,32 @@ residuals.gllvm <- function(object, ...) {
   
   num.X <- ncol(object$X.design)
   num.T <- ncol(object$TR)
-
-  pzip <- function(y, mu, sigma)
-  {
-    pp <- NULL
-    if (y > -1) {
-      cdf <- ppois(y, lambda = mu, lower.tail = TRUE, log.p = FALSE)
-      cdf <- sigma + (1 - sigma) * cdf
-      pp <- cdf
-    }
-    if (y < 0) {
-      pp <- 0
-    }
-    pp
-  }
-
+  
   if (is.null(object$offset)) {
     offset <- matrix(0, nrow = n, ncol = p)
   } else {
     offset <- object$offset
   }
 
-  eta.mat <- matrix(object$params$beta0, n, p, byrow = TRUE) + offset
-  if (!is.null(object$X) && is.null(object$TR))
-    eta.mat <- eta.mat + (object$X.design %*% matrix(t(object$params$Xcoef), num.X, p))
-  if (!is.null(object$TR))
-    eta.mat <- eta.mat + matrix(object$X.design %*% c(object$params$B) , n, p)
-  if (object$row.eff != FALSE)
-    eta.mat <- eta.mat + matrix(object$params$row.params, n, p, byrow = FALSE)
-  if (num.lv > 0|num.lv.c>0|num.RR>0){
-  lvs <- getLV(object)
-  if(nrow(lvs)!=n) lvs = object$TMBfn$env$data$dr0%*%lvs # !!!
-  if(num.lv>0){
-  lvs[,grepl("^LV",colnames(object$lvs))] <- t(t(lvs[,grepl("^LV",colnames(object$lvs))])*object$params$sigma.lv[grepl("^LV",colnames(object$lvs))])
+  if(object$family == "betaH"){
+    eta.mat <- matrix(object$params$beta0, n, p*2, byrow = TRUE) + c(offset)
+  } else {
+    eta.mat <- matrix(object$params$beta0, n, p, byrow = TRUE) + offset
   }
-  eta.mat <- eta.mat  + lvs %*% t(object$params$theta[,1:(num.lv+num.lv.c+num.RR),drop=F])
+  
+  if (!is.null(object$X) && is.null(object$TR))
+    eta.mat <- eta.mat + (object$X.design %*% matrix(t(object$params$Xcoef), nrow = num.X, ncol(eta.mat) ))
+  if (!is.null(object$TR))
+    eta.mat <- eta.mat + matrix(object$X.design %*% c(object$params$B) , nrow = n, ncol = ncol(eta.mat) )
+  if (object$row.eff != FALSE)
+    eta.mat <- eta.mat + matrix(object$params$row.params, n, ncol(eta.mat), byrow = FALSE)
+  if (num.lv > 0|num.lv.c>0|num.RR>0){
+    lvs <- getLV(object)
+    if(nrow(lvs)!=n) lvs = object$TMBfn$env$data$dLV%*%lvs # !!!
+    if(num.lv>0){
+    lvs[,grepl("^LV",colnames(object$lvs))] <- t(t(lvs[,grepl("^LV",colnames(object$lvs))])*object$params$sigma.lv[grepl("^LV",colnames(object$lvs))])
+    }
+    eta.mat <- eta.mat  + lvs %*% t(object$params$theta[,1:(num.lv+num.lv.c+num.RR),drop=F])
   }
   if(quadratic != FALSE){
    eta.mat <- eta.mat  + lvs^2 %*% t(object$params$theta[,-c(1:(num.lv+num.lv.c+num.RR)),drop=F])
@@ -103,7 +94,7 @@ residuals.gllvm <- function(object, ...) {
   mu <- exp(eta.mat)
   if (any(mu == 0))
     mu <- mu + 1e-10
-  if (object$family == "binomial" || object$family == "beta")
+  if (object$family %in% c("binomial", "beta", "betaH", "orderedBeta") )
     mu <- binomial(link = object$link)$linkinv(eta.mat)
   if (object$family == "gaussian")
     mu <- (eta.mat)
@@ -113,6 +104,7 @@ residuals.gllvm <- function(object, ...) {
   colnames(ds.res) <- colnames(y)
   for (i in 1:n) {
     for (j in 1:p) {
+      if(!is.na(object$y[i,j])){
       if (object$family == "poisson") {
         b <- ppois(as.vector(unlist(y[i, j])), mu[i, j])
         a <- min(b,ppois(as.vector(unlist(y[i, j])) - 1, mu[i, j]))
@@ -160,6 +152,33 @@ residuals.gllvm <- function(object, ...) {
         if(u==0) u=1e-16
         ds.res[i, j] <- qnorm(u)
       }
+      if (object$family == "betaH") {
+        if(y[i, j]==0){
+          b = 1 - binomial(link = object$link)$linkinv(eta.mat[i,p+j])
+          a = 0
+        } else {
+          b <- a <- 1 - binomial(link = object$link)$linkinv(eta.mat[i,p+j]) + binomial(link = object$link)$linkinv(eta.mat[i,p+j])*pbeta(as.vector(unlist(y[i, j])), shape1 = object$params$phi[j]*mu[i, j], shape2 = object$params$phi[j]*(1-mu[i, j]))
+        }
+        u <- runif(n = 1, min = a, max = b)
+        if(u==1) u=1-1e-16
+        if(u==0) u=1e-16
+        ds.res[i, j] <- qnorm(u)
+      }
+      if (object$family == "orderedBeta") {
+        if(y[i, j]==1){
+          b = 1
+          a = 1 - binomial(link = object$link)$linkinv(eta.mat[i,j] - object$params$zeta[j,2])
+        } else if(y[i, j]==0){
+          b = 1 - binomial(link = object$link)$linkinv(eta.mat[i,j] - object$params$zeta[j,1])
+          a = 0
+        } else {
+          b <- a <- 1 - binomial(link = object$link)$linkinv(eta.mat[i,j] - object$params$zeta[j,1]) + (binomial(link = object$link)$linkinv(eta.mat[i,j] - object$params$zeta[j,1]) - binomial(link = object$link)$linkinv(eta.mat[i,j] - object$params$zeta[j,2]))*pbeta(as.vector(unlist(y[i, j])), shape1 = object$params$phi[j]*mu[i, j], shape2 = object$params$phi[j]*(1-mu[i, j]))
+        }
+        u <- try({runif(n = 1, min = a, max = b)})
+        if(u==1) u=1-1e-16
+        if(u==0) u=1e-16
+        ds.res[i, j] <- qnorm(u)
+      }
       if (object$family == "exponential") {
         b <- pexp(as.vector(unlist(y[i, j])), rate = 1/mu[i, j])
         a <- min(b,pexp(as.vector(unlist(y[i, j])), rate = 1/mu[i, j]))
@@ -176,6 +195,14 @@ residuals.gllvm <- function(object, ...) {
         if(u==0) u=1e-16
         ds.res[i, j] <- qnorm(u)
       }
+      if (object$family == "ZINB") {
+        b <- pzinb(as.vector(unlist(y[i, j])), mu = mu[i, j], sigma = object$params$phi[j])
+        a <- min(b,pzinb(as.vector(unlist(y[i, j])) - 1, mu = mu[i, j], sigma = object$params$phi[j]))
+        u <- runif(n = 1, min = a, max = b)
+        if(u==1) u=1-1e-16
+        if(u==0) u=1e-16
+        ds.res[i, j] <- qnorm(u)
+      }
       if (object$family == "binomial") {
         b <- pbinom(as.vector(unlist(y[i, j])), 1, mu[i, j])
         a <- min(b,pbinom(as.vector(unlist(y[i, j])) - 1, 1, mu[i, j]))
@@ -184,7 +211,6 @@ residuals.gllvm <- function(object, ...) {
         if(u==0) u=1e-16
         ds.res[i, j] <- qnorm(u)
       }
-
       if (object$family == "tweedie") {
         phis <- object$params$phi + 1e-05
         b <- fishMod::pTweedie(as.vector(unlist(y[i, j])), mu = mu[i, j], phi = phis[j], p = object$Power)
@@ -235,6 +261,7 @@ residuals.gllvm <- function(object, ...) {
             ds.res[i, j] <- qnorm(u)
           }
 
+      }
       }
     }
   }

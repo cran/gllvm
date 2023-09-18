@@ -1,5 +1,48 @@
+Version 1.4.3
+==============
+* For CRAN release 1.4.3 see updates for versions 1.4.2 and 1.4.3
+
+## Bug Fixes
+* Bug in correlated row effects fixed
+* Bug in getPredictErr for models fitted with LA fixed, and it returns now prediction errors for random slopes of X covariates as well
+* Bug in randomCoefplot fixed
+
+Version 1.4.2
+==============
+
+### New Features
+* Added a correction factor to the second partial derivatives of the canonical coefficients for concurrent and constrained ordination
+* Added `randomCoefPlot` functionality of constrained and concurrent ordination models with random slopes. Currently not supported for models with quadratic responses
+* Summary now provides the possibility to calculate wald statistics across LVs or predictors for concurrent and constrained ordination
+* `coef` now renames parameter estimates with more intuitive names and allows to subset the parameter list with names
+* Tweedie power parameter is estimated now if set to NULL in `gllvm. 
+* VA support for Zero-inflated poisson distribution
+* Zero-inflated negative-binomial distribution added
+* Binomial (Ntrials>1) support added (previously only Bernoulli)
+* Now allowed to have (some) NAs in the response data
+
+## Bug Fixes
+* Fixed an issue with structured row-effects in concurrent and constrained ordination
+* Fixed a bug that prevented plotting prediction regions for constrained ordination with structured row-effects
+* No standard errors should be returned by optima.gllvm and tolerances.gllvm with randomB != FALSE
+* Species names were in the original order with order = TRUE in RandomCoefPlot
+* Fixed an issue that arose when {0,1} bounded parameters reached the bounds
+* Various bug fixes for constrained/concurrent ordination with random intercepts and random slopes
+* Bug in predictions with structured row intercepts was fixed, see issue #86
+
 Version 1.4.1
 ==============
+
+### New Features
+* Computational stability of random slopes for constr. and concr. ordination significantly improved
+* Computational stability of quadratic model significantly improved
+* Unstructured VA covariance matrix for quadratic models with random intercepts
+* Added example for se.gllvm
+
+## Bug Fixes
+* Bugfix in random slopes for concr. ordination with LV-specific variances and random row intercepts
+* Bugfix for quadratic model with Poisson, NB, gamma, or exponential responses
+* Bugfix in starting values for constrained and concurrent quadratic model
 
 ### Bug Fixes
 * Valgrind error fixed
