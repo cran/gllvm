@@ -23,25 +23,6 @@
 #'fit <- gllvm(y, X, formula = ~ pH + Phosp, family = poisson())
 #'coefplot(fit)
 #'\dontrun{
-#'## Load a dataset from the mvabund package
-#'data(antTraits)
-#'y <- as.matrix(antTraits$abund)
-#'X <- as.matrix(antTraits$env)
-#'# Fit model with environmental covariates
-#'fit <- gllvm(y, X, formula = ~ Bare.ground + Shrub.cover,
-#'             family = poisson())
-#'coefplot.gllvm(fit)
-#'
-#'# Fit model with all environmental covariates
-#'fitx <- gllvm(y, X, family = "negative.binomial")
-#'coefplot(fitx, mfrow = c(3,2))
-#'coefplot(fitx, which.Xcoef = 1:2)
-#'
-#'# Fit gllvm model with environmental and trait covariates
-#'TR <- antTraits$traits
-#'fitT <- gllvm(y = y, X = X, TR = TR, family = "negative.binomial")
-#'coefplot(fitT)
-#'
 #'# Fit  gllvm model with environmental covariances and reduced rank
 #'fitRR <- gllvm(y = y, X = X, num.RR = 2, family = "negative.binomial")
 #'coefplot(fitRR)
@@ -54,14 +35,14 @@ coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, order = T
 
   if (!any(class(object) == "gllvm"))
     stop("Class of the object isn't 'gllvm'.")
-
-  if (is.null(object$X) & is.null(object$lv.X))
+  if(!is.null(object$lv.X) && is.null(object$lv.X.design))object$lv.X.design <- object$lv.X #for backward compatibility
+  if (is.null(object$X) & is.null(object$lv.X.design))
     stop("No X covariates in the model.")
   if(is.null(object$X) && !isFALSE(object$randomB))
     stop("No predictor effects to plot in the model.")
 
   #Calculate standard errors of species-effects for reduced rank terms
-  if(!is.null(object$lv.X) && isFALSE(object$randomB)){
+  if(!is.null(object$lv.X.design) && isFALSE(object$randomB)){
     beta <- object$params$theta[,1:(object$num.lv.c+object$num.RR), drop=FALSE]%*%t(object$params$LvXcoef)
     betaSE <- RRse(object)
     object$params$Xcoef<-cbind(object$params$Xcoef,beta)
@@ -114,9 +95,15 @@ coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, order = T
         axis( 2, at = At.y, labels = names(Xc), las = 1, cex.axis = cex.ylab)
     }
   } else{
-    Xcoef <- object$params$B
-    xnames <- names(object$params$B)
-    sdXcoef <- object$sd$B
+    if(object$beta0com){
+      object$params$B <- c(setNames(object$params$beta0[1], "Intercept"), object$params$B)
+      object$sd$B <- c(setNames(object$sd$beta0[1], "Intercept"),object$sd$B)
+    }
+    if (is.null(which.Xcoef))
+      which.Xcoef <- 1:length(object$params$B)
+    Xcoef <- object$params$B[which.Xcoef]
+    xnames <- names(object$params$B)[which.Xcoef]
+    sdXcoef <- object$sd$B[which.Xcoef]
     if(object$family=="betaH"){
       if(is.null(which.Xcoef)){
         Xcoef <- c(Xcoef,object$params$betaH)
@@ -162,7 +149,7 @@ coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, order = T
   }
 }
 
-#'@export
+#'@export coefplot
 coefplot <- function(object, ...)
 {
   UseMethod(generic="coefplot")

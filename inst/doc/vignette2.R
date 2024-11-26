@@ -9,7 +9,7 @@ Xenv <- microbialdata$Xenv
 dim(Ysoil)
 head(Xenv, 3)
 
-## ---- echo=FALSE--------------------------------------------------------------
+## ----echo=FALSE---------------------------------------------------------------
 load(file = "ftXi.RData")
 load(file = "ftXph.RData")
 load(file = "ftX.RData")
@@ -22,6 +22,7 @@ ftNULL$num.RR <- ftNULL$num.lv.c <- 0
 ftXi$quadratic<-ftXph$quadratic<-ftX$quadratic<-ftNULL$quadratic<-FALSE
 #ftXi$num.lvcor<-ftXph$num.lvcor<-ftX$num.lvcor<-ftNULL$num.lvcor<-0
 ftNULL$TMBfn$env$data$dr0=model.matrix(~Site-1, Xenv)
+ftXi$col.eff$col.eff<-ftXph$col.eff$col.eff<-ftX$col.eff$col.eff<-ftNULL$col.eff$col.eff<-FALSE
 
 ## ----fig.height=4, fig.width=8------------------------------------------------
 meanY <- apply(Ysoil,2, mean)
@@ -31,7 +32,7 @@ plot(log(meanY),varY, log = "y", main = "Species mean-variance relationship")
 ## -----------------------------------------------------------------------------
 sDesign<-data.frame(Site=Xenv$Site)
 
-## ---- eval = FALSE------------------------------------------------------------
+## ----eval = FALSE-------------------------------------------------------------
 #  ftNULL <- gllvm(Ysoil, studyDesign = sDesign, family = "negative.binomial", row.eff = ~(1|Site), num.lv = 2, sd.errors = FALSE)
 
 ## -----------------------------------------------------------------------------
@@ -41,7 +42,7 @@ ftNULL
 par(mfrow = c(1, 2))
 plot(ftNULL, which = 1:2, var.colors = 1, n.plot = 100)
 
-## ---- out.width='70%'---------------------------------------------------------
+## ----out.width='70%'----------------------------------------------------------
 # Define colors according to the values of pH, SOM and phosp
 library(grDevices)
 ph <- Xenv$pH
@@ -95,7 +96,7 @@ legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch=c(1, 2, 3), bty = "n")
 # Scale environmental variables
 Xsoils <- scale(Xenv[, 1:3])
 
-## ---- eval = FALSE------------------------------------------------------------
+## ----eval = FALSE-------------------------------------------------------------
 #  ftXph <- gllvm(Ysoil, X = Xsoils, studyDesign = sDesign, formula = ~pH, family = "negative.binomial",
 #                 row.eff = ~(1|Site), num.lv = 2)
 
@@ -105,12 +106,12 @@ ftXph
 ## ----fig.height=7, fig.width=7------------------------------------------------
 coefplot(ftXph, cex.ylab = 0.5, y.label = FALSE)
 
-## ---- out.width='70%'---------------------------------------------------------
+## ----out.width='70%'----------------------------------------------------------
 ordiplot(ftXph, main = "Ordination of sites", 
          symbols = TRUE, pch = pchr, s.colors = Colorsph)
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 
-## ---- eval = FALSE------------------------------------------------------------
+## ----eval = FALSE-------------------------------------------------------------
 #  ftX <- gllvm(Ysoil, X = Xsoils, studyDesign = sDesign, family = "negative.binomial", row.eff = ~(1|Site), num.lv = 2)
 
 ## -----------------------------------------------------------------------------
@@ -119,12 +120,12 @@ ftX
 ## ----fig.height=10, fig.width=7-----------------------------------------------
 coefplot(ftX, cex.ylab = 0.5, y.label = FALSE, mar = c(4, 2, 2, 1))
 
-## ---- out.width='70%'---------------------------------------------------------
+## ----out.width='70%'----------------------------------------------------------
 ordiplot(ftX, main = "Ordination of sites", 
          symbols = TRUE, pch = pchr, s.colors = Colorsph)
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 
-## ---- eval = FALSE------------------------------------------------------------
+## ----eval = FALSE-------------------------------------------------------------
 #  Xenv <- data.frame(Xsoils, Region = factor(Xenv$Region),
 #                     Soiltype = factor(Xenv$Soiltype))
 #  ftXi <- gllvm(Ysoil, X = Xenv, studyDesign = sDesign, formula = ~ SOM + pH + Phosp + Region,
@@ -134,7 +135,7 @@ legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 ## -----------------------------------------------------------------------------
 ftXi
 
-## ---- warning=FALSE, out.width='70%'------------------------------------------
+## ----warning=FALSE, out.width='70%'-------------------------------------------
 ordiplot(ftXi, main = "Ordination of sites",  
          symbols = TRUE, pch = pchr, s.colors = Colorsph)
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")

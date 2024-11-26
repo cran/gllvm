@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Pekka Korhonen" />
+
+<meta name="date" content="2024-11-26" />
+
+<title>Analysing sparse ecological percent cover data using gllvm</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+<style type="text/css">
+
+div.csl-bib-body { }
+div.csl-entry {
+clear: both;
+margin-bottom: 0em;
+}
+.hanging div.csl-entry {
+margin-left:2em;
+text-indent:-2em;
+}
+div.csl-left-margin {
+min-width:2em;
+float:left;
+}
+div.csl-right-inline {
+margin-left:2em;
+padding-left:1em;
+}
+div.csl-indent {
+margin-left: 2em;
+}
+</style>
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Analysing sparse ecological percent cover
+data using gllvm</h1>
+<h4 class="author">Pekka Korhonen</h4>
+<h4 class="date">2024-11-26</h4>
+
+
+
+<p>This short document showcases how to use the <strong>gllvm</strong>
+package to analyse multivariate percent cover data. Namely, we show how
+to apply the hurdle beta GLLVM (with logistic link), as detailed in
+<span class="citation">Korhonen et al. (2024)</span>, to analyse the
+kelp forest dataset from the Santa Barbara Coastal Long-Term Ecological
+Research project, available from <a href="https://doi.org/10.6073/pasta/0af1a5b0d9dde5b4e5915c0012ccf99c">https://doi.org/10.6073/pasta/0af1a5b0d9dde5b4e5915c0012ccf99c</a>.</p>
+<p>A multivariate percent cover dataset often comes in the form of a
+<span class="math inline">\(n \times m\)</span> matrix <span class="math inline">\(\bf{Y}\)</span>, with <span class="math inline">\(n\)</span> being the number of observational
+units/sites, and <span class="math inline">\(m\)</span> being the number
+of species of plants, macroalgae, sessile invertebrates, et cetera. The
+response <span class="math inline">\(y_{ij}\)</span> is then the
+recorded percentage of the relative area covered by species <span class="math inline">\(j\)</span> on unit/site <span class="math inline">\(i\)</span>. Typically such datasets contain
+considerable proportion of zero observations, as a given obs. unit is
+often populated by only a small subset of the <span class="math inline">\(m\)</span> species in total. More rarely, it might
+even be the case that one of the species covers some obs. unit
+completely.</p>
+<div id="hurdle-beta-gllvm" class="section level2">
+<h2>Hurdle beta GLLVM</h2>
+<p>Traditionally, beta regression has been used to model responses that
+take the form of percentages. If <span class="math inline">\(y^*_{ij}\)</span> is in the (open) interval <span class="math inline">\((0,1)\)</span>, and is distributed according to
+beta distribution, <span class="math inline">\(y^*_{ij} \sim
+\text{Beta}(\mu_{ij}, \phi_j)\)</span>, then it has the following
+density: <span class="math display">\[ f_{\text{beta}}(y_{ij}^*;
+\mu_{ij}, \phi_j) =
+\frac{\Gamma(\phi_j)}{\Gamma(\mu_{ij}\phi_j)\Gamma(\phi_j-\phi_j\mu_{ij})}
+(y_{ij}^*)^{\mu_{ij}\phi_j-1}(1-y_{ij}^*)^{\phi_j(1-\mu_{ij}-1)}.\]</span></p>
+<p>The mean parameter <span class="math inline">\(\mu_{ij}\)</span> can
+be connected to a set of covariates and latent variables through some
+link function, by the equation <span class="math inline">\(g(\mu_{ij})=\eta_{ij} = \beta_{0j} +
+\boldsymbol{\beta}_j^\top\bf{x_i} +
+\boldsymbol{\lambda}_j^\top\bf{u_i}\)</span>.</p>
+<p>However, such a model is ill-suited for most percent cover datasets,
+due to the fact that the beta distribution isn’t capable of handling
+zero (or <span class="math inline">\(100\%\)</span>) responses. To make
+use of the beta regression model in such scenario, one needs to use some
+transformation in order to ‘push’ the responses away from the
+boundaries. This procedure might provide reasonable results when the
+numbers of zeros or ones in the data are relatively low. On the other
+hand, by transforming the zeros and ones, we might lose some important
+information.</p>
+<p>A more sophisticated way of tackling such issue is by considering a
+zero-accommodating model, couple of which have been proposed recently.
+One such model is the hurdle beta model, which models the two (can be
+extended to three if <span class="math inline">\(100\%\)</span> covers
+are recorded, see <span class="citation">Korhonen et al. (2024)</span>)
+classes the response <span class="math inline">\(y_{ij}\)</span> can
+take, i.e., <span class="math inline">\(\{0\}\)</span> and <span class="math inline">\((0,1)\)</span>, by separate processes. Namely, the
+zeros are assumed to be generated by a Bernoulli process. Conditional on
+<span class="math inline">\(y_{ij}\in(0,1)\)</span>, the response is
+modeled using the standard beta distribution as presented above. The
+likelihood function for a response <span class="math inline">\(Y_{ij}\)</span> following the hurdle beta
+distribution is of the form: <span class="math display">\[
+P(Y_{ij};\mu_{ij}, \mu_{ij}^0, \phi_j) = \begin{cases}
+        1-\mu_{ij}^0, &amp; Y_{ij} = 0,\\
+         \mu_{ij}^0 \cdot f_{\text{beta}}(Y_{ij};\mu_{ij},\phi_j), &amp;
+Y_{ij} \in (0,1). \\
+        \end{cases}
+\]</span> where <span class="math inline">\(g(\mu_{ij}^0) = \eta_{ij}^0
+= \beta_{0j}^0 + \bf{x_i}^\top\boldsymbol{\beta}_j^0 +
+\bf{u_i}^\top\boldsymbol{\lambda}_j^0\)</span> for and <span class="math inline">\(g(\mu_{ij}) = \eta_{ij} = \beta_{0j} +
+\bf{x_i}^\top\boldsymbol{\beta}_j +
+\bf{u_i}^\top\boldsymbol{\lambda}_j\)</span> and <span class="math inline">\(g(\cdot)\)</span> can be either probit or logistic
+link function. Note, that here, the separate linear predictors share the
+same environmental covariates <span class="math inline">\(\bf{x}_i\)</span> and latent variable scores <span class="math inline">\(\bf{u}_i\)</span>, while the coefficients and
+loadings are allowed to differ.</p>
+<p>The <strong>gllvm</strong> package implements the hurdle beta GLLVM
+with two different estimation methods available. First, accessed by the
+argument <code>method=&quot;VA&quot;</code> when calling uses a hybrid approach,
+where the method of variational approximations, or VA, is applied to the
+Bernoulli-process part of the data (only probit link allowed), while the
+method of <strong>extended</strong> variational approximations, see
+<span class="citation">Korhonen et al. (2023)</span>, is applied to the
+beta distributed part. By instead specifying <code>method=&quot;EVA&quot;</code>,
+the <strong>EVA</strong> method is applied to both parts of the
+likelihood.</p>
+</div>
+<div id="example" class="section level2">
+<h2>Example</h2>
+<p>In the following, we show how to fit the logistic hurdle beta GLLVM
+using <strong>EVA</strong> on the SBC LTER marine macroalgae (i.e.,
+seaweed) percent cover dataset. The data has been collected in 2000-2020
+along 44 permanent transect lines along coastal southern California. We
+will specify a model with two latent variables (for ordination) and will
+include the rockiness of the seabed and the average number of stripes of
+giant kelp as environmental covariates in the model.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(gllvm)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;kelpforest&quot;</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>Yabund <span class="ot">&lt;-</span> kelpforest<span class="sc">$</span>Y</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>Xenv <span class="ot">&lt;-</span> kelpforest<span class="sc">$</span>X</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>SPinfo <span class="ot">&lt;-</span> kelpforest<span class="sc">$</span>SPinfo</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="co"># Data contains both algae and sessile invertebrates</span></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="fu">table</span>(SPinfo<span class="sc">$</span>GROUP)</span></code></pre></div>
+<pre><code>## 
+##  ALGAE INVERT  PLANT 
+##     61     69      2</code></pre>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="co"># Select only the macroalgae:</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>Yalg <span class="ot">&lt;-</span> Yabund[,SPinfo<span class="sc">$</span>GROUP<span class="sc">==</span><span class="st">&quot;ALGAE&quot;</span>]</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="co"># Remove empty rows and rows with missing values from the data</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>rem0 <span class="ot">&lt;-</span> <span class="fu">which</span>((<span class="fu">rowSums</span>(Yalg)<span class="sc">==</span><span class="dv">0</span>) <span class="sc">|</span> <span class="fu">is.na</span>(<span class="fu">rowSums</span>(Yalg)))</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>Yalg <span class="ot">&lt;-</span> Yalg[<span class="sc">-</span>rem0,]</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>Xenv <span class="ot">&lt;-</span> Xenv[<span class="sc">-</span>rem0,]</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="co"># Use only the data from the year 2016:</span></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>Yalg <span class="ot">&lt;-</span> Yalg[Xenv<span class="sc">$</span>YEAR<span class="sc">==</span><span class="dv">2016</span>,]</span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a>Xenv <span class="ot">&lt;-</span> Xenv[Xenv<span class="sc">$</span>YEAR<span class="sc">==</span><span class="dv">2016</span>,]</span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a></span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="co"># Remove species which have no observations</span></span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a>Yalg <span class="ot">&lt;-</span> Yalg[,<span class="sc">-</span><span class="fu">which</span>(<span class="fu">colSums</span>(Yalg<span class="sc">&gt;</span><span class="dv">0</span>)<span class="sc">==</span><span class="dv">0</span>)]</span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="co"># Number of obs. and species:</span></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="fu">dim</span>(Yalg)</span></code></pre></div>
+<pre><code>## [1] 44 53</code></pre>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># Specify the covariates in the linear predictor</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>Xformulai <span class="ot">=</span> <span class="er">~</span>KELP_FRONDS <span class="sc">+</span> PERCENT_ROCKY</span></code></pre></div>
+<p>After setting up the data, LV design and the covariates, the model is
+estimated by</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">gllvm</span>(Yalg, <span class="at">X=</span>Xenv, <span class="at">formula =</span> Xformulai, <span class="at">family =</span> <span class="st">&quot;betaH&quot;</span>, <span class="at">method=</span><span class="st">&quot;EVA&quot;</span>, </span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>             <span class="at">num.lv =</span> <span class="dv">2</span>, <span class="at">link=</span><span class="st">&quot;logit&quot;</span>, <span class="at">control=</span><span class="fu">list</span>(<span class="at">reltol=</span><span class="fl">1e-12</span>))</span></code></pre></div>
+<p>To inspect e.g., the covariate effects, use</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>fit<span class="sc">$</span>params<span class="sc">$</span>Xcoef</span></code></pre></div>
+<pre><code>##            KELP_FRONDS PERCENT_ROCKY
+## AMZO     -6.926576e-04 -3.419449e-02
+## AU       -1.020450e-01 -3.089640e-03
+## BF       -1.485643e+00  6.268714e-02
+## BLD      -4.593091e-03 -6.824021e-02
+## BO        1.082033e-01 -1.703388e-02
+## BR        3.593815e-02  8.754444e-03
+## BRA       3.249536e-01 -8.187708e-02
+## CAL      -8.898427e-02  4.872812e-03
+## CC        1.688338e-01 -9.612437e-03
+## CF       -3.537180e-01  3.778452e-02
+## CG       -1.431699e-02 -4.172088e-02
+## CO       -7.171867e-02  9.536235e-03
+## COF      -1.492480e-01  3.649886e-02
+## CP       -3.490993e-01  3.336247e-02
+## CRYP      1.105240e-03 -4.021097e-06
+## CYOS      9.591773e-03 -6.121095e-03
+## CZ       -1.743722e-03 -3.236607e-02
+## DL        6.640460e-02 -1.284277e-03
+## DMH      -3.610327e-02 -4.747740e-03
+## DP       -6.418505e-02  7.576342e-03
+## DU       -1.009267e+00 -2.734474e-03
+## EAH       3.489164e+00 -3.518374e-02
+## EC        9.778532e-02  1.264536e-02
+## EH        1.425385e+00 -1.184152e-01
+## ER        6.652890e-02  2.281598e-02
+## FASP     -1.681229e-03 -5.414127e-02
+## FB       -3.352533e-01  8.559165e-03
+## FTHR     -1.988998e-02  1.674417e-03
+## GR        5.405880e-01  3.356715e-02
+## GS       -2.457032e-01 -3.474810e-03
+## GYSP     -8.023519e-02 -4.342719e-03
+## IR       -1.301316e-03 -4.854652e-02
+## LH       -3.000163e-03 -4.123936e-02
+## LI       -2.039607e-04 -1.835646e-01
+## LS       -6.287617e-04 -8.840235e-03
+## LX       -6.083141e-03 -8.163522e-02
+## MH        1.070132e-01 -1.872839e-03
+## NIE      -3.717803e-02 -8.403467e-03
+## PH        1.422250e+00 -2.047847e-01
+## PHSE     -2.939904e-01  2.578593e-03
+## PL        9.841258e-02  7.086878e-04
+## POLA     -3.288605e-01 -4.030514e-02
+## PRSP      2.190012e-03 -1.579337e-04
+## R         3.652964e-02  1.005004e-02
+## RAT      -2.353364e-02  3.655290e-03
+## SAFU     -8.732058e-01  1.686067e-02
+## SAHO     -2.367829e+00 -1.298932e-02
+## SAMU     -9.875292e-02 -1.795740e-04
+## SCCA     -5.261532e-02  4.094153e-02
+## STIN     -1.117553e-04 -1.005798e-01
+## TALE      1.545333e-01 -2.454684e-02
+## UEC      -1.858629e-05 -9.293147e-03
+## UV        1.142739e+00  1.196097e-03
+## H01_AMZO -1.077519e+00  1.182957e-01
+## H01_AU   -1.610227e-01 -3.658912e-02
+## H01_BF   -1.827179e-01 -6.135933e-02
+## H01_BLD  -1.155947e+00  6.226792e-02
+## H01_BO    1.842461e-01 -8.565025e-03
+## H01_BR   -1.380823e-01  1.158724e-03
+## H01_BRA   1.586778e-02 -6.345348e-02
+## H01_CAL  -5.542341e-01  1.946985e-01
+## H01_CC   -5.891700e-01  4.040126e-02
+## H01_CF   -1.281117e-01  2.861065e-03
+## H01_CG   -1.589743e-01  3.181475e-01
+## H01_CO    6.063362e-02 -1.211045e-02
+## H01_COF  -2.809342e+00  2.419088e-01
+## H01_CP   -2.889048e-01  1.428933e-01
+## H01_CRYP -8.746774e-02 -2.461221e-02
+## H01_CYOS  1.252789e-01 -1.927851e-02
+## H01_CZ   -4.066913e-01  2.326639e-01
+## H01_DL    2.375553e-01 -4.956400e-02
+## H01_DMH  -8.350503e-02 -5.084179e-02
+## H01_DP   -1.038233e-01  1.648197e-02
+## H01_DU   -5.556789e-01  2.218709e-01
+## H01_EAH  -7.122910e+00  2.061907e-01
+## H01_EC    7.850942e-02  6.847758e-02
+## H01_EH    2.223421e-01 -6.291070e-02
+## H01_ER   -2.246952e-02  3.549221e-02
+## H01_FASP -1.789588e+00  2.173708e-01
+## H01_FB   -9.105757e-01 -1.155929e-01
+## H01_FTHR -1.482863e-01 -2.570203e-02
+## H01_GR   -3.227311e-01  3.266667e-01
+## H01_GS   -1.716337e+00 -1.706905e-01
+## H01_GYSP -3.969697e-01  7.068655e-02
+## H01_IR   -7.441518e-01  1.183389e-01
+## H01_LH   -3.661752e-01  1.698636e-01
+## H01_LI   -3.632474e+00 -2.412018e-02
+## H01_LS   -4.700083e-02  1.300001e-01
+## H01_LX   -5.695952e-01 -2.920796e-02
+## H01_MH    2.851963e+00 -1.691651e-02
+## H01_NIE  -3.796154e-02 -1.723835e-02
+## H01_PH    8.275629e-01 -1.264264e-01
+## H01_PHSE -1.926180e+00 -9.363851e-02
+## H01_PL    7.445800e-02 -2.318431e-03
+## H01_POLA -2.316144e-01 -2.666334e-02
+## H01_PRSP -1.888217e-01 -6.964450e-05
+## H01_R    -2.856247e-01  1.963927e-02
+## H01_RAT  -1.874272e-01  3.119916e-02
+## H01_SAFU -5.804313e+00 -2.524188e-01
+## H01_SAHO -5.482167e+00  2.350453e-01
+## H01_SAMU -7.142075e-02  2.244000e-03
+## H01_SCCA -4.907491e-02  1.676260e-02
+## H01_STIN -1.577110e+01 -6.620633e-02
+## H01_TALE -3.913926e-01  2.607905e-01
+## H01_UEC  -2.855413e+00  1.909605e-01
+## H01_UV   -1.371414e+00 -4.323153e-02</code></pre>
+<p>In the above, the prefix indicates that the coefficient relates to
+the Bernoulli part of the hurdle model.</p>
+<p>Ordination plot can then be generated as per usual:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">ordiplot</span>(fit, <span class="at">jitter =</span> <span class="cn">TRUE</span>, <span class="at">s.cex =</span> .<span class="dv">8</span>)</span></code></pre></div>
+<p><img role="img" src="data:image/png;base64,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" style="display: block; margin: auto;" /></p>
+</div>
+<div id="references" class="section level2 unnumbered">
+<h2 class="unnumbered">References</h2>
+<div id="refs" class="references csl-bib-body hanging-indent" entry-spacing="0">
+<div id="ref-Korhonen2023" class="csl-entry">
+Korhonen, P., F.K.C. Hui, J. Niku, and S. Taskinen. 2023. <span>“Fast
+and Universal Estimation of Latent Variable Models Using Extended
+Variational Approximations.”</span> 33: 26. <a href="https://doi.org/10.1007/s11222-022-10189-w">https://doi.org/10.1007/s11222-022-10189-w</a>.
+</div>
+<div id="ref-Korhonen2024" class="csl-entry">
+Korhonen, P., F.K.C. Hui, J. Niku, S. Taskinen, and B. van der Veen.
+2024. <span>“A Comparison of Joint Species Distribution Models for
+Percent Cover Data.”</span> <a href="https://doi.org/10.48550/arXiv.2403.11562">https://doi.org/10.48550/arXiv.2403.11562</a>.
+</div>
+</div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

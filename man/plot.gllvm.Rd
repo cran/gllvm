@@ -27,7 +27,7 @@
 
 \item{var.colors}{colors for responses, vector with length of number of response variables or 1. Defaults to NULL, when different responses have different colors.}
 
-\item{add.smooth}{logical indicating if a smoother should be added.}
+\item{add.smooth}{logical with default \code{TRUE}. Indicates if a smoother should be added.}
 
 \item{envelopes}{logical, indicating if simulated point-wise confidence interval envelope will be added to Q-Q plot, defaults to \code{TRUE}}
 
@@ -48,22 +48,15 @@ plot.gllvm is used for model diagnostics. Dunn-Smyth residuals (randomized quant
 }
 \examples{
 \dontrun{
-## Load a dataset from the mvabund package
-data(antTraits)
-y <- as.matrix(antTraits$abund)
 # Fit gllvm model with Poisson family
-fit <- gllvm(y, family = poisson())
+data(microbialdata)
+X <- microbialdata$Xenv
+y <- microbialdata$Y[, order(colMeans(microbialdata$Y > 0), 
+                     decreasing = TRUE)[21:40]]
+fit <- gllvm(y, X, formula = ~ pH + Phosp, family = poisson())
 # Plot residuals
 plot(fit, mfrow = c(3,2))
 
-\donttest{
-# Fit gllvm model with negative binomial family
-fitnb <- gllvm(y = y, family = "negative.binomial")
-# Plot residuals
-plot(fitnb, mfrow = c(3,2))
-# Plot only two first plots
-plot(fitnb, which = 1:2, mfrow = c(1,2))
-}
 }
 }
 \references{

@@ -11,7 +11,7 @@
 #' @examples
 #' \dontrun{
 #'## Load a dataset from the mvabund package
-#'data(antTraits)
+#'data(antTraits, package = "mvabund")
 #'y <- as.matrix(antTraits$abund)
 #'X <- as.matrix(antTraits$env[,1:2])
 #'# Fit gllvm model
@@ -36,9 +36,27 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
   num.lv.c <- object$num.lv.c
   num.RR <- object$num.RR
   quadratic <- object$quadratic
-  alfa <- (1 - level) / 2
-  if(object$row.eff == "random") object$params$row.params = NULL
   
+  # backward compatibility
+  
+  if(!inherits(object$row.eff, "formula") && object$row.eff == "random") object$params$row.params.random <- object$params$row.params
+  if(!inherits(object$row.eff, "formula") && object$row.eff == "fixed") object$params$row.params.fixed <- object$params$row.params[-1]
+  if(!is.null(object$lv.X) && is.null(object$lv.X.design))object$lv.X.design <- object$lv.X
+  if(is.null(object$col.eff$col.eff))object$col.eff$col.eff <- FALSE
+  
+  # end backward compatibility
+  
+  if("Intercept"%in%row.names(object$sd$B))object$sd$B<-object$sd$B[-which(row.names(object$sd$B)=="Intercept")]
+  alfa <- (1 - level) / 2
+  
+  if(!is.null(object$params$row.params.random)) object$params$row.params.random = NULL
+  
+  if(object$col.eff$col.eff == "random" | !is.null(object$randomX))object$params$Br <- NULL
+  if(object$beta0com){
+    object$params$beta0 <- unique(object$params$beta0)
+    names(object$params$beta0) <- "Community intercept"
+    object$sd$beta0 <- unique(object$sd$beta0)
+  }
   if(is.null(parm)){
     if (object$family == "negative.binomial") {
       object$params$phi <- NULL
@@ -51,11 +69,13 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
     
     if (!is.null(object$params$sigmaB)) {
       object$params$sigmaB <- sqrt(diag(object$params$sigmaB))
+      if(object$col.eff$col.eff=="random"){
+        object$sd$sigmaB <- diag(object$sd$sigmaB)
+      }
       object$sd$corrpar <- NULL
     }
     
-    
-    parm_all <- c("sigma.lv","theta", "LvXcoef","beta0", "Xcoef", "B", "row.params", "sigma", "sigmaB", "sigmaLvXcoef", "inv.phi", "phi", "ZINB.phi", "ZINB.inv.phi" ,"p","zeta")
+    parm_all <- c("sigma.lv","theta", "LvXcoef","beta0", "Xcoef", "B", "row.params.fixed", "sigma", "sigmaB", "sigmaLvXcoef", "inv.phi", "phi", "ZINB.phi", "ZINB.inv.phi" ,"p","zeta", "rho.sp")
     if(object$randomB!=FALSE){
       object$params$LvXcoef <- NULL
     }
@@ -63,9 +83,18 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
     if(object$family=="ZINB" && "inv.phi" %in% parmincl)parmincl[parmincl=="inv.phi"]<-"ZINB.inv.phi"
     
     parmincl <- parm_all[parm_all %in% names(object$params)]
-
+    if("rho.sp"%in%names(object$params[parmincl])){
+      object$params$rho.sp <- log(-log(object$params$rho.sp))
+    }
+    
     cilow <- unlist(object$params[parmincl]) + qnorm(alfa) * unlist(object$sd[parmincl])
     ciup <- unlist(object$params[parmincl]) + qnorm(1 - alfa) * unlist(object$sd[parmincl])
+    
+    if("rho.sp"%in%names(object$params[parmincl])){
+      a <- exp(-exp(cilow[grepl("rho.sp", names(cilow))])); b <- exp(-exp(ciup[grepl("rho.sp", names(ciup))]))
+      cilow[grepl("rho.sp", names(cilow))] <- pmin(a,b)
+      ciup[grepl("rho.sp", names(ciup))] <- pmax(a,b)
+    }
     
     M <- cbind(cilow, ciup)
     
@@ -77,63 +106,57 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
       nr <- rep(1:(num.lv.c+num.RR), each = p)
       nc <- rep(1:p, (num.lv.c+num.RR))
       if(quadratic == FALSE)
-        rnames[1:((num.lv.c+num.RR) * p)] <- paste(paste("theta.CLV", nr, sep = ""), nc, sep = ".")
+        rnames[grepl("theta",rnames)][1:((num.lv.c+num.RR) * p)] <- paste(paste("theta.CLV", nr, sep = ""), nc, sep = ".")
       if(quadratic != FALSE)
-        rnames[1:((num.lv.c+num.RR) * p *2)] <- c(paste(paste("theta.CLV", nr, sep = ""), nc, sep = "."), paste(paste("theta.CLV", nr, "^2",
+        rnames[grepl("theta",rnames)][1:((num.lv.c+num.RR) * p *2)] <- c(paste(paste("theta.CLV", nr, sep = ""), nc, sep = "."), paste(paste("theta.CLV", nr, "^2",
                                                                                                                       sep = ""
         ), nc, sep = "."))
       if(quadratic==FALSE)cal <- cal + (num.lv.c+num.RR) * p
       if(quadratic!=FALSE)cal <- cal + (num.lv.c+num.RR) * p * 2
+      cal <- cal + num.lv.c #for sigma.lv
     }
     if (num.lv > 0 & (num.lv.c+num.RR) ==0) {
       nr <- rep(1:num.lv, each = p)
       nc <- rep(1:p, num.lv)
       if(quadratic == FALSE)
-        rnames[1:(num.lv * p)] <- paste(paste("theta.LV", nr, sep = ""), nc, sep = ".")
+        rnames[grepl("theta",rnames)][1:(num.lv * p)] <- paste(paste("theta.LV", nr, sep = ""), nc, sep = ".")
       if(quadratic != FALSE)
-        rnames[1:(num.lv * p *2)] <- c(paste(paste("theta.LV", nr, sep = ""), nc, sep = "."), paste(paste("theta.LV", nr, "^2",
+        rnames[grepl("theta",rnames)][1:(num.lv * p *2)] <- c(paste(paste("theta.LV", nr, sep = ""), nc, sep = "."), paste(paste("theta.LV", nr, "^2",
                                                                                                           sep = ""
         ), nc, sep = "."))
       if(quadratic==FALSE)cal <- cal + num.lv * p
       if(quadratic!=FALSE)cal <- cal + num.lv * p * 2
+      cal <- cal + num.lv #for sigma.lv
     }
     if ((num.lv.c+num.RR) > 0 & num.lv>0) {
       nr <- rep(1:(num.lv.c+num.RR), each = p)
       nc <- rep(1:p, (num.lv.c+num.RR))
       if(quadratic == FALSE)
-        rnames[1:((num.lv.c+num.RR) * p)] <- paste(paste("theta.CLV", nr, sep = ""), nc, sep = ".")
+        rnames[grepl("theta",rnames)][1:((num.lv.c+num.RR) * p)] <- paste(paste("theta.CLV", nr, sep = ""), nc, sep = ".")
       if(quadratic != FALSE)
-        rnames[1:((num.lv.c+num.RR) * p *2)] <- c(paste(paste("theta.CLV", nr, sep = ""), nc, sep = "."), paste(paste("theta.CLV", nr, "^2",
+        rnames[grepl("theta",rnames)][1:((num.lv.c+num.RR) * p *2)] <- c(paste(paste("theta.CLV", nr, sep = ""), nc, sep = "."), paste(paste("theta.CLV", nr, "^2",
                                                                                                                       sep = ""
         ), nc, sep = "."))
       if(quadratic==FALSE)cal <- cal + (num.lv.c+num.RR) * p
       if(quadratic!=FALSE)cal <- cal + (num.lv.c+num.RR) * p * 2
-      
+      cal <- cal + num.lv.c #for sigma.lv
       
       nr <- rep(1:num.lv, each = p)
       nc <- rep(1:p, num.lv)
       if(quadratic == FALSE)
-        rnames[((num.lv.c+num.RR)*p+1):((num.lv.c+num.RR)*p+num.lv * p)] <- paste(paste("theta.LV", nr, sep = ""), nc, sep = ".")
+        rnames[grepl("theta",rnames)][((num.lv.c+num.RR)*p+1):((num.lv.c+num.RR)*p+num.lv * p)] <- paste(paste("theta.LV", nr, sep = ""), nc, sep = ".")
       if(quadratic != FALSE)
-        rnames[((num.lv.c+num.RR)*p+1):((num.lv.c+num.RR)*p+num.lv * p)] <- c(paste(paste("theta.LV", nr, sep = ""), nc, sep = "."), paste(paste("theta.LV", nr, "^2",
+        rnames[grepl("theta",rnames)][((num.lv.c+num.RR)*p+1):((num.lv.c+num.RR)*p+num.lv * p)] <- c(paste(paste("theta.LV", nr, sep = ""), nc, sep = "."), paste(paste("theta.LV", nr, "^2",
                                                                                                                                                  sep = ""
         ), nc, sep = "."))
       if(quadratic==FALSE)cal <- cal + num.lv * p
       if(quadratic!=FALSE)cal <- cal + num.lv * p * 2
+      cal <- cal + num.lv #for sigma.lv
     }
-    if((num.lv+num.lv.c)>0){
-      if(num.lv>0&num.lv.c>0){
-        rnames[-c(1:cal)][1:(num.lv+num.lv.c)] <-  c(paste("sigma.CLV", 1:num.lv.c, sep=""),paste("sigma.LV", 1:num.lv, sep=""))
-      }else if(num.lv>0){
-        rnames[-c(1:cal)][1:(num.lv+num.lv.c)] <-  c(paste("sigma.LV", 1:num.lv, sep=""))
-      }else if(num.lv.c>0){
-        rnames[-c(1:cal)][1:(num.lv+num.lv.c)] <-  c(paste("sigma.CLV", 1:num.lv.c, sep=""))
-      }
-      cal <- cal+num.lv+num.lv.c
-    }
+    
     if((num.lv.c+num.RR)>0&object$randomB==FALSE){
-      rnames[-c(1:cal)][1:(ncol(object$lv.X)*(num.lv.c+num.RR))] <- paste(colnames(object$lv.X),"LV",rep(1:(num.lv.c+num.RR),each=ncol(object$lv.X)),sep=".")
-      cal<-cal + ncol(object$lv.X)*(num.lv.c+num.RR)
+      rnames[-c(1:cal)][1:(ncol(object$lv.X.design)*(num.lv.c+num.RR))] <- paste(colnames(object$lv.X.design),"LV",rep(1:(num.lv.c+num.RR),each=ncol(object$lv.X.design)),sep=".")
+      cal<-cal + ncol(object$lv.X.design)*(num.lv.c+num.RR)
     }
     
     if(!object$beta0com){
@@ -143,7 +166,7 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
       rnames[(cal + 1)] <- paste("Intercept",names(object$params$beta0), sep = ".")
       cal <- cal + 1
     }
-    if (!is.null(object$TR)) {
+    if (!is.null(object$TR) | object$col.eff$col.eff == "random") {
       nr <- names(object$params$B)
       rnames[(cal + 1):(cal + length(nr))] <- nr
       cal <- cal + length(nr)
@@ -156,19 +179,20 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
       rnames[(cal + 1):(cal + nX * p)] <- paste("Xcoef", newnam, sep = ".")
       cal <- cal + nX * p
     }
-    if (object$row.eff %in% c("fixed",TRUE)) {
-      rnames[(cal + 1):(cal + n)] <- paste("Row.Intercept", 1:n, sep = ".")
-      cal <- cal + n
+    if(!is.null(object$params$row.params.fixed)){
+      nr <- ncol(object$TMBfn$env$data$xr)
+      rnames[(cal + 1):(cal + nr)] <- paste("Fixed.Row.Effect", colnames(object$TMBfn$env$data$xr), sep = ".")
+      cal <- cal + nr
     }
-    if (object$row.eff == "random") {
-      rnames[(cal + 1)] <- "sigma"
+    if ("sigma" %in% names(object$params)) {
+      rnames[(cal + 1):(cal+length(object$sd$sigma))] <- paste("sigma", names(object$params$sigma), sep=".")
       cal <- cal + length(object$sd$sigma)
       # if(!is.null(object$params$rho)) {
       #   rnames[(cal + 1)] <- "rho"
       #   cal <- cal + length(object$sd$rho)
       # }
     }
-    if (!is.null(object$randomX)) {
+    if (!is.null(object$randomX) | object$col.eff$col.eff == 'random') {
       cal <- cal + length(object$params$sigmaB)
     }
     if (object$randomB!=FALSE) {
@@ -243,14 +267,14 @@ confint.gllvm <- function(object, parm=NULL, level = 0.95, ...) {
       
     }
     if("LvXcoef"%in%parm&object$randomB==FALSE){
-      names(cilow)[gsub("LvXcoef.*","LvXcoef",names(unlist(object$sd[parm])))%in%"LvXcoef"] <-paste(rep(colnames(object$lv.X),2),"LV",rep(1:(num.lv.c+num.RR),each=ncol(object$lv.X)),sep=".")
-      names(ciup)[gsub("LvXcoef.*","LvXcoef",names(unlist(object$sd[parm])))%in%"LvXcoef"] <- paste(rep(colnames(object$lv.X),2),"LV",rep(1:(num.lv.c+num.RR),each=ncol(object$lv.X)),sep=".")
+      names(cilow)[gsub("LvXcoef.*","LvXcoef",names(unlist(object$sd[parm])))%in%"LvXcoef"] <-paste(rep(colnames(object$lv.X.design),2),"LV",rep(1:(num.lv.c+num.RR),each=ncol(object$lv.X.design)),sep=".")
+      names(ciup)[gsub("LvXcoef.*","LvXcoef",names(unlist(object$sd[parm])))%in%"LvXcoef"] <- paste(rep(colnames(object$lv.X.design),2),"LV",rep(1:(num.lv.c+num.RR),each=ncol(object$lv.X.design)),sep=".")
     }
     if("sigmaLvXcoef"%in%parm&object$randomB!=FALSE){
       if(object$randomB=="LV"){
         names(cilow)[gsub("sigmaLvXcoef.*","sigmaLvXcoef",names(unlist(object$sd[parm])))%in%"sigmaLvXcoef"]<-  c(paste("sigmaLvXcoef.LV", 1:(num.RR+num.lv.c), sep=""))
       }else if(object$randomB=="P"){
-        names(cilow)[gsub("sigmaLvXcoef.*","sigmaLvXcoef",names(unlist(object$sd[parm])))%in%"sigmaLvXcoef"]<-  c(paste("sigmaLvXcoef.", colnames(object$lv.X), sep=""))
+        names(cilow)[gsub("sigmaLvXcoef.*","sigmaLvXcoef",names(unlist(object$sd[parm])))%in%"sigmaLvXcoef"]<-  c(paste("sigmaLvXcoef.", colnames(object$lv.X.design), sep=""))
       }
       
     }

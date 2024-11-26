@@ -16,7 +16,7 @@
 #' @examples
 #'  \donttest{
 #'# Load a dataset from the mvabund package
-#'data(antTraits)
+#'data(antTraits, package = "mvabund")
 #'y <- as.matrix(antTraits$abund)
 #'X <- scale(antTraits$env[, 1:3])
 #'# Fit gllvm model
@@ -51,17 +51,15 @@ simulate.gllvm = function (object, nsim = 1, seed = NULL, conditional = FALSE, .
     # generate new latent variables
     lvsNew = matrix(rnorm(nsim*nRows*(object$num.lv+object$num.lv.c)),ncol=(object$num.lv+object$num.lv.c))
   }else{
-    lvsNew = object$lvs[rep(1:nRows,nsim),]
+    lvsNew = object$lvs[rep(1:nRows,nsim),,drop=FALSE]
   }
-  if(is.null(object$X)) 
-  {
+  if(is.null(object$X))   {
     prs = predict.gllvm(object,newLV = lvsNew,type="response")
-  }
-  else if(is.null(object$TR)){ 
-    Xnew <- object$X[rep(1:nRows,nsim),]; colnames(Xnew) <- colnames(object$X)
+  }  else if(is.null(object$TR)){ 
+    Xnew <- object$X[rep(1:nRows,nsim),,drop=FALSE]; colnames(Xnew) <- colnames(object$X)
     prs = predict.gllvm(object,newX=Xnew, newLV = lvsNew,type="response")
   } else {
-    Xnew <- object$X[rep(1:nRows,nsim),]; colnames(Xnew) <- colnames(object$X)
+    Xnew <- object$X[rep(1:nRows,nsim),,drop=FALSE]; colnames(Xnew) <- colnames(object$X)
     prs = predict.gllvm(object,newX=Xnew, newLV = lvsNew,type="response")
   }
   # generate new data

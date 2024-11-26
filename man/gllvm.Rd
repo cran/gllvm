@@ -17,8 +17,12 @@ gllvm(
   lv.formula = NULL,
   lvCor = NULL,
   studyDesign = NULL,
-  dist = matrix(0),
+  dist = list(matrix(0)),
+  distLV = matrix(0),
+  colMat = NULL,
+  colMat.rho.struct = "single",
   corWithin = FALSE,
+  corWithinLV = FALSE,
   quadratic = FALSE,
   row.eff = FALSE,
   sd.errors = TRUE,
@@ -26,7 +30,6 @@ gllvm(
   method = "VA",
   randomB = FALSE,
   randomX = NULL,
-  dependent.row = FALSE,
   beta0com = FALSE,
   zeta.struc = "species",
   plot = FALSE,
@@ -38,14 +41,16 @@ gllvm(
   return.terms = TRUE,
   gradient.check = FALSE,
   disp.formula = NULL,
-  control = list(reltol = 1e-10, reltol.c = 1e-08, TMB = TRUE, optimizer = ifelse((num.RR
+  control = list(reltol = 1e-08, reltol.c = 1e-08, TMB = TRUE, optimizer = ifelse((num.RR
     + num.lv.c) == 0 | randomB != FALSE, "optim", "alabama"), max.iter = 6000, maxit =
-    6000, trace = FALSE, optim.method = NULL),
-  control.va = list(Lambda.struc = "unstructured", Ab.struct = "unstructured", Ar.struc =
-    "diagonal", diag.iter = 1, Ab.diag.iter = 0, Lambda.start = c(0.3, 0.3, 0.3), NN = 3),
+    6000, trace = FALSE, optim.method = NULL, nn.colMat = 10),
+  control.va = list(Lambda.struc = "unstructured", Ab.struct = ifelse(is.null(colMat),
+    "blockdiagonal", "MNunstructured"), Ab.struct.rank = 1, Ar.struc = "diagonal",
+    diag.iter = 1, Ab.diag.iter = 0, Lambda.start = c(0.3, 0.3, 0.3), NN = 3),
   control.start = list(starting.val = "res", n.init = 1, n.init.max = 10, jitter.var = 0,
-    start.fit = NULL, start.lvs = NULL, randomX.start = "zero", quad.start = 0.01,
-    start.struc = "LV", scalmax = 10, MaternKappa = 1.5, rangeP = NULL),
+    jitter.var.br = 0, start.fit = NULL, start.lvs = NULL, randomX.start = "res",
+    quad.start = 0.01, start.struc = "LV", scalmax = 10, MaternKappa = 1.5, rangeP =
+    NULL, zetacutoff = NULL),
   setMap = NULL,
   ...
 )
@@ -61,27 +66,35 @@ gllvm(
 
 \item{formula}{an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for fixed-effects predictors).}
 
-\item{family}{distribution function for responses. Options are \code{"negative.binomial"} (with log link), \code{poisson(link = "log")}, \code{binomial(link = "probit")} (and also with \code{link = "logit"} when \code{method = "LA"} or \code{method = "EVA"}), zero-inflated poisson (\code{"ZIP"}), zero-inflated negative-binomial (\code{"ZINB"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link, for \code{"LA"} and \code{"EVA"}-method), \code{"gamma"} (with log link), \code{"exponential"} (with log link), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method) and \code{"ordinal"} (only with \code{"VA"}-method).}
+\item{family}{distribution function for responses. Options are \code{"negative.binomial"} (with log link), \code{poisson(link = "log")}, \code{binomial(link = "probit")} (and also with \code{link = "logit"} when \code{method = "LA"} or \code{method = "EVA"}), zero-inflated poisson (\code{"ZIP"}), zero-inflated negative-binomial (\code{"ZINB"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link, for \code{"LA"} and \code{"EVA"}-method), \code{"gamma"} (with log link), \code{"exponential"} (with log link), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method), \code{"ordinal"} (with \code{"VA"} and \code{"EVA"}-method), beta hurdle \code{"betaH"} (for \code{"VA"} and \code{"EVA"}-method) and \code{"orderedBeta"} (for \code{"VA"} and \code{"EVA"}-method). Note: \code{"betaH"} and \code{"orderedBeta"} with \code{"VA"}-method are actually fitted using a hybrid approach such that EVA is applied to the beta distribution part of the likelihood.}
 
 \item{num.lv}{number of latent variables, d, in gllvm model. Non-negative integer, less than number of response variables (m). Defaults to 2, if \code{num.lv.c=0} and \code{num.RR=0}, otherwise 0.}
 
-\item{num.lv.c}{number of latent variables, d, in gllvm model to constrain, with residual term. Non-negative integer, less than number of response (m) and equal to, or less than, the number of predictor variables (k). Defaults to 0. Requires specification of "lv.formula" in combination with "X" or "datayx". Can be used in combination with num.lv and fixed-effects, but not with traits.}
+\item{num.lv.c}{number of latent variables, d, in gllvm model to inform, i.e., with residual term. Non-negative integer, less than number of response (m) and equal to, or less than, the number of predictor variables (k). Defaults to 0. Requires specification of "lv.formula" in combination with "X" or "datayx". Can be used in combination with num.lv and fixed-effects, but not with traits.}
 
 \item{num.RR}{number of latent variables, d, in gllvm model to constrain, without residual term (reduced rank regression). Cannot yet be combined with traits.}
 
 \item{lv.formula}{an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for latent variables).}
 
-\item{lvCor}{(Under development, not to be used at the moment!) correlation structure for latent variables, defaults to \code{NULL} Correlation structure for latent variables can be defined via formula, eg. \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}') and \code{corCS} (compound symmetry). The grouping variable needs to be included either in 'X' or 'studyDesign'. Works at the moment only with unconstrained ordination without quadratic term.}
+\item{lvCor}{correlation structure for latent variables, defaults to \code{NULL} Correlation structure for latent variables can be defined via formula, eg. \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}') and \code{corCS} (compound symmetry). The grouping variable needs to be included either in \code{studyDesign}. Works at the moment only with unconstrained ordination without quadratic term.}
 
 \item{studyDesign}{variables related to eg. sampling/study design, used for defining correlation structure of the latent variables and row effects.}
 
-\item{dist}{matrix of coordinates or time points used for row parameters correlation structure \code{corExp}.}
+\item{dist}{list of length equal to the number of row effects with correlation structure \code{corExp} that holds the matrix of coordinates or time points.}
 
-\item{corWithin}{logical. If \code{TRUE}, correlation is set between row effects of the observation units within group. Correlation and groups can be defined using \code{row.eff}. Defaults to \code{FALSE}, when correlation is set for row parameters between groups.}
+\item{distLV}{matrix of coordinates or time points used for LV correlation structure \code{corExp}.}
+
+\item{colMat}{either a list of length 2 with matrix of similarity for the column effects and named matrix "dist" of pairwise distances (of columns, to use in selecting nearest neighbours) for a sparse approximation of the matrix inverse in the likelihood, or only a (p.d.) matrix of similarity for the column effects for a normal inverse calculation.}
+
+\item{colMat.rho.struct}{either \code{single} (default) or \code{term} indicating whether the signal parameter should be shared for covariates, or not.}
+
+\item{corWithin}{logical. Vector of length equal to the number of row effects. For structured row effects with correlation, If \code{TRUE}, correlation is set between row effects of the observation units within group. Correlation and groups can be defined using \code{row.eff}. Defaults to \code{FALSE}, when correlation is set for row parameters between groups.}
+
+\item{corWithinLV}{logical. For LVs with correlation, If \code{TRUE}, correlation is set between rows of the observation units within group. Defaults to \code{FALSE}, when correlation is set for rows between groups.}
 
 \item{quadratic}{either \code{FALSE}(default), \code{TRUE}, or \code{LV}. If \code{FALSE} models species responses as a linear function of the latent variables. If \code{TRUE} models species responses as a quadratic function of the latent variables. If \code{LV} assumes species all have the same quadratic coefficient per latent variable.}
 
-\item{row.eff}{\code{FALSE}, \code{fixed}, \code{"random"} or formula to define the structure for the row parameters. Indicating whether row effects are included in the model as a fixed or as a random effects. Defaults to \code{FALSE} when row effects are not included. Structured random row effects can be defined via formula, eg. \code{~(1|groups)}, when unique row effects are set for each group, not for all rows, the grouping variable needs to be included in \code{X}. Correlation structure between random group effects/intercepts can also be set using \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}') and \code{corCS} (compound symmetry). Correlation structure can be set between or within groups, see argument '\code{corWithin}'.}
+\item{row.eff}{\code{FALSE}, \code{fixed}, \code{"random"} or formula to define the structure for the community level row effects, indicating whether row effects are included in the model as a fixed or as a random effects. Defaults to \code{FALSE} when row effects are not included. Structured random row effects can be defined via formula, eg. \code{~(1|groups)}, when unique row effects are set for each group, not for all rows, the grouping variable needs to be included in \code{studyDesign}. Correlation structure between random group effects/intercepts can also be set using \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}') and \code{corCS} (compound symmetry). Correlation structure can be set between or within groups, see argument '\code{corWithin}'.}
 
 \item{sd.errors}{logical. If \code{TRUE} (default) standard errors for parameter estimates are calculated.}
 
@@ -89,25 +102,23 @@ gllvm(
 
 \item{method}{model can be fitted using Laplace approximation method (\code{method = "LA"}) or variational approximation method (\code{method = "VA"}), or with extended variational approximation method (\code{method = "EVA"}) when VA is not applicable. If particular model has not been implemented using the selected method, model is fitted using the alternative method as a default. Defaults to \code{"VA"}.}
 
-\item{randomB}{either \code{FALSE}(default), "LV", "P", or "single". Fits concurrent or constrained ordination (i.e. models with num.lv.c or num.RR) with random slopes for the predictors. "LV" assumes LV-specific variance parameters, "P" predictor specific, and "single" the same across LVs and predictors.}
+\item{randomB}{either \code{FALSE}(default), "LV", "P", "single", or "iid". Fits concurrent or constrained ordination (i.e. models with num.lv.c or num.RR) with random slopes for the predictors. "LV" assumes LV-specific variance parameters, "P" predictor specific, and "single" the same across LVs and predictors.}
 
 \item{randomX}{formula for species specific random effects of environmental variables in fourth corner model. Defaults to \code{NULL}, when random slopes are not included.}
 
-\item{dependent.row}{logical. Whether or not random row effects are correlated (dependent) with the latent variables. Defaults to \code{FALSE} when correlation terms are not included.}
-
-\item{beta0com}{logical. If \code{FALSE} column-specific intercepts are assumed. If \code{TRUE}, a common intercept is used which is allowed only for fourth corner models.}
+\item{beta0com}{logical. If \code{FALSE} column-specific intercepts are assumed. If \code{TRUE}, column-specific intercepts are collected to a common value.}
 
 \item{zeta.struc}{structure for cut-offs in the ordinal model. Either "common", for the same cut-offs for all species, or "species" for species-specific cut-offs. For the latter, classes are arbitrary per species, each category per species needs to have at least one observations. Defaults to "species".}
 
 \item{plot}{logical. If \code{TRUE} ordination plots will be printed in each iteration step when \code{TMB = FALSE}. Defaults to \code{FALSE}.}
 
-\item{link}{link function for binomial family if \code{method = "LA"} and beta family. Options are "logit" and "probit.}
+\item{link}{link function for binomial family if \code{method = "LA"} and beta family. Options are "logit" and "probit".}
 
 \item{Ntrials}{number of trials for binomial family.}
 
 \item{Power}{fixed power parameter in Tweedie model. Scalar from interval (1,2). Defaults to 1.1. If set to NULL it is estimated (note: experimental).}
 
-\item{seed}{a single seed value, defaults to \code{NULL}.}
+\item{seed}{a single seed value if \code{n.init=1}, and a seed value vector of length \code{n.init} if \code{n.init>1}. Defaults to \code{NULL}, when new seed is not set for single initial fit and seeds are is randomly generated if multiple initial fits are set.}
 
 \item{scale.X}{logical. If \code{TRUE}, covariates are scaled when fourth corner model is fitted.}
 
@@ -115,25 +126,27 @@ gllvm(
 
 \item{gradient.check}{logical. If \code{TRUE} gradients are checked for large values (>0.01) even if the optimization algorithm did converge.}
 
-\item{disp.formula}{formula, or alternatively a vector of indices, for the grouping of dispersion parameters (e.g. in a negative-binomial distribution). Defaults to NULL so that all species have their own dispersion parameter. Is only allowed to include categorical variables. If a formula, data should be included as named rows in y.}
+\item{disp.formula}{a vector of indices, or alternatively formula, for the grouping of dispersion parameters (e.g. in a negative-binomial distribution, ZINB, tweedie), shape parameters (gamma, Beta, ordered Beta, hurdle Beta models) or variance parameters (gaussian distribution). Defaults to NULL so that all species have their own dispersion parameter. Is only allowed to include categorical variables. If a formula, data should be included as named rows in y.}
 
 \item{control}{A list with the following arguments controlling the optimization:
-\itemize{
+\describe{
  \item{\emph{reltol}: }{ convergence criteria for log-likelihood, defaults to 1e-8.}
  \item{\emph{reltol.c}: }{ convergence criteria for equality constraints in ordination with predictors, defaults to 1e-8.}  
  \item{\emph{TMB}: }{ logical, if \code{TRUE} model will be fitted using Template Model Builder (TMB). TMB is always used if \code{method = "LA"}.  Defaults to \code{TRUE}.}
  \item{\emph{optimizer}: }{ if \code{TMB=TRUE}, log-likelihood can be optimized using \code{"\link{optim}"} (default) or \code{"\link{nlminb}"}. For ordination with predictors (num.RR>0 or num.lv.c>0) this can additionally be one of \code{alabama}(default), \code{nloptr(agl)} or \code{nloptr(sqp)}.}
- \item{\emph{max.iter}: }{ maximum number of iterations when \code{TMB = FALSE} or for \code{optimizer = "nlminb"} when \code{TMB = TRUE}, defaults to 4000.}
- \item{\emph{maxit}: }{ maximum number of iterations for optimizer, defaults to 4000.}
+ \item{\emph{max.iter}: }{ maximum number of iterations when \code{TMB = FALSE} or for \code{optimizer = "nlminb"} when \code{TMB = TRUE}, defaults to 6000.}
+ \item{\emph{maxit}: }{ maximum number of iterations for optimizer, defaults to 6000.}
  \item{\emph{trace}: }{ logical, if \code{TRUE} in each iteration step information on current step will be printed. Defaults to \code{FALSE}. Only with \code{TMB = FALSE}.}
- \item{\emph{optim.method}: }{ optimization method to be used if optimizer is \code{"\link{optim}"},\code{"alabama"}, or  \code{"\link{nloptr}"}, but the latter two are only available in combination with at least two latent variables (i.e., num.RR+num.lv.c>1). Defaults to \code{"BFGS"}, but to \code{"L-BFGS-B"} for Tweedie family due the limited-memory use. For optimizer='alabama' this can be any \code{"\link{optim}"} method, or  \code{"\link{nlminb}"}. If optimizer = 'nloptr(agl)' this can be one of: "NLOPT_LD_CCSAQ", "NLOPT_LD_SLSQP", "NLOPT_LD_TNEWTON_PRECOND" (default), "NLOPT_LD_TNEWTON", "NLOPT_LD_MMA".}
+ \item{\emph{optim.method}: }{ optimization method to be used if optimizer is \code{"\link{optim}"},\code{"alabama"}, or  \code{"\link[nloptr:nloptr]{nloptr}"}, but the latter two are only available in combination with at least two latent variables (i.e., num.RR+num.lv.c>1). Defaults to \code{"BFGS"}, but to \code{"L-BFGS-B"} for Tweedie family due the limited-memory use. For optimizer='alabama' this can be any \code{"\link{optim}"} method, or  \code{"\link{nlminb}"}. If optimizer = 'nloptr(agl)' this can be one of: "NLOPT_LD_CCSAQ", "NLOPT_LD_SLSQP", "NLOPT_LD_TNEWTON_PRECOND" (default), "NLOPT_LD_TNEWTON", "NLOPT_LD_MMA".}
+ \item{\emph{nn.colMat}: }{number of nearest neighbours for calculating inverse of "colMat", defaults to 10. If set to the number of columns in the response data, a standard inverse is used instead.}
 }}
 
 \item{control.va}{A list with the following arguments controlling the variational approximation method:
-\itemize{
+\describe{
  \item{\emph{Lambda.struc}: }{ covariance structure of VA distributions for latent variables when \code{method = "VA"}, "unstructured" or "diagonal".}
- \item{\emph{Ab.struct}: }{ covariance structure of VA distributions for random slopes when \code{method = "VA"}, "unstructured" or "diagonal".}
- \item{\emph{Ar.struc}: }{ covariance structure of VA distributions for random row effects when \code{method = "VA"}, "unstructured" or "diagonal".}
+ \item{\emph{Ab.struct}: }{ covariance structure of VA distributions for random slopes when \code{method = "VA"}, ordered in terms of complexity: "diagonal", "MNdiagonal" (only with colMat), "blockdiagonal" (default without colMat), "MNunstructured" (default, only with colMat), "diagonalCL1" ,"CL1" (only with colMat), "CL2" (only with colMat),"diagonalCL2" (only with colMat), or "unstructured" (only with colMat).}
+ \item{\emph{Ab.struct.rank}: }{number of columns for the cholesky of the variational covariance matrix to use, defaults to 1. Only applicable with "MNunstructured", "diagonalCL1", "CL1","diagonalCL2", and "unstructured".}
+ \item{\emph{Ar.struc}: }{ covariance structure of VA distributions for random row effects when \code{method = "VA"}, "unstructured" or "diagonal". Defaults to "diagonal".}
  \item{\emph{diag.iter}: }{ non-negative integer which can sometimes be used to speed up the updating of variational (covariance) parameters in VA method. Can sometimes improve the accuracy. If \code{TMB = TRUE} either 0 or 1. Defaults to 1.}
  \item{\emph{Ab.diag.iter}: }{ As above, but for variational covariance of random slopes.}
  \item{\emph{Lambda.start}: }{ starting values for variances in VA distributions for latent variables, random row effects and random slopes in variational approximation method. Defaults to 0.3.}
@@ -141,22 +154,24 @@ gllvm(
 }}
 
 \item{control.start}{A list with the following arguments controlling the starting values:
-\itemize{
+\describe{
   \item{\emph{starting.val}: }{ starting values can be generated by fitting model without latent variables, and applying factorial analysis to residuals to get starting values for latent variables and their coefficients (\code{starting.val = "res"}). Another options are to use zeros as a starting values (\code{starting.val = "zero"}) or initialize starting values for latent variables with (n x num.lv) matrix. Defaults to \code{"res"}, which is recommended.}
   \item{\emph{n.init}: }{ number of initial runs. Uses multiple runs and picks up the one giving highest log-likelihood value. Defaults to 1.}
   \item{\emph{n.init.max}: }{ maximum number of refits try try for n.init without improvement, defaults to 10.}
   \item{\emph{start.fit}: }{ object of class 'gllvm' which can be given as starting parameters for count data (poisson, NB, or ZIP).}
   \item{\emph{start.lvs}: }{ initialize starting values for latent variables with (n x num.lv) matrix. Defaults to \code{NULL}.}
   \item{\emph{jitter.var}: }{ jitter variance for starting values of latent variables. Defaults to 0, meaning no jittering.}
-  \item{\emph{randomX.start}: }{ starting value method for the random slopes. Options are \code{"zero"} and \code{"res"}. Defaults to \code{"zero"}.}
+  \item{\emph{jitter.var.br}: }{ jitter variance for starting values of random slopes. Defaults to 0, meaning no jittering.}
+  \item{\emph{randomX.start}: }{ starting value method for the random slopes. Options are \code{"zero"} and \code{"res"}. Defaults to \code{"res"}.}
   \item{\emph{start.struc}: }{ starting value method for the quadratic term. Options are \code{"LV"} (default) and \code{"all"}.}
   \item{\emph{quad.start}: }{ starting values for quadratic coefficients. Defaults to 0.01.}
   \item{\emph{MaternKappa}: }{ Starting value for smoothness parameter kappa of Matern covariance function. Defaults to 3/2.}
   \item{\emph{scalmax}: }{ Sets starting value for the scale parameter for the coordinates. Defaults to 10, when the starting value for scale parameter scales the distances of coordinates between 0-10.}
   \item{\emph{rangeP}: }{ Sets starting value for the range parameter for the correlation structure.}
+  \item{\emph{zetacutoff}: }{ Either vector of length 2 or a matrix of dimension (a number of species x 2). Sets starting value for the cutoff parameters of the ordered beta model.}
 }}
 
-\item{setMap}{UNDER DEVELOPMENT, DO NOT USE! list of a set of parameters to be fixed}
+\item{setMap}{under development, not properly tested, except for ordinal beta cutoffs (zeta) and for rho_lvc. a list of a set of parameters to be fixed. Parameters to be fixed need to be defined with factors. Other arguments may overwrite these definitions.}
 
 \item{...}{Not used.}
 }
@@ -164,52 +179,70 @@ gllvm(
 An object of class "gllvm" includes the following components:
 
 
- \item{call }{ function call}
+ \item{call }{ function call.}
  \item{y}{ (n x m) matrix of responses.}
  \item{X}{ matrix or data.frame of environmental covariates.}
- \item{lv.X}{ matrix or data.frame of environmental covariates for latent variables.}
- \item{TR}{ Trait matrix}
- \item{formula}{ Formula for predictors}
- \item{lv.formula}{ Formula of latent variables in constrained and concurrent ordination}
- \item{randomX }{ Formula for species specific random effects in fourth corner model}
- \item{randomB }{ Boolean flag for random slopes in constrained and concurrent ordination}
- \item{num.lv}{ Number of unconstrained latent variables}
- \item{num.lv.c}{ Number of latent variables in concurrent ordination}
- \item{num.RR}{ Number of latent variables in constrained ordination}
- \item{Ntrials}{ Number of trials in a binomial model}
- \item{method}{ Method used for integration}
- \item{family}{ Response distribution}
- \item{row.eff}{ Type of row effect used}
- \item{n.init}{ Number of model runs for best fit}
- \item{disp.group}{ Groups for dispersion parameters}
- \item{sd }{ List of standard errors}
- \item{lvs }{ Latent variables}
+ \item{X.design}{ design matrix of environmental covariates.}
+ \item{lv.X}{ design matrix or data.frame of environmental covariates for latent variables.}
+ \item{lv.X.design}{ design matrix or data.frame of environmental covariates for latent variables.}
+ \item{TR}{ Trait matrix.}
+ \item{formula}{ Formula for predictors.}
+ \item{lv.formula}{ Formula of latent variables in constrained and concurrent ordination.}
+ \item{randomX }{ Formula for species specific random effects in fourth corner model.}
+ \item{Xd}{ design matrix for species specific random effects in fourth corner model.}
+ \item{randomB }{ Boolean flag for random slopes in constrained and concurrent ordination.}
+ \item{num.lv}{ Number of unconstrained latent variables.}
+ \item{num.lv.c}{ Number of latent variables in concurrent ordination.}
+ \item{num.RR}{ Number of latent variables in constrained ordination.}
+ \item{Ntrials}{ Number of trials in a binomial model.}
+ \item{method}{ Method used for integration.}
+ \item{family}{ Response distribution.}
+ \item{row.eff}{ Type of row effect used.}
+ \item{n.init}{ Number of model runs for best fit.}
+ \item{disp.group}{ Groups for dispersion parameters.}
+ \item{sd }{ List of standard errors.}
+ \item{lvs }{ Latent variables.}
  \item{params}{ List of parameters
- \itemize{
+ \describe{
    \item{theta }{ latent variables' loadings relative to the diagonal entries of loading matrix}
    \item{sigma.lv }{ diagonal entries of latent variables' loading matrix}
    \item{LvXcoef }{ Predictor coefficients (or predictions for random slopes) related to latent variables, i.e. canonical coefficients}
    \item{beta0 }{ column specific intercepts}
    \item{Xcoef }{ coefficients related to environmental covariates X}
-   \item{B }{ coefficients in fourth corner model}
-   \item{row.params }{ row-specific intercepts}
+   \item{B }{ coefficients in fourth corner model, and RE means}
+   \item{Br}{ column random effects}
+   \item{sigmaB}{ scale parameters for column-specific random effects}
+   \item{rho.sp}{ (positive) correlation parameter for influence strength of "colMat"}
+   \item{row.params.random }{ row-specific random effects}
+   \item{row.params.fixed }{ row-specific fixed effects}
+   \item{sigma }{ scale parameters for row-specific random effects}
    \item{phi }{ dispersion parameters \eqn{\phi} for negative binomial or Tweedie family, probability of zero inflation for ZIP family, standard deviation for gaussian family or shape parameter for gamma/beta family}
    \item{inv.phi }{ dispersion parameters \eqn{1/\phi} for negative binomial}
    }}
  \item{Power }{ power parameter \eqn{\nu} for Tweedie family}
  \item{sd }{ list of standard errors of parameters}
  \item{prediction.errors }{ list of prediction covariances for latent variables and variances for random row effects when method \code{"LA"} is used}
- \item{A, Ar, Ab_lv}{ covariance matrices for variational densities of latent variables, random row effects, and random slopes respectively}
+ \item{A, Ar, Ab_lv, spArs}{ covariance matrices for variational densities of latent variables, random row effects, random slopes, and colum effects respectively}
  \item{seed}{ Seed used for calculating starting values}
  \item{TMBfn}{ TMB objective and derivative functions}
  \item{logL }{ log likelihood}
  \item{convergence }{ convergence code of optimizer}
  \item{quadratic }{ flag for quadratic model}
  \item{Hess }{ List holding matrices of second derivatives}
- \item{beta0com }{ Flag for common intercept in fourth corner models}
- \item{rstruc }{ Integer that indicates which type of row structure is included}
+ \item{beta0com }{ Flag for common intercept}
  \item{cstruc }{ Correlation structure for row effects}
+ \item{cstruclv }{ Correlation structure for LVs}
  \item{dist }{ Matrix of coordinates or time points used for row effects}
+ \item{distLV }{ Matrix of coordinates or time points used for LVs}
+ \item{col.eff }{ list of components for column random effects}
+ \describe{
+ \item{Ab.struct }{ variational covariance structure of fitted model}
+ \item{Ab.struct.rank }{fitted rank of variational covariance matrix}
+ \item{col.eff }{flag indicating if column random effects are included}
+ \item{spdr }{ design matrix}
+ \item{colMat.rho.struct }{ character vector for signal parameter}
+ 
+ }
  \item{terms }{ Terms object for main predictors}
  \item{start }{ starting values for model}
  \item{optim.method }{ Optimization method when using 'optim', 'alabama', or 'nloptr'}
@@ -225,7 +258,7 @@ site related environmental covariates are used, the expectation of response \eqn
 
 \deqn{g(\mu_{ij}) = \eta_{ij} = \alpha_i + \beta_{0j} + x_i'\beta_j + u_i'\theta_j,}
 
-where \eqn{g(.)} is a known link function, \eqn{u_i} are \eqn{d}-variate latent variables (\eqn{d}<<\eqn{m}), \eqn{\alpha_i} is an optional row effect
+where \eqn{g(.)} is a known link function, \eqn{u_i} are \eqn{d}-variate latent variables (\eqn{d}<<\eqn{m}), \eqn{\alpha_i} is an optional community level row effect
 at site \eqn{i}, and it can be fixed or random effect (also other structures are possible, see below), \eqn{\beta_{0j}} is an intercept term for species \eqn{j}, \eqn{\beta_j} and \eqn{\theta_j} are column
 specific coefficients related to covariates and the latent variables, respectively.
 
@@ -262,7 +295,7 @@ The interaction/fourth corner terms are optional as well as are the main effects
 }
 
 \subsection{Structured row effects}{
-In addition to the site-specific random effects, \eqn{\alpha_i}, it is also possible to set arbitrary structure/design for the row effects. 
+In addition to the sample-specific community level random effects, \eqn{\alpha_i}, it is also possible to set arbitrary structure/design for the row effects. 
 That is, assume that observations / rows \eqn{i=1,...,n} in the data matrix are from groups \eqn{t=1,...,T}, so that each row \eqn{i} belongs to one of the groups, denote \eqn{G(i) \in \{1,...,T\}}. Each group \eqn{t} has a number of observations \eqn{n_t}, so that \eqn{\sum_{t=1}^{T} n_t =n}.
 Now we can set random intercept for each group \eqn{t}, (see argument '\code{row.eff}'):
 
@@ -273,10 +306,10 @@ Now we can set random intercept for each group \eqn{t}, (see argument '\code{row
  This model is restricted to the case, where each group has equal number of observations (rows), that is \eqn{n_t=n_{t'}} for all \eqn{t,t' \in \{1,...,T\}}.
  
  The correlation structures available in the package are 
-\itemize{
-  \item{\code{corAR1}} { autoregressive process of order 1.}
-  \item{\code{corExp}} { exponentially decaying, see argument '\code{dist}'.}
-  \item{\code{corCS}} { compound symmetry.}
+\describe{
+  \item{\code{corAR1} }{ autoregressive process of order 1.}
+  \item{\code{corExp} }{ exponentially decaying, see argument '\code{dist}'.}
+  \item{\code{corCS} }{ compound symmetry.}
 }  
 }
 
@@ -293,8 +326,8 @@ With ordinal family response classes must start from 0 or 1.
 \subsection{Distributions}{
 
   Mean and variance for distributions are defined as follows.
-\itemize{
-  \item{For count data \code{family = poisson()}:} {Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}}, or}
+\describe{
+  \item{For count data \code{family = poisson()}:}{Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}}, or}
   \item{ \code{family = "negative.binomial"}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}+\mu_{ij}^2\phi_j}, or}
   \item{ \code{family = "ZIP"}:}{ Expectation \eqn{E[Y_{ij}] = (1-p)\mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-p_j)(1+\mu_{ij}p)}.}
   \item{ \code{family = "ZINB"}:}{ Expectation \eqn{E[Y_{ij}] = (1-p)\mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-p_j)(1+\mu_{ij}(\phi_j+p_j))}.}
@@ -336,7 +369,7 @@ fit <- gllvm(y, X, formula = ~ pH + Phosp, family = poisson(),
 
 ## Load a dataset from the mvabund package
 library(mvabund)
-data(antTraits)
+data(antTraits, package = "mvabund")
 y <- as.matrix(antTraits$abund)
 X <- as.matrix(antTraits$env)
 TR <- antTraits$traits
@@ -344,7 +377,7 @@ TR <- antTraits$traits
 fit <- gllvm(y, X, formula = ~ Bare.ground + Shrub.cover,
             family = poisson())
 ordiplot(fit)
-coefplot(fit)
+coefplot.gllvm(fit)
 
 ## Example 1: Fit model with two unconstrained latent variables
 # Using variational approximation:
@@ -384,17 +417,17 @@ ordiplot(fit.z)
 # Fit model with two latent variables and all environmental covariates,
 fitvX <- gllvm(formula = y ~ X, family = "negative.binomial")
 ordiplot(fitvX, biplot = TRUE)
-coefplot(fitvX)
+coefplot.gllvm(fitvX)
 # Fit model with environmental covariates Bare.ground and Shrub.cover
 fitvX2 <- gllvm(y, X, formula = ~ Bare.ground + Shrub.cover,
  family = "negative.binomial")
 ordiplot(fitvX2)
-coefplot(fitvX2)
+coefplot.gllvm(fitvX2)
 # Use 5 initial runs and pick the best one
 fitvX_5 <- gllvm(y, X, formula = ~ Bare.ground + Shrub.cover,
  family = "negative.binomial", control.start=list(n.init = 5, jitter.var = 0.1))
 ordiplot(fitvX_5)
-coefplot(fitvX_5)
+coefplot.gllvm(fitvX_5)
 
 ## Example 3: Data in long format
 # Reshape data to long format:
@@ -407,7 +440,7 @@ fitvLong <- gllvm(data = datalong, formula = y ~ Bare.ground + Shrub.cover,
 ## Example 4: Fourth corner model
 # Fit fourth corner model with two latent variables
 fitF1 <- gllvm(y = y, X = X, TR = TR, family = "negative.binomial")
-coefplot(fitF1)
+coefplot.gllvm(fitF1)
 # Fourth corner can be plotted also with next lines
 #fourth = fitF1$fourth.corner
 #library(lattice)
@@ -423,7 +456,7 @@ fitF2 <- gllvm(y = y, X = X, TR = TR,
  formula = ~ Bare.ground + Canopy.cover * (Pilosity + Webers.length),
  family = "negative.binomial")
 ordiplot(fitF2)
-coefplot(fitF2)
+coefplot.gllvm(fitF2)
 
 ## Include species specific random slopes to the fourth corner model
 fitF3 <- gllvm(y = y, X = X, TR = TR,
@@ -431,7 +464,7 @@ fitF3 <- gllvm(y = y, X = X, TR = TR,
  family = "negative.binomial", randomX = ~ Bare.ground + Canopy.cover, 
  control.start = list(n.init = 3))
 ordiplot(fitF3)
-coefplot(fitF3)
+coefplot.gllvm(fitF3)
 
 
 ## Example 5: Fit Tweedie model
@@ -443,8 +476,8 @@ ycoral <- ycoral[((tikus$x$time == 81) + (tikus$x$time == 83)) > 0, ]
 # Exclude species which have observed at less than 4 sites
 ycoral <- ycoral[-17, (colSums(ycoral > 0) > 4)]
 # Fit Tweedie model for coral data (this line may take few minutes to run)
-fit.twe <- gllvm(y = ycoral, family = "tweedie", method = "LA")
-ordiplot(fit.twe)
+fit.twe <- gllvm(y = ycoral, family = "tweedie", method = "EVA", seed=111)
+fit.twe
 
 ## Example 6: Random row effects
 fitRand <- gllvm(y, family = "negative.binomial", row.eff = "random")

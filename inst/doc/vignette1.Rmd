@@ -30,11 +30,11 @@ GLLVM extends the basic generalized linear model to multivariate data using a fa
 
 ## Generalized linear latent variable models
 
-A multivariate abundance dataset can be defined by a matrix of abundances, with $n$ rows (usually sites) and $m$ columns of responses (usually species). Denote the abundance of the $j$th species at the $i$th site as $y_{ij}$. A set of k environmental variables, or experimental treatments, may also be recorded at each site and stored in the vector $\boldsymbol{x}_i = (x_{i1}, ..., x_{ik})$. A GLLVM regresses the mean abundance $\mu_{ij}$ against environmental variables and a vector of $d<m$ latent variables, $\boldsymbol{u}_i = (u_{i1}, ..., u_{id})'$:
+A multivariate abundance dataset can be defined by a matrix of abundances, with $n$ rows (usually sites or samples) and $m$ columns of responses (usually species). Denote the abundance of the $j$th species at the $i$th site as $y_{ij}$. A set of k environmental variables, or experimental treatments, may also be recorded at each site and stored in the vector $\boldsymbol{x}_i = (x_{i1}, ..., x_{ik})$. A GLLVM regresses the mean abundance $\mu_{ij}$ against environmental variables and a vector of $d<m$ latent variables, $\boldsymbol{u}_i = (u_{i1}, ..., u_{id})'$:
 
 $$g(\mu_{ij}) = \eta_{ij} = \alpha_i + \beta_{0j} + \boldsymbol{x}_i'\boldsymbol{\beta}_j + \boldsymbol{u}_i'\boldsymbol{\theta}_j,$$
 
-where $\boldsymbol{\beta}_j$ and $\boldsymbol{\theta}_j$ are vectors of species specific coefficients related to the covariates and latent variables, respectively. The latent variables $\boldsymbol{u}_i$ can be thought of as unmeasured environmental variables, or as ordination scores, capturing the main axes of covariation of abundance (after controlling for observed predictors $\boldsymbol{x}_i$). We assume these latent variables are independent across sites and standard normally distributed. The parameters $\beta_{0j}$ are species specific intercepts, while $\alpha_i$ are optional site effects which can be chosen as either fixed or random effects ($\alpha_i \sim N(0; \sigma^2))$. If row effects $\alpha_i$ are included, all other terms in the model can be subsequently interpreted as modelling relative abundance or compositional effects (Hui et al., 2015).
+where $\boldsymbol{\beta}_j$ and $\boldsymbol{\theta}_j$ are vectors of species specific coefficients related to the covariates and latent variables, respectively. The latent variables $\boldsymbol{u}_i$ can be thought of as unmeasured environmental variables, or as ordination scores, capturing the main axes of covariation of abundance (after controlling for observed predictors $\boldsymbol{x}_i$). We assume these latent variables are independent across sites and standard normally distributed. The parameters $\beta_{0j}$ are species specific intercepts, while $\alpha_i$ are optional community level row effects which can be chosen as either fixed or random effects ($\alpha_i \sim N(0; \sigma^2))$. If community level row effects for each sample $\alpha_i$ are included, all other terms in the model can be subsequently interpreted as modelling relative abundance or compositional effects (Hui et al., 2015).
 
 If $q$ trait covariates $\boldsymbol{t}_j=(t_{i1}, \dots,t_{iq})^\top$ are also recorded, we can use them to help explain inter-specific variation in environmental response. This leads to an extension of the so-called "fourth corner model" where multivariate abundance is regressed against a function of traits and environment, and the environment-trait interactions represents the fourth corner association between traits and environment. We also include species-specific random slopes for environmental covariates in order to take into account the inters-pecific variation in responses that is not explained by the covariates. The associated fourth corner GLLVM then has mean model:
 
@@ -113,7 +113,7 @@ gllvm(formula = y ~ (Bare.ground + Shrub.cover), data = datalong,
       family = "negative.binomial")
 ```
 
-The number of latent variables can be defined using the argument `num.lv`. The default number of latent variables is two. Other important arguments in the `gllvm` call are `row.eff` for defining the type of row effects (none, fixed or random), `offset` for potential inclusion of offsets, `Power` for defining the power parameter of the Tweedie distribution and `starting.val` for judicious choice of starting values for the latent variables.
+The number of latent variables can be defined using the argument `num.lv`. The default number of latent variables is two. Other important arguments in the `gllvm` call are `row.eff` for defining the type of row effects (none, fixed or random, or multiple and/or sructured via formula), `offset` for potential inclusion of offsets, `Power` for defining the power parameter of the Tweedie distribution and `starting.val` for judicious choice of starting values for the latent variables.
 
 List of available distributions with the mean, $E(y_{ij})$, and mean-variance, $V(\mu_{ij})$, functions, estimation methods and link functions for various response types are in the table below.
 
@@ -126,16 +126,19 @@ List of available distributions with the mean, $E(y_{ij})$, and mean-variance, $
 |		          |		           |		     |		    | $V(\mu_{ij}) = \mu_{ij}(1-p_j) (1+\mu_{ij}p_j)$|
 |             | ZINB       	 | VA/LA   |log		  | $E(y_{ij}) = (1-p_j)\mu_{ij}$, $P(y_{ij}=0)=p_j$,|
 |		          |		           |		     |		    | $V(\mu_{ij}) = \mu_{ij}(1-p_j)(1+\mu_{ij}(p_j+\phi_j))$|
-|Binary       | Bernoulli 	 | VA/LA   |probit  | $E(y_{ij}) = \mu_{ij}$, $V(\mu_{ij}) = \mu_{ij}(1-\mu_{ij})$|
-|             |              | LA 		 |logit   |                            |
+|             | binomial     | VA/LA   |probit  | $E(y_{ij}) = N_j\mu_{ij}$, $V(\mu_{ij}) = N_j\mu_{ij}(1-\mu_{ij})$|
+|             | binomial     |    LA   |logit   | 
+|Binary       | Bernoulli 	 | EVA/VA/LA   |probit  | $E(y_{ij}) = \mu_{ij}$, $V(\mu_{ij}) = \mu_{ij}(1-\mu_{ij})$|
+|             |              | EVA/LA 		 |logit   |                            |
 |Biomass    	| Tweedie 	   | LA/EVA  |log 	  | $E(y_{ij}) = \mu_{ij}$, $V(\mu_{ij}) = \phi_j\mu_{ij}^\nu$,|
 |		          |		           |		     |		    | where $1<\nu<2$ is a power parameter and $\phi_j>0$ is a dispersion parameter |
 |Ordinal 	    | Multinomial  | VA      |probit  | Cumulative probit model|
 |Normal       | Gaussian     | VA/LA   |identity| $E(y_{ij}) = \mu_{ij}$, $V(y_{ij}) = \phi_j^2$|
 |Positive continuous| Gamma     | VA/LA   |log| $E(y_{ij}) = \mu_{ij}$, $V(y_{ij}) = \mu_{ij}^2/\phi_j$|
 |		          |		           |		     |		    | where $\phi_j$ is a shape parameter |
-|Non-negative continuous| Exponential | VA/LA   |log| $E(y_{ij}) = \mu_{ij}$, $V(y_{ij}) = \mu_{ij}^2$|
+|Positive continuous | Exponential | VA/LA   |log| $E(y_{ij}) = \mu_{ij}$, $V(y_{ij}) = \mu_{ij}^2$|
 |Percent cover| beta    	   | LA/EVA | probit/logit | $E(y_{ij}) = \mu_{ij}$, $V(\mu_{ij}) = \mu_{ij}(1-\mu_{ij})/(1+\phi_j)$ |
+|Percent cover with zeros/ones| ordered beta    	   | EVA | probit | details in Korhonen et al (2024) |
 
 ## Model-based ordination
 
@@ -281,7 +284,7 @@ Residual correlations can also be visualized in a residual biplot, where highly 
 ```{r fig.height=7, fig.show='hold', fig.width=7, message=FALSE, warning=FALSE, out.width='49%'}
 fit_env2 <- gllvm(y, X, family = "negative.binomial", num.lv = 2, 
                   formula = ~ Bare.ground + Canopy.cover + 
-                    Volume.lying.CWD, seed = 1234)
+                    Volume.lying.CWD, seed = 12345)
 rownames(fit_env2$params$theta) <- paste("sp", 1:ncol(fit_env2$y), sep = "")
 ordiplot(fit_ord, biplot = TRUE, ind.spp = 15, jitter = TRUE, cex.spp = 1,
          xlim = c(-4, 3.5), ylim = c(-2.5, 2), main = "(a)")
@@ -307,7 +310,7 @@ rcov0$trace; rcov$trace
 In the previous section, environmental associations were studied by fitting separate terms for each species, without attempting to explain why different species respond differently to the environment. Adding functional traits to the model offers the potential to explain why species differ in environmental response. 
 
 
-The fourth corner model can be fitted using the argument `TR` to include traits. The argument `formula` is used to specify the model. Random row effects are included using `row.eff = "random"` and the argument `randomX` is used to incorporate random slopes in the model. As the defined model is very complex, we use three starting points for the initial values of the latent variables via argument `n.init` in order to ensure that the maximum point is reached.
+The fourth corner model can be fitted using the argument `TR` to include traits. The argument `formula` is used to specify the model. Community level random row effects are included using `row.eff = "random"` and the argument `randomX` is used to incorporate random slopes in the model. As the defined model is very complex, we use three starting points for the initial values of the latent variables via argument `n.init` in order to ensure that the maximum point is reached.
 
 ```{r, warning=FALSE, eval = FALSE}
 fit_4th <- gllvm(y, X, TR, family = "negative.binomial", num.lv = 1, 
@@ -319,12 +322,12 @@ fit_4th <- gllvm(y, X, TR, family = "negative.binomial", num.lv = 1,
 ```
 
 As previously, coefficients can be plotted using the function `coefplot`. The environmental-trait interaction terms, also known as the fourth corner terms, can be visualized using the function `levelplot` from the package `lattice`, see below. The resulting plots indicate that interactions of the trait variable `Polymorphism` with `Bare.ground` and `Canopy.cover`, `Pilosity3` with `Canopy.cover` have the strongest effects on ant abundances.
-```{r, echo=FALSE, warning = TRUE}
-load(file = "fit_4th.RData")
+```{r, echo=FALSE, warning = TRUE, eval = FALSE}
+load(file = "fit_4th.Rdata")
 ```
-```{r, fig.show='hold', out.width='49%', warning = TRUE}
+```{r F4, fig.show='hold', out.width='49%', warning = TRUE, eval = FALSE, echo=TRUE}
 library(lattice)
-coefplot(fit_4th, mar = c(4, 11, 1, 1), cex.ylab = 0.8)
+coefplot.gllvm(fit_4th, mar = c(4, 11, 1, 1), cex.ylab = 0.8)
 fourth <- fit_4th$fourth.corner
 a <- 1.5
 colort <- colorRampPalette(c("blue", "white", "red"))
@@ -333,6 +336,17 @@ plot.4th <- levelplot((as.matrix(fourth)), xlab = "Environmental Variables",
                       at = seq(-a, a, length = 100), scales = list(x = list(rot = 45)))
 plot.4th
 ```
+<div class="figure" style="text-align: center">
+<img src="F4coef.png" alt="plot of chunk F4 1"  />
+<p class="caption"> coefplot</p>
+</div>
+
+<div class="figure" style="text-align: center">
+<img src="F4.png" alt="plot of chunk F4 2"  />
+<p class="caption"> fourth corner plot</p>
+</div>
+
+
 
 ## Example: Model-based inference
 

@@ -1,3 +1,79 @@
+Version 2.0
+=============
+
+* For CRAN release 2.0 see updates for versions 1.4.4 - 1.4.9
+
+Version 1.4.9
+=============
+
+* Row.eff can now be used for community-level (species-common) effect
+* Both fixed and random at the same time (i.e., a mixed effects formula)
+  * Does not allow for a single random intercept
+  * Does not yet allow for between random effect correlation
+* New formula interface for phylogenetic model adapted to trait model too
+* New phyplot.gllvm function for plotting the phylogenetic random effects
+* Minor adjustment in the behavior of 'caption' in plot.gllvm
+
+Version 1.4.8
+=============
+
+* Added functionality for correlated random canonical coefficients
+* Changed "site.index" argument in getResidualCov.gllvm to "x", in line with getEnvironCov.gllvm
+* New vignette for the correlation structures of random effects and latent variables.
+
+## Bug Fixes
+* Bug fixed for calculating residual covariances of quadratic concurrent ordination
+
+Version 1.4.7
+=============
+
+* Added "fungi" dataset by Abrego et al. 2022
+* Added "kelpforest" dataset by Reed and Miller 2023
+* New vignette for phylogenetic random effects
+* New vignette for percent cover data analysis
+* Function for calculating and plotting variance partitioning (varPartitioning.gllvm and plotVP)
+
+Version 1.4.6
+=============
+
+* Added a 'getLoadings' function for retrieving species' loadings
+* Added 'fac.center' argument in ordiplot to plot canonical coefficients of binary variables as points
+* Added a simple plotting function for the gllvm summary
+* Improved scaling for ordiplot with quadratic model and with biplot = FALSE
+* optima.gllvm and tolerances.gllvm for num.lv now correctly provide tolerances w.r.t. the scaled LV
+* Improved starting values for models with 'randomB'
+* 'which.Xcoef' in coefplot.gllvm now also works for fourth-corner models
+* Added intercept if beta0com=TRUE to coefplot.gllvm for fourth-corner models
+
+## Bug Fixes
+* Bug fixed that prevented increasing he point size of sites in ordiplot with symbols = TRUE
+* Bug fixed in optima.gllvm for models with a single LV
+
+Version 1.4.5
+=============
+* Separated "n.init" functionality into gllvm.iter.R
+  * Prep for parallelisation
+  * Enabled parallelisation (see TMB::openmp)
+* Largely vectorized "residuals.gllvm", and residuals in "gllvm.aux"
+* Added covariance of random effects to summary
+* In preparation of emmeans support: moved the design matrix in "lv.X" to "lv.X.design". "lv.X" now stores the original supplied data.frame
+
+## Bug Fixes
+* Bug in ZINB fixed
+
+Version 1.4.4
+=============
+* Removed "dependent.row" feature
+* Added possibility for multiple random row intercepts
+* Added possibility for (correlated) random species random effects
+  * Can be plotted with "randomCoefPlot"
+* Added possibility to Phylogenetically structure the random species effects
+  * Phylogenetic signal parameter is included as object$params$rho.sp
+  * Can be covariate specific
+* num.RR and num.lv.c can now be larger than the number of predictors if randomB!=FALSE
+* Added "iid" option for "randomB"
+* Added a "getEnvironCov" function to extract species associations due to random covariate effects
+
 Version 1.4.3
 ==============
 * For CRAN release 1.4.3 see updates for versions 1.4.2 and 1.4.3

@@ -20,7 +20,7 @@
 #' @examples
 #' \donttest{
 #'# Load a dataset from the mvabund package
-#'data(antTraits)
+#'data(antTraits, package = "mvabund")
 #'y <- as.matrix(antTraits$abund)
 #'X <- scale(antTraits$env[, 1:3])
 #'# Fit gllvm model
@@ -55,9 +55,23 @@
 #'@export
 #'@export predict.gllvm
 predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type ="link", level = 1, offset = TRUE, ...){
-  r0 <- NULL
+
+  # backward compatibility
+  if(is.null(object$params$row.params.random) && !inherits(object$row.eff, "formula") && object$row.eff == "random"){
+    object$params$row.params.random <- object$params$row.params
+    object$row.eff <- ~(1|site)
+  }
+  if(is.null(object$params$row.params.fixed) && !inherits(object$row.eff, "formula") && object$row.eff == "fixed"){
+    object$params$row.params.fixed <- object$params$row.params
+    object$xr <- diag(nrow(object$y))
+  }
+  if(!is.null(object$lv.X) && is.null(object$lv.X.design))object$lv.X.design <- object$lv.X #for backward compatibility
+  
+  # end backward compatibility
+  
   newdata <- newX
   p <- ncol(object$y)
+  if(object$family == "betaH")p <- p*2
   n <- max(nrow(object$y), nrow(newdata), nrow(newLV))
   if (!is.null(newdata)) 
     n <- nrow(newdata)
@@ -79,14 +93,12 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
   else {
     formula <- NULL
   }
-  if (object$row.eff != FALSE) {
-    if(!is.null(newX) & length(all.vars(object$call$row.eff))>0){
-      if(all.vars(object$call$row.eff) %in% colnames(newX)) {
+  if (!isFALSE(object$row.eff)) {
+    if(!is.null(newX)){
+      if(any(all.vars(object$call$row.eff) %in% colnames(newX))) {
         warning("Using row effects for predicting new sites does not work yet.")
       }
-    } else if ((length(object$params$row.params) != nrow(object$y)) & is.null(newX)) 
-      object$params$row.params = c(object$TMBfn$env$data$dr0 %*% 
-                                     object$params$row.params)
+    }
   }
   b0 <- object$params$beta0
   eta <- matrix(b0, n, p, byrow = TRUE)
@@ -113,16 +125,19 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
             formula1 <- paste(formula1, n1[i1], sep = "+")
           }
         }
-        formula1 <- paste(formula1, "1", sep = "-")
+        # formula1 <- paste(formula1, "1", sep = "-")
         formula1 <- formula(formula1)
         Xnew <- as.matrix(model.matrix(formula1, data = data.frame(newdata)))
+        X.d <- as.matrix(Xnew[, !(colnames(Xnew) %in% c("(Intercept)")), 
+                            drop = F])
+      } else {
+        formula <- as.formula(nobars1_(object$call$formula)) # due to potential REs
+        xb <- as.matrix(model.matrix(formula, data = data.frame(Xnew)))
+        X.d <- as.matrix(xb[, !(colnames(xb) %in% c("(Intercept)")), 
+                            drop = F])
+        colnames(X.d) <- colnames(xb)[!(colnames(xb) %in% 
+                                          c("(Intercept)"))]
       }
-      formula <- formula(object$formula)
-      xb <- as.matrix(model.matrix(formula, data = data.frame(Xnew)))
-      X.d <- as.matrix(xb[, !(colnames(xb) %in% c("(Intercept)")), 
-                          drop = F])
-      colnames(X.d) <- colnames(xb)[!(colnames(xb) %in% 
-                                        c("(Intercept)"))]
     }
     else {
       X.d <- object$X.design
@@ -223,8 +238,8 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
     if (object$num.lv > 0 | (object$num.lv.c + object$num.RR) > 
         0) {
       
-      if(!is.null(object$lvs)){
-        if(nrow(object$lvs)!=n) object$lvs = object$TMBfn$env$data$dLV%*%object$lvs # !!!
+      if(!is.null(object$lvs) && inherits(object$lvCor,"formula")){
+        if(nrow(object$lvs)!=n) object$lvs = as.matrix(object$TMBfn$env$data$dLV%*%object$lvs) # !!!
       }
       
       if (!is.null(newLV)) {
@@ -243,7 +258,7 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
                              object$params$sigma.lv[1:object$num.lv.c]), 
                          matrix(0, ncol = object$num.RR, nrow = n), 
                          t(t(newLV[, -c(1:object$num.lv.c)]) * 
-                             object$params$sigma.lv[1:object$num.lv]))
+                             object$params$sigma.lv[-(1:object$num.lv.c)]))
           }
           else if (object$num.lv > 0 & object$num.lv.c == 0) {
             lvs <- cbind(matrix(0, ncol = object$num.RR, 
@@ -262,7 +277,7 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
                              object$params$sigma.lv[1:object$num.lv.c]), 
                          matrix(0, ncol = object$num.RR, nrow = n), 
                          t(t(object$lvs[, -c(1:object$num.lv.c)]) * 
-                             object$params$sigma.lv[1:object$num.lv]))
+                             object$params$sigma.lv[-c(1:object$num.lv.c)]))
           }
           else if (object$num.lv > 0 & object$num.lv.c == 
                    0) {
@@ -277,7 +292,7 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
       if ((object$num.lv.c + object$num.RR) > 0 & !is.null(newdata)) {
         lv.X <- model.matrix(object$lv.formula, as.data.frame(newdata))[,-1, drop = F]
       } else {
-        lv.X <- object$lv.X
+        lv.X <- object$lv.X.design
       }
       theta <- (object$params$theta[, 1:(object$num.lv + 
                                           (object$num.lv.c + object$num.RR)), drop = F])
@@ -305,16 +320,32 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
     }
   }
   
-  
-  if ((object$row.eff %in% c("random", "fixed", "TRUE")) && is.null(r0) & is.null(newX)) {
-    if(!is.null(object$params$row.params)){
-      if(length(object$params$row.params)!=n) object$params$row.params = c(object$TMBfn$env$data$dr0%*%object$params$row.params) # !!!
+  r0 <- NULL
+  if (inherits(object$row.eff, "formula") & is.null(newX)) {
+    if(!is.null(object$params$row.params.random)){
+     object$params$row.params.random = object$TMBfn$env$data$dr0%*%object$params$row.params.random # !!!
+     if(level==0)object$params$row.params.random = object$params$row.params.random*0
+     r0 <- cbind(r0, as.matrix(object$params$row.params.random))
+    } 
+    if(!is.null(object$params$row.params.fixed)){
+        object$params$row.params.fixed = object$TMBfn$env$data$xr%*%as.matrix(object$params$row.params.fixed)
+        r0 <- cbind(as.matrix(object$params$row.params.fixed))
     }
-    if(nrow(eta) == length(object$params$row.params)){
-    r0 <- object$params$row.params
-    if((object$row.eff %in% "random") && (level==0)) r0 = r0*0
-    eta <- eta + r0
-    }
+    
+    eta <- eta + as.matrix(rowSums(r0))%*%rep(1,p)
+  }
+  if(is.null(object$col.eff$col.eff))object$col.eff$col.eff <- FALSE # backward compatibility
+  if (object$col.eff$col.eff == "random" && is.null(newX)) {
+    eta <- eta + as.matrix(object$col.eff$spdr%*%object$params$Br)
+    if(length(object$params$B)>0)eta <- eta + as.matrix(object$col.eff$spdr[,names(object$params$B),drop=FALSE]%*%matrix(object$params$B, ncol = ncol(object$y), nrow = length(object$params$B)))
+  }else if(object$col.eff$col.eff == "random" && !is.null(newX) && level == 1){
+    stop("Prediction with column effects not yet implemented.")
+      # bar.f <- findbars1(object$col.eff$col.eff.formula) # list with 3 terms
+      # mf <- model.frame(subbars1(object$col.eff$col.eff.formula),data=data.frame(newX))
+      # RElist <- mkReTrms1(bar.f,mf)
+      # newspdr <- Matrix::t(RElist$Zt)
+      # eta <- eta + as.matrix(newspdr%*%object$params$Br)
+      # eta <- eta + model.matrix(as.formula(paste0("~", paste0(all.vars(object$col.eff$col.eff.formula), collapse = "+"))), newX)[,-1, drop = FALSE]%*%t(object$params$Xcoef[,grepl("RE_mean_",colnames(object$params$Xcoef)),drop=FALSE])
   }
 
   if(!is.null(object$offset)){
@@ -403,5 +434,6 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
     dimnames(preds)[[3]] <- colnames(object$y)
   }
   try(rownames(out) <- 1:NROW(out), silent = TRUE)
+  if(any(class(out) %in% "dgeMatrix")) out <- as.matrix(out)
   return(out)
 }
