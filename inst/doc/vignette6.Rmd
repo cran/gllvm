@@ -1,7 +1,7 @@
 ---
 title: 'Ordination with predictors'
 author: "Bert van der Veen"
-date: "2024-11-22"
+date: "2025-04-01"
 output:  rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Ordination with predictors}
@@ -206,7 +206,7 @@ coefsTab[,-4]
 
 There is a range of potential use cases for random canonical coefficients, but pragmatically, inducing some shrinkage on the predictor effects can result in more better "behaved" (fewer outliers) ordination plots. 
 
-Incorporating correlation between the canonical coefficients is (currently) only possible in combination with `randomB="P"`. This assumes that the canonical coefficients per LV are drawn from a covariance matrix that is specified with the `lv.formula` argument:
+Incorporating correlation between the canonical coefficients, with works in combination with `randomB="P"` or `randomB="LV"`. This assumes that the canonical coefficients per LV are drawn from a covariance matrix that is specified with the `lv.formula` argument:
 
 
 ``` r
@@ -223,7 +223,7 @@ summary(RRGLMb2)
 ## 
 ## Family:  poisson 
 ## 
-## AIC:  2402.894 AICc:  2413.434 BIC:  2551.761 LL:  -1162.4 df:  39 
+## AIC:  2400.207 AICc:  2422.207 BIC:  2610.148 LL:  -1145.1 df:  55 
 ## 
 ## Informed LVs:  0 
 ## Constrained LVs:  2 
@@ -234,13 +234,20 @@ summary(RRGLMb2)
 ## Row effect:  ~ 1 
 ## 
 ## Random effects LV predictors:
-##  Name          Variance Std.Dev
-##  soil.dry      0.4174   0.6461 
-##  bare.sand     0.0049   0.0700 
-##  fallen.leaves 0.1125   0.3354 
-##  moss          0.3404   0.5835 
-##  herb.layer    0.4036   0.6353 
-##  reflection    0.3353   0.5790
+##  Name          Std.Dev.CLV1 Variance.CLV1 Std.Dev.CLV2 Variance.CLV2 Corr           
+##  soil.dry      1.5823       2.5038        0.6396       0.4091                       
+##  bare.sand     0.1660       0.0276        0.0671       0.0045        -0.6713        
+##  fallen.leaves 0.6722       0.4518        0.2717       0.0738        -0.4600 -0.3411
+##  moss          0.5970       0.3564        0.2413       0.0582        -0.0216  0.7554
+##  herb.layer    1.4067       1.9787        0.5686       0.3233        -0.3142  0.2517
+##  reflection    0.5562       0.3094        0.2248       0.0506         0.2343 -0.5319
+##                          
+##                          
+##                          
+##                          
+##  -0.8659                 
+##   0.1735  0.0748         
+##   0.4483 -0.5085  0.2089
 ```
 
 

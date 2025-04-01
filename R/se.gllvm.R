@@ -61,15 +61,14 @@ se.gllvm <- function(object, ...){
   
   quadratic <- object$quadratic
   nlvr <- num.lv + num.lv.c 
-  nr = object$TMBfn$env$data$nr
   dr = object$dr
   
   cstrucn = 0
   cstruc = object$corP$cstruc
   for (i in 1:length(cstruc)) {
-    cstrucn[i] = switch(cstruc[i], "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
+    cstrucn[i] = switch(cstruc[i], "ustruc" = 0, "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
   }
-  cstruclvn = switch(object$corP$cstruclv, "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
+  cstruclvn = switch(object$corP$cstruclv, "ustruc" = 0, "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
   corWithinLv <- object$corP$corWithinLV
   
   family = object$family
@@ -302,6 +301,7 @@ se.gllvm <- function(object, ...){
       }
       
       if(family%in%c("ZIP","ZINB")) {
+        pars <- object$TMBfn$par
         p0i <- names(pars)=="lg_phi"
         p0 <- pars[p0i]
       }
@@ -319,14 +319,14 @@ se.gllvm <- function(object, ...){
       }
       
       if(!is.null(object$randomX)){
-        nr <- ncol(xb)
-        if(length(se$sigmaB)>nr && !is.null(object$params$rho.sp)){
-          out$sd$rho.sp <- tail(se$sigmaB,ifelse(object$col.eff$colMat.rho.struct == "single", 1, nr))
-          se$sigmaB <- head(se$sigmaB, -ifelse(object$col.eff$colMat.rho.struct == "single", 1, nr))
+        n.xb <- ncol(xb)
+        if(length(se$sigmaB)>n.xb && !is.null(object$params$rho.sp)){
+          out$sd$rho.sp <- tail(se$sigmaB,ifelse(object$col.eff$colMat.rho.struct == "single", 1, n.xb))
+          se$sigmaB <- head(se$sigmaB, -ifelse(object$col.eff$colMat.rho.struct == "single", 1, n.xb))
         }
         out$sd$sigmaB <- se$sigmaB*c(sqrt(diag(object$params$sigmaB))); 
         names(out$sd$sigmaB) <- c(paste("sd",colnames(xb),sep = "."))
-        if(nr>1){
+        if(n.xb>1){
           out$sd$corrpar <- se$sigmaij
         }
       }
@@ -334,11 +334,16 @@ se.gllvm <- function(object, ...){
       if(!is.null(object$params$row.params.random)) { 
         iter = 1 # keep track of index
         sigma <- se$log_sigma
+        if(!is.null(object$TMBfn$env$map$log_sigma)) { #clean from duplicates and NAs
+          sigma = sigma[!duplicated(object$TMBfn$env$map$log_sigma) & !is.na(object$TMBfn$env$map$log_sigma)]
+        }
+        nr = object$TMBfn$env$data$nr
+        
         for(re in 1:length(cstrucn)){
           if(cstrucn[re] %in% c(1,3)) {
             sigma[iter] <- sigma[iter]*object$params$sigma[iter]
-            names(sigma)[iter] = names(nr)[re]
-            names(sigma)[iter+1] = paste0(names(nr)[re],"rho")
+            names(sigma)[iter] <- names(nr)[re]
+            names(sigma)[iter+1] <- paste0(names(nr)[re],"rho")
             sigma[iter+1] <- sigma[iter+1]*(1-object$params$sigma[iter+1]^2)^1.5
             iter <- iter +2
           } else if(cstrucn[re] %in% c(2)){
@@ -347,15 +352,17 @@ se.gllvm <- function(object, ...){
             names(sigma)[iter+1] = names(nr)[re]
             iter <- iter + 2
           } else if(cstrucn[re] %in% c(4)){
-            sigma[iter:(iter+2)] <- sigma[iter:(iter+2)]*object$params$sigma[iter:(iter+2)]
+            # sigma[iter:(iter+2)] <- sigma[iter:(iter+2)]*object$params$sigma[iter:(iter+2)] # matern smoothness fixed
+            sigma[iter:(iter+1)] <- sigma[iter:(iter+1)]*object$params$sigma[iter:(iter+1)]
             names(sigma)[iter] = "Scale"
             names(sigma)[iter+1] = names(nr)[re]
             iter <- iter + 2
             # Matern smoothness
-            names(sigma)[iter+1] = "Matern kappa"
-            iter <- iter +1
+            # names(sigma)[iter+1] = "Matern kappa"
+            # iter <- iter +1
           } else {
             sigma[iter] <- sigma[iter]*object$params$sigma[iter]
+            names(sigma)[iter] = names(nr)[re]
             iter <- iter +1
           }
         }
@@ -364,6 +371,9 @@ se.gllvm <- function(object, ...){
       
       if(num.lv.cor>0 & cstruclvn>0){
         if(length(object$params$rho.lv)>0){
+          if(!is.null(object$TMBfn$env$map$rho_lvc)) { #clean from duplicates and NAs
+            se$rho_lvc = se$rho_lvc[!duplicated(object$TMBfn$env$map$rho_lvc) & !is.na(object$TMBfn$env$map$rho_lvc)]
+          }
           if((cstruclvn %in% c(1,3))) {out$sd$rho.lv <- se$rho_lvc[1:length(object$params$rho.lv)]*(1-object$params$rho.lv^2)^1.5}
           if((cstruclvn %in% c(2,4))) {out$sd$rho.lv <- se$rho_lvc[1:length(object$params$rho.lv)]*object$params$rho.lv}
           names(out$sd$rho.lv) <- names(object$params$rho.lv)
@@ -746,26 +756,29 @@ se.gllvm <- function(object, ...){
     }
     if(!isFALSE(object$randomB)&(num.lv.c+num.RR)>0){
       if(object$randomB!="iid"){
-        if(is.null(object$params$corsLvXcoef)){
-        se.lsigmab.lv <-  se$sigmab_lv;
+        if(object$randomB=="LV"){
+        se.lsigmab.lv <-  head(se$sigmab_lv, num.lv.c+num.RR)
         out$sd$sigmaLvXcoef <- se.lsigmab.lv*object$params$sigmaLvXcoef
+        }else if(object$randomB=="P"){
+          se.lsigmab.lv <- head(se$sigmab_lv, ncol(object$lv.X.design)+num.lv.c+num.RR-1);
+          out$sd$sigmaLvXcoef <- se.lsigmab.lv*object$params$sigmaLvXcoef
         }else{
           se.lsigmab.lv <- head(se$sigmab_lv, ncol(object$lv.X.design));
           out$sd$sigmaLvXcoef <- se.lsigmab.lv*object$params$sigmaLvXcoef
         }
       }
       if(object$randomB=="LV")names(out$sd$sigmaLvXcoef) <- paste("CLV",1:(num.lv.c+num.RR), sep="")
-      if(object$randomB=="P")names(out$sd$sigmaLvXcoef) <- colnames(lv.X.design)
+      if(object$randomB=="P")names(out$sd$sigmaLvXcoef) <- c(colnames(lv.X.design), paste("CLV",2:(num.lv.c+num.RR), sep=""))
       # if(object$randomB=="all")names(out$sd$sigmaLvXcoef) <- paste(paste("CLV",1:(num.lv.c+num.RR),sep=""),rep(colnames(lv.X.design),each=num.RR+num.lv.c),sep=".")
       if(object$randomB=="single")names(out$sd$sigmaLvXcoef) <- NULL
     }
     if(object$col.eff$col.eff=="random"){
-      nr <- ncol(object$col.eff$spdr)
-      sigma.sp <- 2*diag(object$params$sigmaB)*se$sigmaB[1:nr]
-      covsigma.sp <- se$sigmaB[-c(1:nr)]
+      n.ce <- ncol(object$col.eff$spdr)
+      sigma.sp <- 2*diag(object$params$sigmaB)*se$sigmaB[1:n.ce]
+      covsigma.sp <- se$sigmaB[-c(1:n.ce)]
       if(!is.null(object$params$rho.sp)){
-        out$sd$rho.sp <- tail(covsigma.sp,ifelse(object$col.eff$colMat.rho.struct == "single", 1, nr))
-        covsigma.sp <- head(covsigma.sp, -ifelse(object$col.eff$colMat.rho.struct == "single", 1, nr))
+        out$sd$rho.sp <- tail(covsigma.sp,ifelse(object$col.eff$colMat.rho.struct == "single", 1, n.ce))
+        covsigma.sp <- head(covsigma.sp, -ifelse(object$col.eff$colMat.rho.struct == "single", 1, n.ce))
       }
       sigma.sp <- diag(sigma.sp, length(sigma.sp))
       if(ncol(object$TMBfn$env$data$cs)==2){
@@ -780,6 +793,11 @@ se.gllvm <- function(object, ...){
     if(!is.null(object$params$row.params.random)) { 
       iter = 1 # keep track of index
       sigma <- se$log_sigma
+      if(!is.null(object$TMBfn$env$map$log_sigma)) { #clean from duplicates and NAs
+        sigma = sigma[!duplicated(object$TMBfn$env$map$log_sigma) & !is.na(object$TMBfn$env$map$log_sigma)]
+      }
+      nr = object$TMBfn$env$data$nr
+      
       for(re in 1:length(cstrucn)){
         if(cstrucn[re] %in% c(1,3)) {
           sigma[iter] <- sigma[iter]*object$params$sigma[iter]
@@ -793,15 +811,17 @@ se.gllvm <- function(object, ...){
           names(sigma)[iter+1] = names(nr)[re]
           iter <- iter + 2
         } else if(cstrucn[re] %in% c(4)){
-          sigma[iter:(iter+2)] <- sigma[iter:(iter+2)]*object$params$sigma[iter:(iter+2)]
+          # sigma[iter:(iter+2)] <- sigma[iter:(iter+2)]*object$params$sigma[iter:(iter+2)]# matern smoothness fixed
+          sigma[iter:(iter+1)] <- sigma[iter:(iter+1)]*object$params$sigma[iter:(iter+1)]
           names(sigma)[iter] = "Scale"
           names(sigma)[iter+1] = names(nr)[re]
           iter <- iter + 2
           # Matern smoothness
-          names(sigma)[iter+1] = "Matern kappa"
-          iter <- iter +1
+          # names(sigma)[iter+1] = "Matern kappa"
+          # iter <- iter +1
         } else {
           sigma[iter] <- sigma[iter]*object$params$sigma[iter]
+          names(sigma)[iter] = names(nr)[re]
           iter <- iter +1
         }
       }
@@ -809,6 +829,9 @@ se.gllvm <- function(object, ...){
     }
     if(num.lv.cor>0 & cstruclvn>0){ 
       if(length(object$params$rho.lv)>0){
+        if(!is.null(object$TMBfn$env$map$rho_lvc)) { #clean from duplicates and NAs
+          se$rho_lvc = se$rho_lvc[!duplicated(object$TMBfn$env$map$rho_lvc) & !is.na(object$TMBfn$env$map$rho_lvc)]
+        }
         if((cstruclvn %in% c(1,3))) {out$sd$rho.lv <- se$rho_lvc*(1-object$params$rho.lv^2)^1.5}
         if((cstruclvn %in% c(2,4))) {out$sd$rho.lv <- se$rho_lvc*object$params$rho.lv}
         names(out$sd$rho.lv) <- names(object$params$rho.lv)

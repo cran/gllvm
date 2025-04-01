@@ -7,7 +7,7 @@
 #' @param TR matrix or data.frame of trait covariates.
 #' @param data data in long format, that is, matrix of responses, environmental and trait covariates and row index named as "id". When used, model needs to be defined using formula. This is alternative data input for y, X and TR.
 #' @param formula an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for fixed-effects predictors).
-#' @param family  distribution function for responses. Options are \code{"negative.binomial"} (with log link), \code{poisson(link = "log")}, \code{binomial(link = "probit")} (and also with \code{link = "logit"} when \code{method = "LA"} or \code{method = "EVA"}), zero-inflated poisson (\code{"ZIP"}), zero-inflated negative-binomial (\code{"ZINB"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link, for \code{"LA"} and \code{"EVA"}-method), \code{"gamma"} (with log link), \code{"exponential"} (with log link), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method), \code{"ordinal"} (with \code{"VA"} and \code{"EVA"}-method), beta hurdle \code{"betaH"} (for \code{"VA"} and \code{"EVA"}-method) and \code{"orderedBeta"} (for \code{"VA"} and \code{"EVA"}-method). Note: \code{"betaH"} and \code{"orderedBeta"} with \code{"VA"}-method are actually fitted using a hybrid approach such that EVA is applied to the beta distribution part of the likelihood.                                                   
+#' @param family  distribution function for responses. Options are \code{"negative.binomial"} (with log link), \code{poisson(link = "log")}, \code{binomial(link = "probit")} (and also with \code{link = "logit"} when \code{method = "LA"} or \code{method = "EVA"}), zero-inflated poisson (\code{"ZIP"}), zero-inflated negative-binomial (\code{"ZINB"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link), \code{"gamma"} (with log link), \code{"exponential"} (with log link), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method), \code{"ordinal"} (with \code{"VA"} and \code{"EVA"}-method), beta hurdle \code{"betaH"} (for \code{"VA"} and \code{"EVA"}-method) and \code{"orderedBeta"} (for \code{"VA"} and \code{"EVA"}-method). Note: \code{"betaH"} and \code{"orderedBeta"} with \code{"VA"}-method are actually fitted using a hybrid approach such that EVA is applied to the beta distribution part of the likelihood.                                                   
 #' @param num.lv  number of latent variables, d, in gllvm model. Non-negative integer, less than number of response variables (m). Defaults to 2, if \code{num.lv.c=0} and \code{num.RR=0}, otherwise 0.
 #' @param num.lv.c  number of latent variables, d, in gllvm model to inform, i.e., with residual term. Non-negative integer, less than number of response (m) and equal to, or less than, the number of predictor variables (k). Defaults to 0. Requires specification of "lv.formula" in combination with "X" or "datayx". Can be used in combination with num.lv and fixed-effects, but not with traits.
 #' @param num.RR number of latent variables, d, in gllvm model to constrain, without residual term (reduced rank regression). Cannot yet be combined with traits.
@@ -41,7 +41,7 @@
 #' @param setMap under development, not properly tested, except for ordinal beta cutoffs (zeta) and for rho_lvc. a list of a set of parameters to be fixed. Parameters to be fixed need to be defined with factors. Other arguments may overwrite these definitions.
 #' @param control A list with the following arguments controlling the optimization:
 #' \describe{
-#'  \item{\emph{reltol}: }{ convergence criteria for log-likelihood, defaults to 1e-8.}
+#'  \item{\emph{reltol}: }{ convergence criteria for log-likelihood, defaults to 1e-10.}
 #'  \item{\emph{reltol.c}: }{ convergence criteria for equality constraints in ordination with predictors, defaults to 1e-8.}  
 #'  \item{\emph{TMB}: }{ logical, if \code{TRUE} model will be fitted using Template Model Builder (TMB). TMB is always used if \code{method = "LA"}.  Defaults to \code{TRUE}.}
 #'  \item{\emph{optimizer}: }{ if \code{TMB=TRUE}, log-likelihood can be optimized using \code{"\link{optim}"} (default) or \code{"\link{nlminb}"}. For ordination with predictors (num.RR>0 or num.lv.c>0) this can additionally be one of \code{alabama}(default), \code{nloptr(agl)} or \code{nloptr(sqp)}.}
@@ -49,7 +49,7 @@
 #'  \item{\emph{maxit}: }{ maximum number of iterations for optimizer, defaults to 6000.}
 #'  \item{\emph{trace}: }{ logical, if \code{TRUE} in each iteration step information on current step will be printed. Defaults to \code{FALSE}. Only with \code{TMB = FALSE}.}
 #'  \item{\emph{optim.method}: }{ optimization method to be used if optimizer is \code{"\link{optim}"},\code{"alabama"}, or  \code{"\link[nloptr:nloptr]{nloptr}"}, but the latter two are only available in combination with at least two latent variables (i.e., num.RR+num.lv.c>1). Defaults to \code{"BFGS"}, but to \code{"L-BFGS-B"} for Tweedie family due the limited-memory use. For optimizer='alabama' this can be any \code{"\link{optim}"} method, or  \code{"\link{nlminb}"}. If optimizer = 'nloptr(agl)' this can be one of: "NLOPT_LD_CCSAQ", "NLOPT_LD_SLSQP", "NLOPT_LD_TNEWTON_PRECOND" (default), "NLOPT_LD_TNEWTON", "NLOPT_LD_MMA".}
-#'  \item{\emph{nn.colMat}: }{number of nearest neighbours for calculating inverse of "colMat", defaults to 10. If set to the number of columns in the response data, a standard inverse is used instead.}
+#'  \item{\emph{nn.colMat}: }{number of nearest neighbours for calculating inverse of "colMat" when \code{colMat.approx = "NNGP"}, defaults to 10. Otherwise, if \code{colMat.approx = "band"}, nn.colMat is the bandwidth of the approximation. If set to the number of columns in the response data, a standard inverse is used instead.}
 #' }
 #' @param control.va A list with the following arguments controlling the variational approximation method:
 #' \describe{
@@ -60,7 +60,7 @@
 #'  \item{\emph{diag.iter}: }{ non-negative integer which can sometimes be used to speed up the updating of variational (covariance) parameters in VA method. Can sometimes improve the accuracy. If \code{TMB = TRUE} either 0 or 1. Defaults to 1.}
 #'  \item{\emph{Ab.diag.iter}: }{ As above, but for variational covariance of random slopes.}
 #'  \item{\emph{Lambda.start}: }{ starting values for variances in VA distributions for latent variables, random row effects and random slopes in variational approximation method. Defaults to 0.3.}
-#'  \item{\emph{NN}: }{ Number of nearest neighbors for NN variational covariance. Defaults to ...}
+#'  \item{\emph{NN}: }{ Number of nearest neighbors for NN variational covariance. Defaults to 10.}
 #' }
 #' @param control.start A list with the following arguments controlling the starting values:
 #' \describe{
@@ -74,7 +74,7 @@
 #'   \item{\emph{randomX.start}: }{ starting value method for the random slopes. Options are \code{"zero"} and \code{"res"}. Defaults to \code{"res"}.}
 #'   \item{\emph{start.struc}: }{ starting value method for the quadratic term. Options are \code{"LV"} (default) and \code{"all"}.}
 #'   \item{\emph{quad.start}: }{ starting values for quadratic coefficients. Defaults to 0.01.}
-#'   \item{\emph{MaternKappa}: }{ Starting value for smoothness parameter kappa of Matern covariance function. Defaults to 3/2.}
+#'   \item{\emph{MaternKappa}: }{ Starting value for smoothness parameter of Matern covariance function. Defaults to 3/2.}
 #'   \item{\emph{scalmax}: }{ Sets starting value for the scale parameter for the coordinates. Defaults to 10, when the starting value for scale parameter scales the distances of coordinates between 0-10.}
 #'   \item{\emph{rangeP}: }{ Sets starting value for the range parameter for the correlation structure.}
 #'   \item{\emph{zetacutoff}: }{ Either vector of length 2 or a matrix of dimension (a number of species x 2). Sets starting value for the cutoff parameters of the ordered beta model.}
@@ -159,8 +159,8 @@
 #'\describe{
 #'   \item{For count data \code{family = poisson()}:}{Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}}, or}
 #'   \item{ \code{family = "negative.binomial"}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}+\mu_{ij}^2\phi_j}, or}
-#'   \item{ \code{family = "ZIP"}:}{ Expectation \eqn{E[Y_{ij}] = (1-p)\mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-p_j)(1+\mu_{ij}p)}.}
-#'   \item{ \code{family = "ZINB"}:}{ Expectation \eqn{E[Y_{ij}] = (1-p)\mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-p_j)(1+\mu_{ij}(\phi_j+p_j))}.}
+#'   \item{ \code{family = "ZIP"}:}{ Expectation \eqn{E[Y_{ij}] = (1-p_j)\mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-p_j)(1+\mu_{ij}p_j)}.}
+#'   \item{ \code{family = "ZINB"}:}{ Expectation \eqn{E[Y_{ij}] = (1-p_j)\mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-p_j)(1+\mu_{ij}(\phi_j+p_j))}.}
 #'   \item{For binary data \code{family = binomial()}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-\mu_{ij})}.}
 #'   
 #'   \item{For percent cover data \eqn{0 < Y_{ij} < 1} \code{family = "beta"}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-\mu_{ij})//(1+\phi_j)}.}
@@ -410,8 +410,8 @@
 #'@importFrom TMB MakeADFun
 #'@importFrom graphics abline axis par plot segments text points boxplot barplot panel.smooth lines polygon arrows image layout mtext
 #'@importFrom grDevices rainbow hcl colorRampPalette dev.size
-#'@importFrom stats dnorm pnorm qnorm rnorm dbinom pbinom rbinom pnbinom rnbinom pbeta rbeta pexp rexp pgamma rgamma ppois rpois runif pchisq qchisq qqnorm lm AIC binomial constrOptim factanal glm model.extract model.frame model.matrix model.response nlminb optim optimHess reshape residuals terms BIC qqline sd formula ppoints quantile gaussian cov princomp as.formula residuals.lm coef printCoefmat nobs predict cov2cor reformulate update.formula aggregate setNames contrasts
-#'@importFrom Matrix bdiag chol2inv diag
+#'@importFrom stats dnorm pnorm qnorm rnorm dbinom pbinom rbinom pnbinom rnbinom pbeta rbeta pexp rexp pgamma rgamma ppois rpois runif pchisq qchisq qqnorm lm AIC binomial constrOptim factanal glm model.extract model.frame model.matrix model.response nlminb optim optimHess reshape residuals terms BIC qqline sd formula ppoints quantile gaussian cov princomp as.formula residuals.lm coef printCoefmat nobs predict cov2cor reformulate update.formula aggregate setNames contrasts cor na.omit
+#'@importFrom Matrix bdiag chol2inv diag t
 #'@importFrom MASS ginv polr mvrnorm
 #'@importFrom mgcv gam predict.gam
 #'@importFrom nloptr nloptr
@@ -428,8 +428,8 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
                   plot = FALSE, link = "probit", Ntrials = 1,
                   Power = 1.1, seed = NULL, scale.X = TRUE, return.terms = TRUE, 
                   gradient.check = FALSE, disp.formula = NULL,
-                  control = list(reltol = 1e-8, reltol.c = 1e-8, TMB = TRUE, optimizer = ifelse((num.RR+num.lv.c)==0 | randomB!=FALSE,"optim","alabama"), max.iter = 6000, maxit = 6000, trace = FALSE, optim.method = NULL, nn.colMat = 10), 
-                  control.va = list(Lambda.struc = "unstructured", Ab.struct = ifelse(is.null(colMat),"blockdiagonal","MNunstructured"), Ab.struct.rank = 1, Ar.struc="diagonal", diag.iter = 1, Ab.diag.iter=0, Lambda.start = c(0.3, 0.3, 0.3), NN = 3),
+                  control = list(reltol = 1e-10, reltol.c = 1e-8, TMB = TRUE, optimizer = ifelse((num.RR+num.lv.c)==0 | randomB!=FALSE,"optim","alabama"), max.iter = 6000, maxit = 6000, trace = FALSE, optim.method = NULL, nn.colMat = 10, colMat.approx = "NNGP"), 
+                  control.va = list(Lambda.struc = "unstructured", Ab.struct = ifelse(is.null(colMat),"blockdiagonal","MNunstructured"), Ab.struct.rank = 1, Ar.struc="diagonal", diag.iter = 1, Ab.diag.iter=0, Lambda.start = c(0.3, 0.3, 0.3), NN = 10),
                   control.start = list(starting.val = "res", n.init = 1, n.init.max = 10, jitter.var = 0, jitter.var.br = 0, start.fit = NULL, start.lvs = NULL, randomX.start = "res", quad.start=0.01, start.struc = "LV", scalmax = 10, MaternKappa=1.5, rangeP=NULL, zetacutoff = NULL), setMap=NULL, ...
                   ) {
   # Dthreshold=0,
@@ -473,7 +473,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
     
     fill_control = function(x){
       if (!("reltol" %in% names(x))) 
-        x$reltol = 1e-8
+        x$reltol = 1e-10
       if (!("reltol.c" %in% names(x))) 
         x$reltol.c = 1e-8
       if (!("TMB" %in% names(x))) 
@@ -493,6 +493,8 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
         x$trace = FALSE
       if(!("nn.colMat" %in% names(x)))
         x$nn.colMat = 10
+      if(!("colMat.approx" %in% names(x)))
+        x$colMat.approx = "NNGP"
       x
     }
     
@@ -514,7 +516,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
       if (!("Lambda.start" %in% names(x))) 
         x$Lambda.start = c(0.3, 0.3, 0.3)
       if (!("NN" %in% names(x)))
-        x$NN = 3   
+        x$NN = 10   
       x
     }
     fill_control.start = function(x){
@@ -614,7 +616,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
     # if(num.RR>0&quadratic>0&(num.lv+num.lv.c)==0){
     #   control.start$start.struc <- "all"
     # }
-    reltol = control$reltol; reltol.c = control$reltol.c; TMB = control$TMB; optimizer = control$optimizer; max.iter = control$max.iter; maxit = control$maxit; trace = control$trace; optim.method = control$optim.method; nn.colMat = control$nn.colMat
+    reltol = control$reltol; reltol.c = control$reltol.c; TMB = control$TMB; optimizer = control$optimizer; max.iter = control$max.iter; maxit = control$maxit; trace = control$trace; optim.method = control$optim.method; nn.colMat = control$nn.colMat; colMat.approx = control$colMat.approx;
     Lambda.struc = control.va$Lambda.struc; Ab.struct = control.va$Ab.struct; Ab.struct.rank = control.va$Ab.struct.rank; Ar.struc = control.va$Ar.struc; diag.iter = control.va$diag.iter; Ab.diag.iter=control.va$Ab.diag.iter; Lambda.start = control.va$Lambda.start; NN = control.va$NN;
     starting.val = control.start$starting.val; n.init = control.start$n.init; n.init.max = control.start$n.init.max; jitter.var = control.start$jitter.var; jitter.var.br = control.start$jitter.var.br; start.fit = control.start$start.fit; start.lvs = control.start$start.lvs; randomX.start = control.start$randomX.start
     start.struc = control.start$start.struc;quad.start=control.start$quad.start; scalmax=control.start$scalmax; rangeP=control.start$rangeP; MaternKappa=control.start$MaternKappa; zetacutoff=control.start$zetacutoff
@@ -706,15 +708,15 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
       col.eff.formula = allbars(formula)
       formula = nobars1_(formula)
       bar.f <- findbars1(col.eff.formula) # list with 3 terms
+      mf <- model.frame(subbars1(reformulate(sprintf("(%s)", sapply(findbars1(col.eff.formula), deparse1)))),data=data.frame(X.col.eff))
       
       if(anyBars(formula) && is.null(X.col.eff) && (length(bar.f)>1 & bar.f[[1]]!=bquote(1|1))){
         stop("Covariates for species random effects must be provided.")
       }else if(length(bar.f)==1 & bar.f[[1]]==bquote(1|1)){
-        X.col.eff <- cbind(Intercept=rep(1,nrow(y)))
+        X.col.eff <- mf <- data.frame(Intercept=rep(1,nrow(y)))
       }
-      
-      mf <- model.frame(subbars1(reformulate(sprintf("(%s)", sapply(findbars1(col.eff.formula), deparse1)))),data=data.frame(X.col.eff))
-      RElistSP<- mkReTrms1(bar.f,mf, nocorr=corstruc(expandDoubleVerts2(col.eff.formula))) #still add find double bars
+
+      RElistSP<- mkReTrms1(bar.f, mf, nocorr=corstruc(expandDoubleVerts2(col.eff.formula))) #still add find double bars
       
       if(is.null(formula) && is.null(lv.formula)){
         X <- NULL
@@ -817,19 +819,19 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
           if(any(apply(lv.X.design, 2, function(x) all(x == 1)))){
             lv.X.design <- lv.X.design[,!apply(lv.X.design, 2, function(x) all(x == 1)),drop=FALSE]
           }
-          }else{
+          }else if((num.RR+num.lv.c)>0 && anyBars(lv.formula)){
             if(isFALSE(randomB))stop("You forgot to set the 'randomB' argument.")
             if(!is.null(nobars1_(lv.formula)))stop("lv.formula cannot yet incorporate fixed and random effects at the same time.")
             bar.f <- findbars1(lv.formula) # list with 3 terms
             lv.X <- model.frame(subbars1(reformulate(sprintf("(%s)", sapply(findbars1(lv.formula), deparse1)))),data=data.frame(datayx))
             RElistLV <- mkReTrms1(bar.f,lv.X, nocorr=corstruc(expandDoubleVerts2(lv.formula))) #still add find double bars
             lv.X.design = t(as.matrix(RElistLV$Zt))
-            if(randomB=="P")csBlv = RElistLV$cs # cannot have correlated effects with randomB != "P"
-            if((ncol(csBlv) == 2) && randomB%in%c("LV","iid","single")){
-              warning("Correlated random canonical coefficients only allowed with randomB = 'P'. Setting randomB='P'.\n")
+            if((ncol(csBlv) == 2) && randomB%in%c("iid","single")){
+              warning("Correlated random canonical coefficients only allowed with randomB = 'P' or and randomB='LV'. Setting randomB = 'P'.\n")
               randomB = "P"
             }
-            
+            if(randomB%in%c("P","LV"))csBlv = RElistLV$cs # cannot have correlated effects with randomB != "P"
+            if(is.null(csBlv)) csBlv <- matrix(0)
             # in case "lv.formula" is specified with random effects, but randomB is not specified
             if(control$optimizer %in% c("alabama","nloptr(sqp)","nloptr(agl)")){
               optimizer = control$optimizer = "optim"
@@ -849,19 +851,19 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
           if(any(apply(lv.X.design, 2, function(x) all(x == 1)))){
             lv.X.design <- lv.X.design[,!apply(lv.X.design, 2, function(x) all(x == 1)),drop=FALSE]
           }
-          }else{
+          }else if((num.RR+num.lv.c)>0 && anyBars(lv.formula)){
             if(isFALSE(randomB))stop("You forgot to set the 'randomB' argument.")
             if(!is.null(nobars1_(lv.formula)))stop("lv.formula cannot yet incorporate fixed and rando effects at the same time.")
             bar.f <- findbars1(lv.formula) # list with 3 terms
             lv.X <- model.frame(subbars1(reformulate(sprintf("(%s)", sapply(findbars1(lv.formula), deparse1)))),data=data.frame(datayx))
             RElistLV<- mkReTrms1(bar.f,lv.X, nocorr=corstruc(expandDoubleVerts2(lv.formula))) #still add find double bars
             lv.X.design = t(as.matrix(RElistLV$Zt))
-            if(randomB=="P")csBlv = RElistLV$cs # cannot have correlated effects with randomB != "P"
-            if((ncol(csBlv) == 2) && randomB%in%c("LV","iid","single")){
-              warning("Correlated random canonical coefficients only allowed with randomB = 'P'. Setting randomB='P'.\n")
+            if((ncol(csBlv) == 2) && randomB%in%c("iid","single")){
+              warning("Correlated random canonical coefficients only allowed with randomB = 'P' or randomB = 'LV'. Setting randomB = 'P'.\n")
               randomB = "P"
             }
-            
+            if(randomB%in%c("P","LV"))csBlv = RElistLV$cs # cannot have correlated effects with randomB != "P"
+            if(is.null(csBlv)) csBlv <- matrix(0)
             if(control$optimizer %in% c("alabama","nloptr(sqp)","nloptr(agl)")){
               optimizer = control$optimizer = "optim"
             }
@@ -1025,13 +1027,13 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
       y <- as.matrix(y)
 
     if(!inherits(row.eff, "formula") && !isFALSE(row.eff)){
-    if(row.eff=="random"){
-      row.eff <- ~(1|site)
-    }else if(row.eff %in% c("fixed", TRUE))row.eff  <- ~site
+      if(row.eff=="random"){
+        row.eff <- ~(1|sample)
+      }else if(row.eff %in% c("fixed", TRUE))row.eff  <- ~sample
       if(is.null(studyDesign)){
-        studyDesign <- data.frame(site = factor(1:n))
+        studyDesign <- data.frame(sample = factor(1:n))
       }else{
-        studyDesign <- cbind(studyDesign, data.frame(site = factor(1:n)) )
+        studyDesign <- cbind(studyDesign, data.frame(sample = factor(1:n)) )
       }
     }
     
@@ -1194,6 +1196,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
       if(nrow(studyDesign) != nrow(y)) stop("A number of rows in studyDesign must be same as for response matrix.")
     }
     if(Lambda.struc %in% c("bdNN","UNN") & num.lv.cor>0){
+      NN <- min(NN, nrow(distLV)-1) # check than NN is smaller than the number of coordinate/distLV points
       NN<-t(apply(as.matrix(dist(distLV, upper = TRUE, diag = TRUE)),1, order)[1+(1:NN),])
       i1<-rep(1:nrow(NN), each=ncol(NN))
       i2<-c(t(NN))
@@ -1250,10 +1253,10 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
     #   cat("VA method cannot handle", family, " family, so LA method is used instead. \n")
     #   method <- "LA"
     # }
-    if (quadratic != FALSE && family %in% c("tweedie", "beta")){
+    if (quadratic != FALSE && family %in% c("beta")){
       stop("The quadratic model is not implemented for ", family, " family yet. \n")
     }
-    if (method == "VA" && family %in% c("tweedie", "beta")){
+    if (method == "VA" && family %in% c("beta")){
       cat("Note that, the", family, "family is implemented using the extended variational approximation method. \n")
     }
     # if (method == "EVA"){
@@ -1331,6 +1334,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
     out <- list( y = y, X = X, lv.X = lv.X, lv.X.design = lv.X.design, TR = TR, data = datayx, num.lv = num.lv, num.lv.c = num.lv.c, num.RR = num.RR, num.lvcor =num.lv.cor, lv.formula = lv.formula, lvCor = lvCor, formula = formula,
         method = method, family = family, row.eff = row.eff.formula, col.eff = list(col.eff = col.eff, col.eff.formula = col.eff.formula, spdr = Matrix::t(RElistSP$Zt), Ab.struct = Ab.struct, Ab.struct.rank = Ab.struct.rank, colMat.rho.struct = colMat.rho.struct), corP=list(cstruc = cstruc, cstruclv = cstruclv, corWithin = corWithin, corWithinLV = corWithinLV, Astruc=0), dist=dist, distLV = distLV, randomX = randomX, n.init = n.init,
         sd = FALSE, Lambda.struc = Lambda.struc, TMB = TMB, beta0com = beta0com, optim.method=optim.method, disp.group = disp.group, NN=NN, Ntrials = Ntrials, quadratic = quadratic, randomB = randomB)
+    if(any(out$corP$cstruc=="corMatern")) out$corP$MaternSmoothness = MaternKappa
     if(inherits(row.eff.formula, "formula"))out$row.eff <- row.eff.formula
     if(return.terms) {out$terms = term} #else {terms <- }
 
@@ -1410,7 +1414,8 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
             method = method,
             Power = Power,
             diag.iter = diag.iter,
-            Ab.diag.iter = Ab.diag.iter, colMat = colMat, nn.colMat = nn.colMat, colMat.rho.struct = colMat.rho.struct, Ab.struct = Ab.struct, Ab.struct.rank = Ab.struct.rank, 
+            # row.eff = row.eff.formula,
+            Ab.diag.iter = Ab.diag.iter, colMat = colMat, nn.colMat = nn.colMat, colMat.approx = colMat.approx, colMat.rho.struct = colMat.rho.struct, Ab.struct = Ab.struct, Ab.struct.rank = Ab.struct.rank, 
             Ar.struc = Ar.struc,
             Lambda.start = Lambda.start,
             jitter.var = jitter.var,
@@ -1456,7 +1461,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
             Lambda.struc = Lambda.struc, Ar.struc = Ar.struc,
             sp.Ar.struc = Ab.struct, Ab.diag.iter = Ab.diag.iter, sp.Ar.struc.rank = Ab.struct.rank, 
             row.eff = row.eff.formula,
-            col.eff = col.eff, colMat = colMat, nn.colMat = nn.colMat, colMat.rho.struct = colMat.rho.struct, randomX.start = randomX.start,
+            col.eff = col.eff, colMat = colMat, nn.colMat = nn.colMat, colMat.approx = colMat.approx, colMat.rho.struct = colMat.rho.struct, randomX.start = randomX.start,
             reltol = reltol,
             reltol.c = reltol.c,
             seed = seed,
@@ -1538,8 +1543,12 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
         if(!is.null(out$params$row.params.random)){ # extra security, probably redundant
           names(out$params$row.params.random) <- row.names(RElistRow$Zt)
           if(!is.null(out$grps.row)) {
-            if(any(is.na(names(out$params$sigma)) | names(out$params$sigma)=="" | names(out$params$sigma)=="site")) names(out$params$sigma)[(is.na(names(out$params$sigma)) | names(out$params$sigma)=="" | names(out$params$sigma)=="site")] ="1"
-            names(out$params$sigma) = paste(names(out$params$sigma),names(out$grps.row), sep="|")
+            if(any(is.na(names(out$params$sigma)) | names(out$params$sigma)=="")) names(out$params$sigma)[(is.na(names(out$params$sigma)) | names(out$params$sigma)=="")] ="1"
+            namsrow<- NULL
+            for (i in 1:length(cstruc)) {
+              namsrow <- c(namsrow, rep(names(out$grps.row)[i], switch(cstruc[i], "ustruc" = 1, "diag" = 1, "corAR1" = 2, "corExp" = 2, "corCS" = 2, "corMatern" = 2)))
+            }
+            names(out$params$sigma) = paste(names(out$params$sigma),namsrow, sep="|")
             }
         }
       }

@@ -1,7 +1,8 @@
 #' @title Calculate variance partitioning
-#' @description Calculates variance partitioning for gllvm object with function \code{varPartitioning()}.
+#' @description Calculates variance partitioning for gllvm object with function \code{VP()} (alias \code{varPartitioning()}).
 #' 
 #' @param object an object of class 'gllvm'.
+#' @param x a VP.gllvm object
 #' @param group a vector of integers identifying grouping of X covariates, the default is to use model terms formula and lv.formula.
 #' @param groupnames a vector of strings given as names for the groups defined in group
 #' @param adj.cov logical, whether or not to adjust co-variation within the group
@@ -28,19 +29,20 @@
 #'                      decreasing = TRUE)[21:40]]
 #'fit <- gllvm(y, X[,1:3], formula = ~ pH + Phosp, family = poisson(), 
 #'              studyDesign = X[,4:5], row.eff = ~(1|Site))
-#'VP <- varPartitioning(fit)
-#'plotVarPartitioning(VP)
+#'VP <- VP(fit)
+#'plot(VP)
 #'
 #'\dontrun{
 #'# Plot the result of  variance partitioning
-#'plotVP(VP, col = palette(hcl.colors(5, "Roma")))
+#'plot(VP, col = palette(hcl.colors(5, "Roma")))
 #'
 #'}
 #'
-#'@aliases varPartitioning VP varPartitioning.gllvm
+#'@aliases VP.gllvm varPartitioning.gllvm VP varPartitioning
 #'@export
-#'@export varPartitioning.gllvm
-varPartitioning.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov = TRUE, grouplvs=FALSE, ...) {
+#'@export print.VP.gllvm 
+
+VP.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov = TRUE, grouplvs=FALSE, ...) {
   if (!any(class(object) == "gllvm"))
     stop("Class of the object isn't 'gllvm'.")
   if(!is.null(object$lv.X) && is.null(object$lv.X.design))object$lv.X.design <- object$lv.X #for backward compatibility
@@ -67,7 +69,7 @@ varPartitioning.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov
   }
 
   groupF <- groupnamesF <- NULL
-  # Basec env model:
+  # Basic env model:
   if (!is.null(object$X) && is.null(object$TR)) {
     groupnamesF <- labels(terms(formula))
     groupF <- attr(model.matrix(formula, data = as.data.frame(object$X)), "assign")
@@ -79,7 +81,7 @@ varPartitioning.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov
   }
   
   # Fourth corner model
-  if (!is.null(object$X) && !is.null(object$TR)) {
+  if (!is.null(object$X) && !is.null(object$TR) && isFALSE(object$col.eff$col.eff)) {
     # stop(paste("VP for Fourth-corner model not implemented yet"))
     # groupnamesF <- labels(terms(formula))
     # groupnamesF <- groupnamesF[groupnamesF %in% colnames(object$X)]
@@ -100,7 +102,7 @@ varPartitioning.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov
     # Fourth corner elements X %*% B %*% TR
     BTR[rownames(object$fourth.corner),] <- BTR[rownames(object$fourth.corner),] + object$fourth.corner %*% t(object$TR)
     # Species specific random effects
-    if(is.null(object$randomX)){
+    if(!is.null(object$randomX)){
       BTR[rownames(object$params$Br),] <- BTR[rownames(object$params$Br),] + object$params$Br
     }
       
@@ -109,24 +111,40 @@ varPartitioning.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov
   }
   
   # Phylogen/random 
-  if(is.null(object$col.eff$col.eff))object$col.eff$col.eff <- FALSE # backward compatibility
-  if (object$col.eff$col.eff == "random" ) {
-    groupnamesF <- labels(terms(subbars1(reformulate(sprintf("(%s)", sapply(findbars1(object$col.eff$col.eff.formula), deparse1))))))
-    groupF <- attr(model.matrix(subbars1(reformulate(sprintf("(%s)", sapply(findbars1(object$col.eff$col.eff.formula), deparse1)))), data = as.data.frame(object$col.eff$Xt)), "assign")
-    groupF <- groupF[groupF!=0]
+  if (object$col.eff$col.eff == "random") {
+    if(!is.null(object$TR)){
+      object$col.eff$Xt <- object$X.design
+    }
+    bars <- findbars1(object$col.eff$col.eff.formula) # list with 3 terms
+    groupnamesF <- paste0("Random effect: ", unlist(lapply(bars,safeDeparse)))
+    
+    mf <- model.frame(subbars1(reformulate(sprintf("(%s)", sapply(findbars1(object$col.eff$col.eff.formula), deparse1)))),data=data.frame(object$col.eff$Xt))
 
-    X.d <- object$col.eff$spdr[, colnames(object$col.eff$spdr)!= "Intercept", drop=FALSE]
+    safeDeparse <- function(x) paste(deparse(x, 500L), collapse = " ")
+    names(bars) <- vapply(bars, function(x) paste(deparse(x[[3]], 500L), collapse = " "), "")
+
+    blist <- lapply(bars, mkModMlist, mf)
+    groupFs <- table(lapply(blist, function(x)row.names(x$sm)%in%colnames(object$col.eff$spdr)))
+    groupF <- rep(1:length(groupFs), groupFs)
+    
+    X.d <- object$col.eff$spdr#[, colnames(object$col.eff$spdr)!= "Intercept", drop=FALSE]
     x_in_model = colnames(X.d)
     
     # Species specific effects total:
     BBr <- matrix(0, nrow = ncol(X.d), ncol = p)
     rownames(BBr) = x_in_model
     # Main effects for X
-    if(length(object$params$B)>0) BBr[x_in_model,] = object$params$B[x_in_model]
+    if(length(object$params$B)>0) BBr[x_in_model[x_in_model%in%names(object$params$B)],] = object$params$B[names(object$params$B)[names(object$params$B)%in%x_in_model]]
     # Species specific random effects
     BBr[rownames(object$params$Br[x_in_model,]),] <- BBr[rownames(object$params$Br[x_in_model,]),] + object$params$Br[x_in_model,]
     
+    # trait effects
+    if(!is.null(object$TR)){
+      BBr[rownames(object$fourth.corner),] <- BBr[rownames(object$fourth.corner),] + object$fourth.corner %*% t(object$TR)
+    }
+    
     Z  <- cbind(Z, as.matrix(X.d))
+    
     CoefMat <- rbind(CoefMat, as.matrix(BBr))
   }
   
@@ -235,13 +253,13 @@ varPartitioning.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov
         for (rg in unique(rgroups)) {
           r0 <- cbind(r0, as.matrix(object$TMBfn$env$data$dr0[,rgroups==rg, drop=FALSE]%*%object$params$row.params.random[rgroups==rg, drop=FALSE]) )
           CoefMat <- rbind(CoefMat, rep(1,p))
-          rownames(CoefMat)[nrow(CoefMat)] = paste("Random effect:",rg)
+          rownames(CoefMat)[nrow(CoefMat)] = paste("Row random effect:",rg)
         }
       } else {
         for (rn in rnams) {
           r0 <- cbind(r0, as.matrix(object$TMBfn$env$data$dr0[,names(object$params$row.params.random)==rn, drop=FALSE]%*%object$params$row.params.random[names(object$params$row.params.random)==rn, drop=FALSE]) )
           CoefMat <- rbind(CoefMat, rep(1,p))
-          rownames(CoefMat)[nrow(CoefMat)] = paste("Random effect:",rn)
+          rownames(CoefMat)[nrow(CoefMat)] = paste("Row random effect:",rn)
         }
       }
     } 
@@ -252,7 +270,7 @@ varPartitioning.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov
         r0 <- cbind(r0, object$TMBfn$env$data$xr%*%object$params$row.params.fixed)
       }
       CoefMat <- rbind(CoefMat, rep(1,p))
-      rownames(CoefMat)[nrow(CoefMat)] = "Fixed row effect"        
+      rownames(CoefMat)[nrow(CoefMat)] = "Row fixed effect"        
     }
     Z <- cbind(Z, r0)
   }
@@ -352,22 +370,42 @@ varPartitioning.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov
   PropExplainedVarSp <- t(LVpartit)/LtotV
   
   if(object$family == "betaH"){
-    return(list(PropExplainedVarSp=PropExplainedVarSp[1:(p/2),, drop=FALSE],PropExplainedVarHurdleSp=PropExplainedVarSp[-(1:(p/2)),, drop=FALSE], LtotV=LtotV, LVpartit=t(LVpartit), group = group, groupnames, family = object$family))
+    out <- list(PropExplainedVarSp=PropExplainedVarSp[1:(p/2),, drop=FALSE],PropExplainedVarHurdleSp=PropExplainedVarSp[-(1:(p/2)),, drop=FALSE], LtotV=LtotV, LVpartit=t(LVpartit), group = group, groupnames = groupnames, family = object$family)
   } else {
-    return(list(PropExplainedVarSp=PropExplainedVarSp, LtotV=LtotV, LVpartit=t(LVpartit), group = group, groupnames, family = object$family))
+    out <- list(PropExplainedVarSp=PropExplainedVarSp, LtotV=LtotV, LVpartit=t(LVpartit), group = group, groupnames = groupnames, family = object$family)
   }
-  
+  class(out) <- "VP.gllvm"
+  return(out)
 }
 
-
-#'@export varPartitioning
-varPartitioning <- function(object, ...)
-{
-  UseMethod(generic="varPartitioning")
-}
 
 #'@export VP
 VP <- function(object, ...)
 {
-  varPartitioning.gllvm(object, ...)
+  UseMethod(generic="VP")
+}
+
+#'@export varPartitioning.gllvm
+varPartitioning.gllvm <- function(object, ...)
+{
+  VP.gllvm(object, ...)
+}
+
+#'@export varPartitioning
+varPartitioning <- function(object, ...)
+{
+  VP.gllvm(object, ...)
+}
+
+#'@export
+#'@rdname VP.gllvm 
+print.VP.gllvm <- function (x, ...) {
+  
+  if(x$family == "betaH"){
+    print.text <- data.frame(Effect = colnames(x$PropExplainedVarHurdleSp), "Mean explained variance" = paste0(format(round(colMeans(x$PropExplainedVarHurdleSp), digits = 3)*100, nsmall = 1), "%"))
+  } else {
+    print.text <- data.frame(Effect = colnames(x$PropExplainedVarSp), "Mean explained variance" = paste0(format(round(colMeans(x$PropExplainedVarSp), digits = 3)*100, nsmall = 1), "%"))
+  }
+  print(print.text, row.names = FALSE, right = FALSE)
+  invisible(print.text)
 }

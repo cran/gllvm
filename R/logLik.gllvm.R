@@ -32,6 +32,9 @@ logLik.gllvm <- function(object, ...)
   if (!is.null(object$params$inv.phi)) {
     object$params$inv.phi <- NULL
   }
+  if (!is.null(object$params$ZINB.inv.phi)) {
+    object$params$ZINB.inv.phi <- NULL
+  }
     if(object$family=="ordinal"){
       if(object$zeta.struc=="species")object$params$zeta <-object$params$zeta[,-1]
       if(object$zeta.struc=="common")object$params$zeta <-object$params$zeta[-1]
@@ -55,6 +58,10 @@ logLik.gllvm <- function(object, ...)
   }
   if(object$randomB!=FALSE){
     object$params$LvXcoef <- NULL
+    if(!is.null(object$params$corsLvXcoef)){
+      object$params$corsLvXcoef[object$params$corsLvXcoef == 0.0]<-NA
+      object$params$corsLvXcoef[upper.tri(object$params$corsLvXcoef,diag=TRUE)]<-NA
+    }
   }else if(object$randomB==F&(object$num.RR+object$num.lv.c)>0){
     #correct nr. df. given orthogonality constraints
     object$params$LvXcoef[upper.tri(object$params$LvXcoef)] <- NA

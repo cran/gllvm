@@ -1,3 +1,32 @@
+Version 2.0.1
+=============
+
+* Added VA implementation of Tweedie
+* Added "band matrix" as a sparsity pattern for phylogenetic models, as alternative to the NNGP
+* Added 'tick.length' argument for phyplot.gllvm to control the tick length in the species-specific random effects plot
+* Improvement for the starting values of concurrent ordination
+* Added correlation canonical coefficients option for randomB="LV"
+* Added additional (LV-specific) variance parameters for randomB="P"
+* Default for rel.tol changed to 1e-10
+* Default for NN changed to 10
+* A Matern smoothness parameter changed to fixed value given by user by default
+
+## Bug Fixes
+* Fixed a bug in the calculation of standard errors for models involving traits and a ZIP/ZINB response distribution. See #204.
+* Fixed a bug that prevented from incorporating correlated random effects via "formula"
+* Fixed a bug that prevented successfully incorporating phylogenetic random effects with traits
+* Fixed a bug in the confidence level of phyloplot.gllvm
+* Fixed a bug in residuals.gllvm
+* Fixed a bug in starting value generation
+* Fixed a bug in the number of parameters by logLik.gllvm for 'randomB' models with correlation parameters
+* Fixed a bug in the normalization constant for randomB="LV"
+* Fixed a bug in the variance partitioning for models with species random effects
+* Fixed a bug in extracting fourth corner coefficients, see #214 and #215
+* Fixed a bug in standard errors involving row.eff = "random"
+* Fixed a bug that prevented using getEnvironCov with the fourth corner model
+* Fixed a bug in gllvm:::RRse
+* Fixed a bug which occurred when correlated latent variables are included and Variational covariance was anything else that diagonal
+
 Version 2.0
 =============
 

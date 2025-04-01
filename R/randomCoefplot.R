@@ -32,15 +32,18 @@
 #'@export randomCoefplot.gllvm
 randomCoefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, cex.ylab = 0.5, mfrow = NULL, mar = c(4,6,2,1), xlim.list = NULL, order = FALSE, ...)
 {
+  
   if(is.null(object$lv.X.design) && !is.null(object$lv.X))object$lv.X.design <- object$lv.X # backward compatibility
   if (any(class(object) != "gllvm"))
     stop("Class of the object isn't 'gllvm'.")
   if(is.null(object$col.eff$col.eff))object$col.eff$col.eff <- FALSE # backward compatibility
   if ((is.null(object$Xrandom) || is.null(object$randomX)) && isFALSE(object$randomB)  && object$col.eff$col.eff!="random")
     stop("No random covariates in the model.")
-  if(is.null(object$TR) && object$col.eff$col.eff=="random") object$Xr <- as.matrix(object$col.eff$spdr)
+  # if(is.null(object$TR) && object$col.eff$col.eff=="random") object$Xr <- as.matrix(object$col.eff$spdr)
+  # 
+  predErr <- getPredictErr(object)
   
-  if((object$num.lv.c+object$num.RR)==0 && !is.null(object$params$Br)){
+  if((object$num.lv.c+object$num.RR)==0 && !is.null(object$params$Br) && !is.null(object$Xr)){
     if(is.null(which.Xcoef))which.Xcoef <- c(1:NROW(object$params$Br))
     Xcoef <- as.matrix(t(object$params$Br)[,which.Xcoef,drop=F])
     cnames <- colnames(object$Xr[,which.Xcoef,drop=FALSE])
@@ -50,7 +53,7 @@ randomCoefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, cex
     m <- ncol(object$y)
     Xc <- Xcoef
     
-    sdXcoef <- t(getPredictErr(object)$Br)
+    sdXcoef <- t(predErr$Br)
     sdXcoef <- sdXcoef[,which.Xcoef,drop=F]
     if (is.null(mfrow) && k > 1)
       mfrow <- c(1, k)
@@ -94,7 +97,6 @@ randomCoefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, cex
       if(is.null(which.Xcoef))which.Xcoef <- colnames(object$col.eff$spdr)
     }
     Xcoef <- cnames <- sdXcoef <- NULL
-    
     if((object$num.lv.c+object$num.RR)>0 && any(which.Xcoef %in% colnames(object$lv.X.design))){
       if(!is.null(object$lv.X) && is.null(object$lv.X.design))object$lv.X.design <- object$lv.X #for backward compatibility
       Xcoef <- cbind(Xcoef,as.matrix(object$params$theta[,1:(object$num.RR+object$num.lv.c),drop=F]%*%t(object$params$LvXcoef))[,colnames(object$lv.X.design)%in%which.Xcoef,drop=F])
@@ -103,11 +105,11 @@ randomCoefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, cex
     }
     if(object$col.eff$col.eff=="random"){
       Xcoef <- cbind(Xcoef, t(object$params$Br)[,colnames(object$col.eff$spdr)%in%which.Xcoef,drop=F])
-      cnames <- c(cnames, row.names(object$params$Br))
-      sdXcoef <- cbind(sdXcoef, t(getPredictErr(object)$Br)) 
+      cnames <- c(cnames, row.names(object$params$Br)[colnames(object$col.eff$spdr)%in%which.Xcoef])
+      sdXcoef <- cbind(sdXcoef, t(predErr$Br)[,colnames(object$col.eff$spdr)%in%which.Xcoef,drop=FALSE]) 
     }
   }
-
+  
   if((object$num.lv.c+object$num.RR)>0 | object$col.eff$col.eff=="random"){
     k <- length(cnames)
     if(is.null(colnames(object$y))) 

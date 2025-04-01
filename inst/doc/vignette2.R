@@ -28,6 +28,9 @@ ftXi$col.eff$col.eff<-ftXph$col.eff$col.eff<-ftX$col.eff$col.eff<-ftNULL$col.eff
 meanY <- apply(Ysoil,2, mean)
 varY <- apply(Ysoil,2, var)
 plot(log(meanY),varY, log = "y", main = "Species mean-variance relationship")
+points(log(sort(meanY)), sort(meanY), type = "l")
+points(log(sort(meanY)), sort(meanY+ 1*meanY^2), type = "l", col=2, lty=2)
+legend("bottomright", lty=1:2, legend = c("var = mean", "var = mean+phi*mu^2"), bty="n", col = 1:2)
 
 ## -----------------------------------------------------------------------------
 sDesign<-data.frame(Site=Xenv$Site)

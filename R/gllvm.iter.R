@@ -3,11 +3,11 @@ gllvm.iter <- function(...){
   
   if(!(args$family %in% c("poisson","negative.binomial","binomial","tweedie","ZIP", "ZINB", "gaussian", "ordinal", "gamma", "exponential", "beta", "betaH", "orderedBeta")))
     stop("Selected family not permitted...sorry!")
-  if(!(args$Lambda.struc %in% c("unstructured","diagonal","bdNN","UNN")))
+  if(!(args$Lambda.struc %in% c("unstructured","diagonal","bdNN","UNN", "diagU", "UU")))
     stop("Lambda matrix (covariance of variational distribution for latent variable) not permitted...sorry!")
   
   if (!is.numeric(args$y))
-    stop( "y must a numeric. If ordinal data, please convert to numeric with lowest level equal to 1.")
+    stop( "y must be numeric. If ordinal data, please convert to numeric with lowest level equal to 1.")
   # if ((family %in% c("ZIP")) && (method %in% c("VA", "EVA"))) #"tweedie", 
   #   stop("family=\"", family, "\" : family not implemented with VA method, change the method to 'LA'")
   if (is.null(rownames(args$y)))
@@ -133,5 +133,10 @@ n.i <- n.i+1;
   fitFinal$seed = seed
 }
 
+# In case gllvm.TMB or trait.TMB fail entirely
+if(is.null(fitFinal)){
+  fitFinal$logL <- -Inf
+}
+    
 return(fitFinal)
 }

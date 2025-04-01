@@ -4,7 +4,7 @@
 ########################################################################################
 gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, family = "poisson", 
                       num.lv = 2, num.lv.c = 0, num.RR = 0, num.lv.cor=0, lv.formula = NULL, corWithinLV = FALSE, randomB = FALSE, 
-                      method = "VA",Lambda.struc = "unstructured", Ar.struc = "diagonal", sp.Ar.struc = "diagonal",  sp.Ar.struc.rank = NULL, Ab.diag.iter = 1, row.eff = FALSE, col.eff = FALSE, colMat = matrix(0), nn.colMat = NULL, colMat.rho.struct = "single", randomX.start = "res", reltol = 1e-8, reltol.c = 1e-8,
+                      method = "VA",Lambda.struc = "unstructured", Ar.struc = "diagonal", sp.Ar.struc = "diagonal",  sp.Ar.struc.rank = NULL, Ab.diag.iter = 1, row.eff = FALSE, col.eff = FALSE, colMat = matrix(0), nn.colMat = NULL, colMat.approx = "NNGP", colMat.rho.struct = "single", randomX.start = "res", reltol = 1e-8, reltol.c = 1e-8,
                       maxit = 3000, max.iter = 200, start.lvs = NULL, offset = NULL,
                       trace = FALSE, link = "logit", n.init = 1, n.init.max = 10, restrict = 30, start.params = NULL, RElist = NULL, dr = matrix(0), dLV=NULL, cstruc = "diag", cstruclv = "diag", dist = list(matrix(0)), distLV = matrix(0),
                       optimizer = "optim", starting.val = "res", Power = 1.5, diag.iter = 1, dependent.row = FALSE, scalmax = 10, MaternKappa = 1.5, rangeP = NULL, zetacutoff = NULL,
@@ -36,9 +36,9 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
   
   cstrucn = 0
   for (i in 1:length(cstruc)) {
-    cstrucn[i] = switch(cstruc[i], "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
+    cstrucn[i] = switch(cstruc[i], "ustruc" = 0, "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
   }
-  cstruclvn = switch(cstruclv, "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
+  cstruclvn = switch(cstruclv, "ustruc" = 0, "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
   
   # Structure for row effects
   model = 0
@@ -61,7 +61,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
     Xt <- Matrix::t(RElist$Xt)
     colMat.old <- colMat
     if(!is.null(colMat) && is.list(colMat)){
-      if(length(colMat)!=2 && !is.null(nn.colMat) || !"dist"%in%names(colMat)){
+      if(colMat.approx == "NNGP" && (length(colMat)!=2 && !is.null(nn.colMat) || !"dist"%in%names(colMat))){
         stop("if nn.colMat<p 'colMat' must be a list of length 2: one Phylogenetic covariance matrix, and one (dist-named) distance matrix.")
       }else if(length(colMat)==1 && is.null(nn.colMat)){
          colMat <- colMat[[1]]
@@ -73,7 +73,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
         nn.colMat <- round(.3*p)
       }
       }
-    }else if(is.matrix(colMat)){
+    }else if(is.matrix(colMat) && colMat.approx != "band"){
       nn.colMat <- p
     }
     
@@ -81,7 +81,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
     # nsp <- table(factor(colnames(spdr),levels=unique(colnames(spdr))))
     
     if(!is.null(colMat)  && all(dim(colMat)!=1)){
-      if(!all(colnames(colMat) %in% colnames(y)))stop("Please make sure that the column names for 'y' and 'colMat' are the same.")
+      if(!all(colnames(colMat) == colnames(y)))stop("Please make sure that the column names for 'y' and 'colMat' are the same.")
       colMat <- colMat[colnames(y), colnames(y)]
       if(exists("colMat.dist"))colMat.dist <- colMat.dist[colnames(y), colnames(y)]
       
@@ -109,22 +109,38 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
       E = B
       if(nn.colMat == p)nncolMat <- matrix(0)
       if(nn.colMat < p)nncolMat <- NULL
-      while(B<=p){
-        while(E<p && (any(colMat[(E+1):p,B:E]!=0)|any(colMat[B:E,(E+1):p]!=0))){
-          # expand block
+      if(colMat.approx == "NNGP"){
+        while(B<=p){
+          while(E<p && (any(colMat[(E+1):p,B:E]!=0)|any(colMat[B:E,(E+1):p]!=0))){
+            # expand block
+            E = E+1;
+          }
+          # save block
+          # here we work with blocks of the inverse of the correlation matrix
+          if(nn.colMat==p)blocks[[length(blocks)+1]] = solve(colMat[B:E,B:E,drop=FALSE])
+          if(nn.colMat<p){
+            # here we work with blocks of the correlation matrix
+            blocks[[length(blocks)+1]] = colMat[B:E,B:E,drop=FALSE]
+            nncolMat <- cbind(nncolMat, sapply(1:ncol(colMat.dist[B:E,B:E,drop=FALSE]),function(i)head(order(colMat.dist[B:E,B:E,drop=FALSE][i,])[order(colMat.dist[B:E,B:E,drop=FALSE][i,])<i],min(i, nn.colMat))[1:p]))
+          }
           E = E+1;
+          B = E;
         }
-        # save block
-        # here we work with blocks of the inverse of the correlation matrix
-        if(nn.colMat==p)blocks[[length(blocks)+1]] = solve(colMat[B:E,B:E,drop=FALSE])
-        if(nn.colMat<p){
-          # here we work with blocks of the correlation matrix
-          blocks[[length(blocks)+1]] = colMat[B:E,B:E,drop=FALSE]
-          nncolMat <- cbind(nncolMat, sapply(1:ncol(colMat.dist[B:E,B:E,drop=FALSE]),function(i)head(order(colMat.dist[B:E,B:E,drop=FALSE][i,])[order(colMat.dist[B:E,B:E,drop=FALSE][i,])<i],min(i, nn.colMat))[1:p]))
+      }else{
+        while(B<=p){
+          while(E<p && (any(colMat[(E+1):p,B:E]!=0)|any(colMat[B:E,(E+1):p]!=0))){
+            # expand block
+            E = E+1;
+          }
+          # save block
+          if(nn.colMat<p && colMat.approx == "band"){
+            blocks[[length(blocks)+1]] = colMat[B:E,B:E,drop=FALSE]
+            nncolMat <- cbind(nncolMat, sapply(1:ncol(colMat[B:E,B:E,drop=FALSE]),function(i)(((i-1):(i-nn.colMat))[(i-1):(i-nn.colMat)>0])[1:p]))
+          }
+          E = E+1;
+          B = E;
         }
-        E = E+1;
-        B = E;
-      }      
+      }
       nncolMat[is.na(nncolMat)] <- 0 ## using zeros to represent an empty cell
       blocksp <- unlist(lapply(blocks, ncol))
       # store total species and nr of species per block in first column, 0 and log determinants of each block in second column
@@ -1037,26 +1053,37 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
       if(num.RR==0 && num.lv.c==0) map.list$b_lv = factor(NA)
       
       ## Row effect settings
+
       if(nrow(dr)==n){
-        # if(dependent.row&quadratic==F|dependent.row&starting.val=="zero") 
-        sigmanew <- map.list$log_sigma <- NULL
+        if(any(cstrucn==4)){
+          map.list$log_sigma <- if(cstrucn[1] == 0){1}else if(cstrucn[1]==4){c(1:2,NA)}else{1:2}
+          if(length(cstrucn)>1){
+            for(i in 2:length(cstrucn)){
+              map.list$log_sigma <- c(map.list$log_sigma, if(!cstrucn[i]%in%c(0,4)){
+                c(max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2)
+              }else if(cstrucn[i] %in% c(0)){
+                max(map.list$log_sigma, na.rm = TRUE)+1
+              }else if(cstrucn[i]==4){
+                c(max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2,NA)
+              })
+            }
+          }
+          map.list$log_sigma <- factor(map.list$log_sigma)
+        }
+        sigmanew <- NULL
         iter = 1 # keep track of # spatial structures
         for(re in cstrucn){
           if(re %in% c(1,3)) {
             sigmanew = c(sigmanew, log(sigma[1]),0)
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2)
           } else if(re %in% c(2)){
             sigmanew = c(sigmanew, log(sigma[1]),scaledc[[iter]])
             iter <- iter + 1
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2)
           } else if(re %in% c(4)){
             sigmanew = c(sigmanew, log(sigma[1]),scaledc[[iter]])
             iter <- iter + 1
             # Fix matern smoothness by default
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2, NA)
-            sigmanew = c(sigmanew, sigma,log(MaternKappa))
+            sigmanew = c(sigmanew, log(MaternKappa))
           } else {
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1)
             sigmanew = c(sigmanew, log(sigma[1]))
           }
         }
@@ -1234,7 +1261,13 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
         if(length(param1[nam=="r0f"])>0){ r0f1 <- matrix(param1[nam=="r0f"])} else {r0f1 <- matrix(0)}
         if(nrow(dr)==n){
           log_sigma1 <- ifelse(param1[nam=="log_sigma"]==0,1e-3,param1[nam=="log_sigma"])
-          if(!is.null(map.list$log_sigma)) log_sigma1 = log_sigma1[map.list$log_sigma]
+          if(!is.null(map.list$log_sigma)) {
+            # We need to maintain the fixed parameter for Matern smoothness
+            # Which is omitted in the optimiser
+            log_sigma <- sigma
+            log_sigma <- log_sigma1[map.list$log_sigma[!is.na(map.list$log_sigma)]]
+            log_sigma1 <- log_sigma
+          }
           lg_Ar<- log(exp(param1[nam=="lg_Ar"][1:sum(nr)])+1e-3)
           if(Ar.struc=="unstructured"){
             lg_Ar <- c(lg_Ar, rep(1e-3, sum(nr*(nr-1)/2)))
@@ -1709,24 +1742,35 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
         randoml[1] <- 1
         randomp <- c(randomp,"r0r")
         
-        sigmanew <- map.list$log_sigma <- NULL
+        sigmanew <- NULL
         iter <- 1
+        if(any(cstrucn==4)){
+          map.list$log_sigma <- if(cstrucn[1]==0){1}else if(cstrucn[1]==4){c(1:2, NA)}else{1:2}
+          if(length(cstrucn)>1){
+         for(i in 2:length(cstrucn)){
+           map.list$log_sigma <- c(map.list$log_sigma, if(!cstrucn[i]%in%c(0,4)){
+            c(max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2)
+             }else if(cstrucn[i]==0){
+               max(map.list$log_sigma, na.rm = TRUE)+1
+               }else if(cstrucn[i]==4){
+                 c(max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2,NA)
+                 })
+         }
+          }
+          map.list$log_sigma <- factor(map.list$log_sigma)
+        }
         for(re in cstrucn){
           if(re %in% c(1,3)) {
             sigmanew = c(sigmanew, log(sigma[1]),0)
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2)
           } else if(re %in% c(2)){
             sigmanew = c(sigmanew, log(sigma[1]),scaledc[[iter]])
             iter <- iter + 1
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2)
           } else if(re %in% c(4)){
             sigmanew = c(sigmanew, log(sigma[1]),scaledc[[iter]])
             iter <- iter + 1
             # Fix matern smoothness by default
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2, NA)
-            sigmanew = c(sigmanew, sigma,log(MaternKappa))
+            sigmanew = c(sigmanew, log(MaternKappa))
           } else {
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1)
             sigmanew = c(sigmanew, log(sigma[1]))
           }
         }
@@ -2092,11 +2136,16 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
           row.names(out$params$LvXcoef) <- colnames(lv.X)
           if(!isFALSE(randomB)){
           if(randomB=="LV"|randomB=="single"){
-            out$params$sigmaLvXcoef <- exp(sigmab_lv)
+            out$params$sigmaLvXcoef <- exp(head(sigmab_lv, num.lv.c+num.RR))
           }else if(randomB=="P"){
-            out$params$sigmaLvXcoef <- exp(head(sigmab_lv, ncol(lv.X)))
+            out$params$sigmaLvXcoef <- exp(head(sigmab_lv, ncol(lv.X)+num.lv.c+num.RR-1))
+            }else if(randomB=="iid"){out$params$sigmaLvXcoef <- 1}
+            if(randomB=="LV")names(out$params$sigmaLvXcoef) <- paste("CLV",1:(num.lv.c+num.RR), sep="")
+            if(randomB=="P")names(out$params$sigmaLvXcoef) <- c(colnames(lv.X), paste("CLV",2:(num.lv.c+num.RR), sep=""))
+            # if(randomB=="all")names(out$params$sigmaLvXcoef) <- paste(paste("CLV",1:(num.lv.c+num.RR),sep=""),rep(colnames(lv.X),each=num.RR+num.lv.c),sep=".")
+            if(randomB=="single")names(out$params$sigmaLvXcoef) <- NULL
             if(ncol(csBlv)==2){
-              covsigmaB <- tail(sigmab_lv, -ncol(lv.X))
+              covsigmaB <- tail(sigmab_lv, -ifelse(randomB=="P", ncol(lv.X), num.lv.c+num.RR))
               sigmaBij <- rep(0,(ncol(lv.X)^2-ncol(lv.X))/2)
               for(i in 1:nrow(csBlv)){
                 sigmaBij[(csBlv[i,1] - 1) * (csBlv[i,1] - 2) / 2 + csBlv[i,2]] = covsigmaB[i]
@@ -2104,12 +2153,6 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
               bL <-  constructL(sigmaBij)
               out$params$corsLvXcoef <- bL%*%t(bL)
             }
-            }else if(randomB=="iid"){out$params$sigmaLvXcoef <- 1}
-            if(randomB=="LV")names(out$params$sigmaLvXcoef) <- paste("CLV",1:(num.lv.c+num.RR), sep="")
-            if(randomB=="P")names(out$params$sigmaLvXcoef) <- colnames(lv.X)
-            # if(randomB=="all")names(out$params$sigmaLvXcoef) <- paste(paste("CLV",1:(num.lv.c+num.RR),sep=""),rep(colnames(lv.X),each=num.RR+num.lv.c),sep=".")
-            if(randomB=="single")names(out$params$sigmaLvXcoef) <- NULL
-            
           }
         }
         
@@ -2235,13 +2278,14 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
               names(sigma)[iter+1] = names(nr)[re]
               iter <- iter + 2
             } else if(cstrucn[re] %in% c(4)){
-              sigma[iter:(iter+2)] <- exp(sigma[iter:(iter+2)])
+              # sigma[iter:(iter+2)] <- exp(sigma[iter:(iter+2)]) # maternKappa fixed
+              sigma[iter:(iter+1)] <- exp(sigma[iter:(iter+1)])
               names(sigma)[iter] = "Scale"
               names(sigma)[iter+1] = names(nr)[re]
               iter <- iter + 2
               # Matern smoothness
-              names(sigma)[iter+1] = "Matern kappa"
-              iter <- iter +1
+              # names(sigma)[iter+1] = "Matern kappa"
+              # iter <- iter +1
             } else {
               sigma[iter] <- exp(sigma[iter])
               names(sigma)[iter] = names(nr)[re]
@@ -2298,7 +2342,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
         if(cstruclvn %in% c(2,4)){ 
           if(length(out$params$rho.lv)>0) 
             names(out$params$rho.lv) <- paste("rho.lv",1:length(out$params$rho.lv), sep = "") #[!is.na(map.list$rho_lvc)]
-        } else {
+        } else if(!is.null(rho.lv)){
           names(out$params$rho.lv) <- paste("rho.lv",1:num.lv.cor, sep = "") 
         }
       }

@@ -7,7 +7,7 @@ trait.TMB <- function(
       Lambda.struc = "unstructured", Ab.struct = "blockdiagonal", Ab.struct.rank = NULL, Ar.struc = "diagonal", row.eff = FALSE, reltol = 1e-6,
       maxit = 3000, max.iter = 200, start.lvs = NULL, offset = NULL, trace = FALSE,
       link = "logit", n.init = 1, n.init.max = 10, start.params = NULL, start0 = FALSE, optimizer = "optim", dr = matrix(0), dLV = NULL, cstruc = "diag", cstruclv  = "diag", dist = list(matrix(0)), distLV = matrix(0), scalmax = 10, MaternKappa = 1.5,
-      starting.val = "res", method = "VA", randomX = NULL, RElist = list(Zt = matrix(0)), Power = 1.5, diag.iter = 1, Ab.diag.iter = 0,colMat = NULL, nn.colMat = NULL, colMat.rho.struct = "single",
+      starting.val = "res", method = "VA", randomX = NULL, RElist = list(Zt = matrix(0)), Power = 1.5, diag.iter = 1, Ab.diag.iter = 0,colMat = NULL, nn.colMat = NULL, colMat.approx = "NNGP", colMat.rho.struct = "single",
       Lambda.start = c(0.2, 0.5), jitter.var = 0, jitter.var.br = 0, yXT = NULL, scale.X = FALSE, randomX.start = "zero", beta0com = FALSE, rangeP = NULL, zetacutoff = NULL,
       zeta.struc = "species", quad.start = 0.01, start.struc = "LV", quadratic = FALSE, optim.method = "BFGS", disp.group = NULL, NN = matrix(0), setMap = NULL, Ntrials = 1) {
   if(is.null(X) && !is.null(TR)) stop("Unable to fit a model that includes only trait covariates")
@@ -23,9 +23,9 @@ trait.TMB <- function(
   
   cstrucn = 0
   for (i in 1:length(cstruc)) {
-    cstrucn[i] = switch(cstruc[i], "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
+    cstrucn[i] = switch(cstruc[i], "ustruc" = 0, "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
   }
-  cstruclvn = switch(cstruclv, "diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
+  cstruclvn = switch(cstruclv, "ustruc" = 0 ,"diag" = 0, "corAR1" = 1, "corExp" = 2, "corCS" = 3, "corMatern" = 4)
   
   term <- NULL
   times = 1
@@ -89,7 +89,7 @@ trait.TMB <- function(
     dr <- as(matrix(0), "TsparseMatrix")  
     # dimnames(dr) <- list(rep("site", n), rep("site", n))
     nr <- n
-    names(nr) = "site"
+    # names(nr) = "site"
   }
   
   if(num.lv.cor > 0){#rstruc
@@ -272,12 +272,17 @@ trait.TMB <- function(
       sigmaB <- log(sqrt(diag(bstart$sigmaB)))
       # colMat signal strength
       if(!is.null(colMat))sigmaB <- c(sigmaB, rep(log(0.5),ifelse(colMat.rho.struct == "single", 1, ncol(xb))))
-      sigmaij <- rep(1e-3,(ncol(xb)-1)*ncol(xb)/2)
-      # artifical "cs" to uninfy code with other "path" that does not go via the randomX argument in gllvm.R
-      # a bit hacky, but it works..
-      sigmaijL = constructL(sigmaij)!=0
-      diag(sigmaijL) = 0
-      cs <- which(sigmaijL!=0, arr.ind=TRUE)
+      if(ncol(xb)>1){
+        sigmaij <- rep(1e-3,(ncol(xb)-1)*ncol(xb)/2)
+        # artifical "cs" to uninfy code with other "path" that does not go via the randomX argument in gllvm.R
+        # a bit hacky, but it works..
+        sigmaijL = constructL(sigmaij)!=0
+        diag(sigmaijL) = 0
+        cs <- which(sigmaijL!=0, arr.ind=TRUE)
+      } else {
+        sigmaij <- 0
+        cs <- matrix(0)
+      }
     } else if(ncol(RElist$Zt)==n){
       # using lme4 formula
       xb <- as.matrix(Matrix::t(RElist$Zt))
@@ -304,7 +309,7 @@ trait.TMB <- function(
     }
       colMat.old <- colMat
       if(!is.null(colMat) && is.list(colMat)){
-        if(length(colMat)!=2 && !is.null(nn.colMat) || !"dist"%in%names(colMat)){
+        if(colMat.approx == "NNGP" && (length(colMat)!=2 && !is.null(nn.colMat) || !"dist"%in%names(colMat))){
           stop("if nn.colMat<p 'colMat' must be a list of length 2: one Phylogenetic covariance matrix, and one (named) distance matrix.")
         }else if(length(colMat)==1 && is.null(nn.colMat)){
           colMat <- colMat[[1]]
@@ -315,14 +320,14 @@ trait.TMB <- function(
             nn.colMat <- round(.3*p)
           }
         }
-      }else if(is.matrix(colMat)){
+      }else if(is.matrix(colMat) && colMat.approx != "band"){
         nn.colMat <- p
       }else{
         nncolMat <- matrix(0)
       }
       
       if(!is.null(colMat) && all(dim(colMat)!=1)){
-        if(!all(colnames(colMat) %in% colnames(y)))stop("Please make sure that the column names for 'y' and 'colMat' are the same.")
+        if(!all(colnames(colMat) == colnames(y)))stop("Please make sure that the column names for 'y' and 'colMat' are the same.")
         colMat <- colMat[colnames(y), colnames(y)]
         if(exists("colMat.dist"))colMat.dist <- colMat.dist[colnames(y), colnames(y)]
         
@@ -351,19 +356,37 @@ trait.TMB <- function(
         E = B
         if(nn.colMat == p)nncolMat <- matrix(0)
         if(nn.colMat < p)nncolMat <- NULL
-        while(B<=p){
-          while(E<p && (any(colMat[(E+1):p,B:E]!=0)|any(colMat[B:E,(E+1):p]!=0))){
-            # expand block
+        if(colMat.approx == "NNGP"){
+          while(B<=p){
+            while(E<p && (any(colMat[(E+1):p,B:E]!=0)|any(colMat[B:E,(E+1):p]!=0))){
+              # expand block
+              E = E+1;
+            }
+            # save block
+            # here we work with blocks of the inverse of the correlation matrix
+            if(nn.colMat==p)blocks[[length(blocks)+1]] = solve(colMat[B:E,B:E,drop=FALSE])
+            if(nn.colMat<p){
+              # here we work with blocks of the correlation matrix
+              blocks[[length(blocks)+1]] = colMat[B:E,B:E,drop=FALSE]
+              nncolMat <- cbind(nncolMat, sapply(1:ncol(colMat.dist[B:E,B:E,drop=FALSE]),function(i)head(order(colMat.dist[B:E,B:E,drop=FALSE][i,])[order(colMat.dist[B:E,B:E,drop=FALSE][i,])<i],min(i, nn.colMat))[1:p]))
+            }
             E = E+1;
+            B = E;
           }
-          # save block
-          if(nn.colMat==p)blocks[[length(blocks)+1]] = solve(colMat[B:E,B:E,drop=FALSE])
-          if(nn.colMat<p){
-            blocks[[length(blocks)+1]] = colMat[B:E,B:E,drop=FALSE]
-            nncolMat <- cbind(nncolMat, sapply(1:ncol(colMat.dist[B:E,B:E,drop=FALSE]),function(i)head(order(colMat.dist[B:E,B:E,drop=FALSE][i,])[order(colMat.dist[B:E,B:E,drop=FALSE][i,])<i],min(i, nn.colMat))[1:p]))
+        }else{
+          while(B<=p){
+            while(E<p && (any(colMat[(E+1):p,B:E]!=0)|any(colMat[B:E,(E+1):p]!=0))){
+              # expand block
+              E = E+1;
+            }
+            # save block
+            if(nn.colMat<p && colMat.approx == "band"){
+              blocks[[length(blocks)+1]] = colMat[B:E,B:E,drop=FALSE]
+              nncolMat <- cbind(nncolMat, sapply(1:ncol(colMat[B:E,B:E,drop=FALSE]),function(i)(((i-1):(i-nn.colMat))[(i-1):(i-nn.colMat)>0])[1:p]))
+            }
+            E = E+1;
+            B = E;
           }
-          E = E+1;
-          B = E;
         }
         nncolMat[is.na(nncolMat)] <- 0 ## using zeros to represent an empty cell
         blocksp <- unlist(lapply(blocks, ncol))
@@ -445,8 +468,10 @@ trait.TMB <- function(
           sigmaB <- log(sqrt(diag(sigmaB)))
           if(rhoSP){sigmaB <- c(sigmaB, rep(log(-log(0.5)),ifelse(colMat.rho.struct == "single", 1, ncol(xb))))}
           if(randomX.start == "res" && !is.null(res$fitstart)){
-            res$sigmaij <- sigmaij <- res$fitstart$TMBfnpar[names(res$fitstart$TMBfnpar) == "sigmaij"] 
-            sigmaij <- constructL(sigmaij)
+            if(sum(names(res$fitstart$TMBfnpar) == "sigmaij")){
+              res$sigmaij <- sigmaij <- res$fitstart$TMBfnpar[names(res$fitstart$TMBfnpar) == "sigmaij"] 
+              sigmaij <- constructL(sigmaij)
+            }
             if(ncol(cs)>1){
               sigmaij <- sigmaij[cs]
             }else{
@@ -480,7 +505,7 @@ trait.TMB <- function(
         zero.cons <- which(theta == 0)
         if(num.lv.cor>0){ # In correlation model, 
           rho_lvc<- rep(0, num.lv.cor);
-          if((cstruclv == 2) | (cstruclv == 4)) {
+          if((cstruclvn == 2) | (cstruclvn == 4)) {
             if(is.null(rangeP)) {
               rangeP = AD1 = (apply(as.matrix(distLV),2,max)-apply(as.matrix(distLV),2,min))/scalmax
             } else {
@@ -553,8 +578,8 @@ trait.TMB <- function(
           }
         }
         if(num.lv.cor>0){ # sigmas are scale parameters # just diagonal values, not
-          if(is.numeric(start.params$params$rho.lv) & ((cstruclv == 2) | (cstruclv == 4))) {
-            # if(cstruclv == 4) start.params$params$rho.lv <- start.params$params$rho.lv[,-ncol(start.params$params$rho.lv), drop=FALSE]
+          if(is.numeric(start.params$params$rho.lv) & ((cstruclvn == 2) | (cstruclvn == 4))) {
+            # if(cstruclvn == 4) start.params$params$rho.lv <- start.params$params$rho.lv[,-ncol(start.params$params$rho.lv), drop=FALSE]
             scaledc = colMeans(as.matrix(start.params$params$rho.lv)); 
             if(length(scaledc) < ncol(distLV) ) scaledc <- rep(scaledc, ncol(distLV))[1:ncol(distLV)]
           }
@@ -757,16 +782,16 @@ trait.TMB <- function(
     
     
     ## Set up starting values for scale (and shape) parameters for correlated LVs
-    if(num.lv.cor>0 & cstruclv>0){
+    if(num.lv.cor>0 & cstruclvn>0){
       rho_lvc<- matrix(rep(0, num.lv.cor))
-      if(cstruclv==2){
+      if(cstruclvn==2){
         if(is.null(rho.lv)) {
           rho.lv=rep(0, num.lv.cor) 
         } else if(length(rho.lv)==num.lv.cor) {
           rho.lv=c(log(rho.lv))
         }
         rho_lvc<- matrix(c(rep(scaledc, each=num.lv.cor)), num.lv.cor)
-      } else if(cstruclv==4){
+      } else if(cstruclvn==4){
         if(is.null(rho.lv)) {
           rho.lv=rep(log(MaternKappa), each=num.lv.cor)
         } else if(length(rho.lv)==num.lv.cor) {
@@ -779,16 +804,16 @@ trait.TMB <- function(
       #   map.list$scaledc = factor(rep(NA, length(scaledc)))
       # }
       
-      if(cstruclv %in% c(2,4)){
+      if(cstruclvn %in% c(2,4)){
         iv<-rep(1:nrow(rho_lvc), ncol(rho_lvc)); 
         if(!is.null(setMap$rho_lvc)){
           if((length(setMap$rho_lvc)==length(rho_lvc))) 
             iv = (setMap$rho_lvc)
           map.list$rho_lvc = factor(iv)
-        } else if(cstruclv==2){ #cstruc=="corExp"
+        } else if(cstruclvn==2){ #cstruc=="corExp"
           maprho = matrix(iv, nrow(rho_lvc), ncol(rho_lvc))
           map.list$rho_lvc = factor(c(maprho))
-        } else if(cstruclv==4){
+        } else if(cstruclvn==4){
           # Fix matern smoothness by default
           maprho = matrix(iv, nrow(rho_lvc), ncol(rho_lvc))
           maprho[, ncol(maprho)] = NA
@@ -863,7 +888,7 @@ trait.TMB <- function(
             Au<-c(Au,AQ[lower.tri(AQ, diag = TRUE)])
           }
         } else {
-          if(Lambda.struc == "unstructured" && Astruc==1 & cstruclv==0){
+          if(Lambda.struc == "unstructured" && Astruc==1 & cstruclvn==0){
             Au <- c(Au[1:(nu*num.lv.cor)], rep(0, nu*num.lv.cor*(num.lv.cor-1)/2))
           } else  if(Astruc==1){
             Au <- c(Au[1:(nu*num.lv.cor)], rep(0, num.lv.cor*nu*(nu-1)/2) )
@@ -896,7 +921,7 @@ trait.TMB <- function(
       # } else {
       #   u <- as.matrix(u[1:nu,])
       #   Au <- Au[1:(nu*num.lv.cor)]
-      #   if(Lambda.struc == "unstructured" && Astruc==1 & cstruclv==0 & diag.iter==0){
+      #   if(Lambda.struc == "unstructured" && Astruc==1 & cstruclvn==0 & diag.iter==0){
       #     Au <- c(Au[1:(nu*num.lv.cor)], rep(0, nu*num.lv.cor*(num.lv.cor-1)/2))
       #   } else {
       #     Au <- Au[1:(nu*num.lv.cor)]
@@ -1035,24 +1060,36 @@ trait.TMB <- function(
       if(nrow(dr)==n){
         randoml[1] <- 1
         randomp <- c(randomp,"r0r")
-        sigmanew <- map.list$log_sigma <- NULL
-        iter = 1 # keep track of # spatial structures
+       
+        sigmanew <- NULL
+        iter <- 1
+        if(any(cstrucn==4)){
+          map.list$log_sigma <- if(cstrucn[1]==0){1}else if(cstrucn[1]==4){c(1:2, NA)}else{1:2}
+          if(length(cstrucn)>1){
+            for(i in 2:length(cstrucn)){
+              map.list$log_sigma <- c(map.list$log_sigma, if(!cstrucn[i]%in%c(0,4)){
+                c(max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2)
+              }else if(cstrucn[i]==0){
+                max(map.list$log_sigma, na.rm = TRUE)+1
+              }else if(cstrucn[i]==4){
+                c(max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2,NA)
+              })
+            }
+          }
+          map.list$log_sigma <- factor(map.list$log_sigma)
+        }
         for(re in cstrucn){
           if(re %in% c(1,3)) {
             sigmanew = c(sigmanew, log(sigma[1]),0)
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2)
           } else if(re %in% c(2)){
             sigmanew = c(sigmanew, log(sigma[1]),scaledc[[iter]])
             iter <- iter + 1
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2)
           } else if(re %in% c(4)){
             sigmanew = c(sigmanew, log(sigma[1]),scaledc[[iter]])
             iter <- iter + 1
             # Fix matern smoothness by default
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1, max(map.list$log_sigma, na.rm = TRUE)+2, NA)
-            sigmanew = c(sigmanew, sigma,log(MaternKappa))
+            sigmanew = c(sigmanew, log(MaternKappa))
           } else {
-            if(is.null(setMap$log_sigma) && any(cstrucn%in%c(4)))map.list$log_sigma <- c(map.list$log_sigma, max(map.list$log_sigma, na.rm = TRUE)+1)
             sigmanew = c(sigmanew, log(sigma[1]))
           }
         }
@@ -1214,7 +1251,13 @@ trait.TMB <- function(
       if(length(param1[nam=="b"])>0){ b1 <- matrix(param1[nam=="b"], ncol = p)} else {b1 <- rbind(rep(0,p))}
       if(nrow(dr)==n){
         log_sigma1 <- ifelse(param1[nam=="log_sigma"]==0,1e-3,param1[nam=="log_sigma"])
-        if(!is.null(map.list$log_sigma)) log_sigma1 = log_sigma1[map.list$log_sigma]
+        if(!is.null(map.list$log_sigma)) {
+          # We need to maintain the fixed parameter for Matern smoothness
+          # Which is omitted in the optimiser
+          log_sigma <- sigma
+          log_sigma <- log_sigma1[map.list$log_sigma[!is.na(map.list$log_sigma)]]
+          log_sigma1 <- log_sigma
+        }
         lg_Ar<- log(exp(param1[nam=="lg_Ar"][1:sum(nr)])+1e-3)
         if(Ar.struc=="unstructured"){
           lg_Ar <- c(lg_Ar, rep(1e-3, sum(nr*(nr-1)/2)))
@@ -1260,7 +1303,8 @@ trait.TMB <- function(
       if(num.lv>0) {
         lambda1 <- param1[nam=="lambda"]; 
         u1 <- matrix(param1[nam=="u"], nrow(u), num.lv)
-        Au<- c(pmax(param1[nam=="Au"],rep(log(1e-6), num.lv*nrow(u1))), rep(0,num.lv*(num.lv-1)/2*nrow(u1)))
+        Au<- c(pmax(param1[nam=="Au"],log(1e-6)), rep(0,num.lv*(num.lv-1)/2*nrow(u1)))
+        # Au<- c(pmax(param1[nam=="Au"],rep(log(1e-6), num.lv*nrow(u1))), rep(0,num.lv*(num.lv-1)/2*nrow(u1)))
         
         if (quadratic=="LV" | quadratic == T && start.struc == "LV"){
           lambda2 <- matrix(param1[nam == "lambda2"], byrow = T, ncol = num.lv, nrow = 1)#In this scenario we have estimated two quadratic coefficients before
@@ -1284,7 +1328,7 @@ trait.TMB <- function(
             Au1 <- c(log(exp(Au1[1:(n)])+1e-2), rep(1e-3,nrow(NN)*nu), Au1[-(1:n)])
           }
         } else {
-          if(Lambda.struc == "unstructured" && Astruc==1 & cstruclv==0){
+          if(Lambda.struc == "unstructured" && Astruc==1 & cstruclvn==0){
             Au1 <- c(pmax(Au1[1:(nu*num.lv.cor)],log(1e-2)), rep(1e-3, nu*num.lv.cor*(num.lv.cor-1)/2))
           } else  if(Astruc==1){
             Au1 <- c(pmax(Au1[1:(nu*num.lv.cor)],log(1e-2)), rep(1e-3, num.lv.cor*nu*(nu-1)/2) )
@@ -1297,8 +1341,8 @@ trait.TMB <- function(
           }
           
         }
-        if(cstruclv>0){
-          if(cstruclv %in% c(2,4)){ #cstruc=="corExp" || cstruc=="corMatern"
+        if(cstruclvn>0){
+          if(cstruclvn %in% c(2,4)){ #cstruc=="corExp" || cstruc=="corMatern"
             if(num.lv.cor>0){
               rho_lvc <- matrix((param1[nam=="rho_lvc"])[map.list$rho_lvc],nrow(rho_lvc),ncol(rho_lvc)); 
               rho_lvc[is.na(rho_lvc)]=0 
@@ -1490,8 +1534,8 @@ trait.TMB <- function(
         theta <- as.matrix(1)
       }
       rho_lvc = param[names(param)=="rho_lvc"]
-      if((cstruclv %in% c(1,3))) rho.lv<- param[names(param)=="rho_lvc"] / sqrt(1.0 + param[names(param)=="rho_lvc"]^2);
-      if((cstruclv %in% c(2,4))){ 
+      if((cstruclvn %in% c(1,3))) rho.lv<- param[names(param)=="rho_lvc"] / sqrt(1.0 + param[names(param)=="rho_lvc"]^2);
+      if((cstruclvn %in% c(2,4))){ 
         rho.lv<- exp(param[names(param)=="rho_lvc"]);
         # scaledc<- exp(param[names(param)=="scaledc"]);
       }
@@ -1620,13 +1664,14 @@ trait.TMB <- function(
               names(sigma)[iter+1] = names(nr)[re]
               iter <- iter + 2
             } else if(cstrucn[re] %in% c(4)){
-              sigma[iter:(iter+2)] <- exp(sigma[iter:(iter+2)])
+              # sigma[iter:(iter+2)] <- exp(sigma[iter:(iter+2)])
+              sigma[iter:(iter+1)] <- exp(sigma[iter:(iter+1)])
               names(sigma)[iter] = "Scale"
               names(sigma)[iter+1] = names(nr)[re]
               iter <- iter + 2
               # Matern smoothness
-              names(sigma)[iter+1] = "Matern kappa"
-              iter <- iter +1
+              # names(sigma)[iter+1] = "Matern kappa"
+              # iter <- iter +1
             } else {
               sigma[iter] <- exp(sigma[iter])
               names(sigma)[iter] = names(nr)[re]
@@ -1644,11 +1689,11 @@ trait.TMB <- function(
       }
       
       # LV correlation matrix parameters
-      if(num.lv.cor>0 & cstruclv>0){
+      if(num.lv.cor>0 & cstruclvn>0){
         out$params$rho.lv <- rho.lv; 
-        if(cstruclv %in% c(2,4)){ 
+        if(cstruclvn %in% c(2,4)){ 
           names(out$params$rho.lv) <- paste("rho.lv",1:length(out$params$rho.lv), sep = "") #[!is.na(map.list$sigma_lvc)]
-        } else {
+        } else if(!is.null(rho.lv)){
           names(out$params$rho.lv) <- paste("rho.lv",1:num.lv.cor, sep = "") 
         }
       }
@@ -1731,7 +1776,7 @@ trait.TMB <- function(
           Au <- param[names(param)=="Au"]
           AQ <- NULL
           
-          if(cstruclv==0){
+          if(cstruclvn==0){
             A <- array(0, dim=c(nu, num.lv.cor, num.lv.cor))
             for (d in 1:(num.lv.cor)){
               for(i in 1:nu){
