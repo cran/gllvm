@@ -643,7 +643,13 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
       }else{
         optimizer="optim"
       }
-      fit <- gllvm.TMB(y=y, lv.X=lv.X, family = family, num.lv=0, num.RR = num.lv.c, starting.val = "res", optimizer = optimizer, optim.method="BFGS", link =link, Power = Power, disp.group = disp.group, method=method, Ntrials = Ntrials, randomB = randomB, diag.iter = 0, Lambda.struc = "diagonal", reltol=1e-10, reltol.c=1e-3, maxit=200)
+      optim.method = "BFGS"
+      if(family == "tweedie")optim.method <- "L-BFGS-B"
+      fit <- try(gllvm.TMB(y=y, lv.X=lv.X, family = family, num.lv=0, num.RR = num.lv.c, starting.val = "res", optimizer = optimizer, optim.method = optim.method, link =link, Power = Power, disp.group = disp.group, method=method, Ntrials = Ntrials, randomB = randomB, diag.iter = 0, Lambda.struc = "diagonal", reltol=1e-10, reltol.c=1e-3, maxit=200, zeta.struc = zeta.struc))
+      if(inherits(fit, "try-error")||is.infinite(fit$logL)){
+        stop("Calculation of starting values has failed.")
+      }
+        
       b.lv <- fit$params$LvXcoef
       
       if(family %in% c("poisson", "negative.binomial", "gamma", "exponential","tweedie","ZIP","ZINB")) {
@@ -788,9 +794,10 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
     if(family!="ordinal"){
       zeta.struc<-"species"
     }
-    
-    if(num.lv.c>1)start.fit <- suppressWarnings(gllvm.TMB(y, lv.X = lv.X, num.lv = 0, num.lv.c = num.lv.c, family = family, starting.val = "zero", zeta.struc = zeta.struc, offset = eta, disp.group = disp.group, optimizer = "alabama", method = method, Ntrials = Ntrials))
-    if(num.lv.c<=1)start.fit <- suppressWarnings(gllvm.TMB(y, lv.X = lv.X, num.lv = 0, num.lv.c = num.lv.c, family = family, starting.val = "zero", zeta.struc = zeta.struc, offset = eta, disp.group = disp.group, optimizer = "nlminb", method = method, Ntrials = Ntrials))
+    optim.method = "BFGS"
+    if(family == "tweedie")optim.method = "L-BFGS-B"
+    if(num.lv.c>1)start.fit <- suppressWarnings(gllvm.TMB(y, lv.X = lv.X, num.lv = 0, num.lv.c = num.lv.c, family = family, starting.val = "zero", zeta.struc = zeta.struc, offset = eta, disp.group = disp.group, optimizer = "alabama", method = method, Ntrials = Ntrials, optim.method = optim.method))
+    if(num.lv.c<=1)start.fit <- suppressWarnings(gllvm.TMB(y, lv.X = lv.X, num.lv = 0, num.lv.c = num.lv.c, family = family, starting.val = "zero", zeta.struc = zeta.struc, offset = eta, disp.group = disp.group, optimizer = "optim", method = method, Ntrials = Ntrials, optim.method = optim.method))
     
     gamma <- start.fit$params$theta
     index <- start.fit$lvs
@@ -868,6 +875,7 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
     #Alternative for RRcoef is factor analysis of the predictors.
     RRmod <- lm(resi~0+lv.X)
     beta <- t(coef(RRmod))
+    if(any(is.na(beta))){beta <- t(MASS::ginv(crossprod(lv.X)) %*% t(lv.X) %*% resi)} # robustness of reduced rank design matrix
     # if(ncol(beta)>1&(randomB==FALSE)){
     # betaSD=apply(beta,1,sd)
     # beta=beta/betaSD
@@ -906,7 +914,9 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
     eta <- eta + lv.X%*%RRcoef%*%t(RRgamma) 
     resi <- NULL
   }else if(num.RR>0 && !isFALSE(randomB)){
-    fit <- gllvm.TMB(y=y, lv.X=lv.X, family = family, num.lv=0, num.RR = num.RR, starting.val = "res", optimizer = "nlminb", link =link, Power = Power, disp.group = disp.group, method=method, Ntrials = Ntrials, diag.iter = 0, Lambda.struc = "diagonal", randomB = randomB, maxit = 200)#mvabund::manyglm(y ~ X, family = family, K = trial.size)
+    optim.method = "BFGS"
+    if(family == "tweedie")optim.method = "L-BFGS-B"
+    fit <- gllvm.TMB(y=y, lv.X=lv.X, family = family, num.lv=0, num.RR = num.RR, starting.val = "res", optimizer = "optim", link =link, Power = Power, disp.group = disp.group, method=method, Ntrials = Ntrials, diag.iter = 0, Lambda.struc = "diagonal", randomB = randomB, maxit = 200, optim.method = optim.method)#mvabund::manyglm(y ~ X, family = family, K = trial.size)
     RRcoef <- fit$params$LvXcoef
     RRgamma <- fit$params$theta
     eta <- eta + lv.X%*%RRcoef%*%t(RRgamma)
@@ -2137,7 +2147,7 @@ sdrandom<-function(obj, Vtheta, incl, ignore.u = FALSE,return.covb = FALSE, type
   #separate errors column effects
   covbetar <- covb[colnames(covb)=="Br",colnames(covb)=="Br"]
   covb <- covb[colnames(covb)!="Br",colnames(covb)!="Br"]
-  if(random[4]>0) {
+  if(random[4]>0||random[2]>0) {
     Ab <- matrix(diag(covbetar), ncol = p)
     
     out$Ab <- Ab
@@ -2151,15 +2161,7 @@ sdrandom<-function(obj, Vtheta, incl, ignore.u = FALSE,return.covb = FALSE, type
     covsB <- as.matrix(covb[colnames(covb)=="b_lv",colnames(covb)=="b_lv"])
   }
   if(!return.covb)covb <- covb[colnames(covb)!="b_lv",colnames(covb)!="b_lv"]
-  
-  #separate errors AB
-  seBr <- diag(covb[colnames(covb)=="Br",colnames(covb)=="Br"])
-  covb <- covb[colnames(covb)!="Br",colnames(covb)!="Br"]
-  
-  if(random[2]>0){
-    CovABerr<-matrix(diag(seBr),ncol=p)
-    out$Ab <- CovABerr
-  }
+
   # if((num.RR+num.lv+num.lv.c)>0){
   if(!return.covb){
     covb <- as.matrix(covb)
@@ -2267,16 +2269,14 @@ start_values_rows <- function(y, family, dr, cstruc, xr, starting.val, Power = N
         if(family == "ZINB") family <- "negative.binomial"
         f1 <- gllvm.TMB(y = y, xr = xr, dr = dr, cstruc = cstruc, family = family, num.lv=0, starting.val = "zero", link =link, Ntrials = Ntrials, optimizer = "nlminb", max.iter = max.iter) #, method=method
       } else if(family == "tweedie"){
-        f1 <- gllvm.TMB(y = y, xr = xr, dr = dr, cstruc = cstruc, family = family, num.lv=0, starting.val = "zero", link =link, Ntrials = Ntrials, optimizer = "L-BFGS-B", max.iter = max.iter) #, method=method
+        f1 <- gllvm.TMB(y = y, xr = xr, dr = dr, cstruc = cstruc, family = family, num.lv=0, starting.val = "zero", link =link, Ntrials = Ntrials, optimizer = "optim", optim.method = "L-BFGS-B", max.iter = max.iter) #, method=method
       }
-    }else{
-      
     }
   }, silent = TRUE)
   
   row.params.random <- NULL
   row.params.fixed <- NULL
-  if((starting.val == "zero")|| inherits(tr0, "try-error")){
+  if((starting.val == "zero")|| inherits(tr0, "try-error") || is.infinite(tr0$logL)){
     if(nrow(dr)==n){
     row.params.random <- rep(0, ncol(dr))
     sigma <- rep(1, length(unique(colnames(dr))))

@@ -6,7 +6,7 @@
 #' @param X matrix or data.frame of environmental covariates.
 #' @param TR matrix or data.frame of trait covariates.
 #' @param data data in long format, that is, matrix of responses, environmental and trait covariates and row index named as "id". When used, model needs to be defined using formula. This is alternative data input for y, X and TR.
-#' @param formula an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for fixed-effects predictors).
+#' @param formula an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for column-specific effects).
 #' @param family  distribution function for responses. Options are \code{"negative.binomial"} (with log link), \code{poisson(link = "log")}, \code{binomial(link = "probit")} (and also with \code{link = "logit"} when \code{method = "LA"} or \code{method = "EVA"}), zero-inflated poisson (\code{"ZIP"}), zero-inflated negative-binomial (\code{"ZINB"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link), \code{"gamma"} (with log link), \code{"exponential"} (with log link), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method), \code{"ordinal"} (with \code{"VA"} and \code{"EVA"}-method), beta hurdle \code{"betaH"} (for \code{"VA"} and \code{"EVA"}-method) and \code{"orderedBeta"} (for \code{"VA"} and \code{"EVA"}-method). Note: \code{"betaH"} and \code{"orderedBeta"} with \code{"VA"}-method are actually fitted using a hybrid approach such that EVA is applied to the beta distribution part of the likelihood.                                                   
 #' @param num.lv  number of latent variables, d, in gllvm model. Non-negative integer, less than number of response variables (m). Defaults to 2, if \code{num.lv.c=0} and \code{num.RR=0}, otherwise 0.
 #' @param num.lv.c  number of latent variables, d, in gllvm model to inform, i.e., with residual term. Non-negative integer, less than number of response (m) and equal to, or less than, the number of predictor variables (k). Defaults to 0. Requires specification of "lv.formula" in combination with "X" or "datayx". Can be used in combination with num.lv and fixed-effects, but not with traits.
@@ -410,7 +410,7 @@
 #'@importFrom TMB MakeADFun
 #'@importFrom graphics abline axis par plot segments text points boxplot barplot panel.smooth lines polygon arrows image layout mtext
 #'@importFrom grDevices rainbow hcl colorRampPalette dev.size
-#'@importFrom stats dnorm pnorm qnorm rnorm dbinom pbinom rbinom pnbinom rnbinom pbeta rbeta pexp rexp pgamma rgamma ppois rpois runif pchisq qchisq qqnorm lm AIC binomial constrOptim factanal glm model.extract model.frame model.matrix model.response nlminb optim optimHess reshape residuals terms BIC qqline sd formula ppoints quantile gaussian cov princomp as.formula residuals.lm coef printCoefmat nobs predict cov2cor reformulate update.formula aggregate setNames contrasts cor na.omit
+#'@importFrom stats dnorm pnorm qnorm rnorm dbinom pbinom rbinom pnbinom rnbinom pbeta rbeta pexp rexp pgamma rgamma ppois rpois runif pchisq qchisq qqnorm lm AIC binomial constrOptim factanal glm model.extract model.frame model.matrix model.response nlminb optim optimHess reshape residuals terms BIC qqline sd formula ppoints quantile gaussian cov princomp as.formula residuals.lm coef printCoefmat nobs predict cov2cor reformulate update.formula aggregate setNames contrasts cor na.omit getCall
 #'@importFrom Matrix bdiag chol2inv diag t
 #'@importFrom MASS ginv polr mvrnorm
 #'@importFrom mgcv gam predict.gam
@@ -558,7 +558,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
   # some checks for optimizer
   if(!is.null(X) && !is.null(y) && any(colnames(X)%in%colnames(y)))stop("Same column name detected in 'y' and 'X' please make sure column names are unique.")
   # Cannot use nloptr or alabama with randomB
-  if(randomB!=FALSE && control$optimizer %in% c("alabama","nloptr(sqp)","nloptr(agl)")){
+  if(!isFALSE(randomB) && control$optimizer %in% c("alabama","nloptr(sqp)","nloptr(agl)")){
     warning("Random slope models should use 'nlminb' or 'optim' as optimizer. Changing to 'optim'.")
     control$optimizer <- 'optim'
     if(family != "tweedie") {control$optim.method <- 'BFGS'}else{control$optim.method <- 'L-BFGS-B'}
@@ -587,19 +587,19 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
     warning("Cannot fit ordination with predictors using 'optim' or 'nlminb', using 'nloptr(agl)' instead.")
     control$optimizer <- "nloptr(agl)"
   }
-  if(family=="tweedie" && (num.lv.c+num.RR)>1 && control$optimizer != "alabama"){
-    warning("Due to memory issues only optimizer 'alabama' with 'optim.method='L-BFGS-B' can be used with Tweedie.")
+  if(family=="tweedie" && (num.lv.c+num.RR)>1 && control$optimizer != "alabama" && isFALSE(randomB)){
+    warning("Due to memory issues only optimizer 'alabama' with optim.method='L-BFGS-B' can be used with Tweedie.")
     control$optimizer <- "alabama"
     control$optim.method <- "L-BFGS-B"
   }
     
     # Check if local solver for nloptr augmented lagranian algorithm is one of the defined options
-    if((num.RR+num.lv.c)>1 && randomB == FALSE && control$optimizer == "nloptr(agl)"){
+    if((num.RR+num.lv.c)>1 && isFALSE(randomB) && control$optimizer == "nloptr(agl)"){
       if(!control$optim.method%in%c("NLOPT_LD_CCSAQ", "NLOPT_LD_SLSQP", "NLOPT_LD_TNEWTON_PRECOND", "NLOPT_LD_TNEWTON", "NLOPT_LD_MMA"))control$optim.method <- "NLOPT_LD_TNEWTON_PRECOND"
     }
     
-    if(randomB!=FALSE&!control$TMB){
-      stop("Random slopes in ordination only allows with TMB = TRUE.")
+    if(!isFALSE(randomB)&!control$TMB){
+      stop("Random slopes in ordination only allowed with TMB = TRUE.")
     }
     if(family == "binomial" && max(Ntrials) == 1 && !is.null(y) && max(y, na.rm=TRUE)>1){
     stop("Using the binomial distribution requires setting the `Ntrials` argument.")
@@ -1102,7 +1102,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
         # Can be easily fixed by adding a try(..., silent = TRUE) but probably needs something more robust
         # The bigger problem is that (cov|1) only generates a single "cstruc" entry anove, while it requires two
         # So that the term needs to be expanded to (1|1)+(0+cov|1) first, which is not yet implemented
-        colnames(dr) <- rep(names(RElistRow$nl),RElistRow$nl)
+        colnames(dr) <- rep(names(RElistRow$grps),RElistRow$grps)
         # add unique column names with corWithin so that we can identify them as separate random effects later
       if(any(corWithin)){
         corWithinNew <- corWithin
@@ -1437,7 +1437,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
             model = "trait.TMB"
             )
         if(length(all.vars(col.eff.formula))>0){
-          randomX <- out$randomX <- paste0("~",paste(colnames(out$col.eff$spdr)),collapse="+")
+          randomX <- out$randomX <- paste0("~",paste(colnames(out$col.eff$spdr), collapse = "+"))
           out$Xrandom <- as.matrix(out$col.eff$spdr)
         }
         out$X <- fitg$X

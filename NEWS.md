@@ -1,3 +1,16 @@
+Version 2.0.2
+=============
+
+## Bugfixes
+* Fixed a bug that caused model failure when starting values for row effects could not be calculated
+* Fixed a bug that caused issues when using 'randomCoefPlot' in combination with lme4-type formula for the 4th corner model
+* Fixed a bug in the prediction error calculation of the 4th corner model fitted with method = "LA"
+* Fixed a bug in the starting values random reduced rank models when the design matrix is of reduced rank
+* Fixed a bug that occurred with 'starting.values = "zero"' for random reduced rank models with correlation parameters
+* Fixed a bug in the calculation of starting values for concurrent ordination with ordinal species responses and common cut-off parameters
+* Fixed a bug that caused the variance parameter of a second row effect to be fixed to the variance of the first
+* Fixed a bug that increased the duration for calculating starting values of some Tweedie models significantly
+
 Version 2.0.1
 =============
 
