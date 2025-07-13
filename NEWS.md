@@ -1,3 +1,47 @@
+Version 2.0.5
+=============
+
+* For CRAN release 2.0.5 see updates for versions 2.0.3 - 2.0.5
+* num.RR and num.lv with lvCor can now be combined
+* lvCor can be used with multiple (iid) terms
+* New start.optimizer and start.optim.method arguments for changing the optimizers for generating starting values, related to #229.
+* cex.spp in ordiplot.gllvm can now be a vector
+* Added zero-inflated binomial distribution
+* Added zero-n-inflated binomial distribution
+
+## Bugfixes
+* Bug fixed in VP for mixed effects formula
+* Bug fixed for num.lv.c = 1 models
+* Bug fixed that crashed ordinal models with num.lv>0 and species-specific random effects
+* Bug fixed in residuals for ZIP and ZINB models
+
+Version 2.0.4
+=============
+* Logit and cumulative logit models with method = "VA"
+
+Version 2.0.3
+=============
+
+* Add option for scaling in getEnvironCor
+* Added logistic GLLVM with VA via polya-gamma augmentation (see Polson et al. 2012)
+* Added residual variance term in getResidualCov.gllvm for ordinal models 
+* Boundary check for cumulative probit model
+* New 'ind.spp' argument for coefplot and RandomCoefPlot to possibly plot for fewer species
+* Implemented predict for species-specific random effects
+* Improved handling of provided 'start.fit'
+
+## Bugfixes
+* Fixed a bug that caused phyloplot.gllvm to fail with trait models
+* Ensured that update.gllvm also adopts non-formula arguments
+* Default optimizer for random canonical coefficients was not set right for Tweedie
+* Bugfix for showing categorical ordination effects as centroids
+* Bugfix for getPredictErr and trait model
+* Bugfix for phylogenetic model with traits; the phylogenetic matrix was not passed on to the output
+* Bugfix for predict with constrained ordination and randomB
+* Fixed a rare bug that caused a warning message in starting value generation with square response matrices
+* Bugfix for starting values of family = "ordinal" and zeta.struc = "species"
+* Bug fixed for partial constrained/concurrent ordination with more than one conditioning variable
+
 Version 2.0.2
 =============
 

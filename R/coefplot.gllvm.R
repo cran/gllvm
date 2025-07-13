@@ -10,6 +10,7 @@
 #' @param mfrow same as \code{mfrow} in \code{par}. If \code{NULL} (default) it is determined automatically.
 #' @param mar vector of length 4, which defines the margin sizes: \code{c(bottom, left, top, right)}. Defaults to \code{c(4,5,2,1)}.
 #' @param xlim.list list of vectors with length of two to define the intervals for an x axis in each covariate plot. Defaults to NULL when the interval is defined by the range of point estimates and confidence intervals
+#' @param ind.spp vector of species indices to construct the caterpillar plot for
 #' @param ...	additional graphical arguments.
 #'
 #' @author Jenni Niku <jenni.m.e.niku@@jyu.fi>, Francis K.C. Hui, Sara Taskinen, Bert van der Veen
@@ -30,13 +31,14 @@
 #'@aliases coefplot coefplot.gllvm
 #'@export
 #'@export coefplot.gllvm
-coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, order = TRUE, cex.ylab = 0.5, cex.xlab = 1.3, mfrow = NULL, mar = c(4,6,2,1), xlim.list = NULL, ...)
+coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, order = TRUE, cex.ylab = 0.5, cex.xlab = 1.3, mfrow = NULL, mar = c(4,6,2,1), xlim.list = NULL, ind.spp = NULL, ...)
 {
 
+  if(is.null(ind.spp))ind.spp <- 1:ncol(object$y)
   if (!any(class(object) == "gllvm"))
     stop("Class of the object isn't 'gllvm'.")
   if(!is.null(object$lv.X) && is.null(object$lv.X.design))object$lv.X.design <- object$lv.X #for backward compatibility
-  if (is.null(object$X) & is.null(object$lv.X.design))
+  if (is.null(object$X) & is.null(object$lv.X.design) & (object$col.eff$col.eff != "random" & is.null(object$params$B)) )
     stop("No X covariates in the model.")
   if(is.null(object$X) && !isFALSE(object$randomB))
     stop("No predictor effects to plot in the model.")
@@ -49,11 +51,11 @@ coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, order = T
     object$sd$Xcoef<-cbind(object$sd$Xcoef,betaSE)
   }
 
-  if (is.null(object$TR)) {
+  if (is.null(object$TR) & !is.null(object$params$Xcoef)) {
     if (is.null(which.Xcoef))
       which.Xcoef <- c(1:NCOL(object$params$Xcoef))
-      Xcoef <- (object$params$Xcoef[, which.Xcoef, drop=FALSE])
-      sdXcoef <- as.matrix(object$sd$Xcoef[, which.Xcoef, drop=FALSE])
+      Xcoef <- (object$params$Xcoef[ind.spp, which.Xcoef, drop=FALSE])
+      sdXcoef <- as.matrix(object$sd$Xcoef[ind.spp, which.Xcoef, drop=FALSE])
       
     # cnames <- colnames(object$params$Xcoef)[which.Xcoef]
     # Xcoef <- as.matrix(object$params$Xcoef[, which.Xcoef,drop=FALSE])
@@ -96,8 +98,9 @@ coefplot.gllvm <- function(object, y.label = TRUE, which.Xcoef = NULL, order = T
     }
   } else{
     if(object$beta0com){
-      object$params$B <- c(setNames(object$params$beta0[1], "Intercept"), object$params$B)
-      object$sd$B <- c(setNames(object$sd$beta0[1], "Intercept"),object$sd$B)
+      if(length(object$sd[["B"]]) > length(object$params[["B"]])) object$sd[["B"]] <- object$sd$B[object$sd[["B"]]!=0]
+      object$params[["B"]] <- c(setNames(object$params$beta0[1], "Intercept"), object$params[["B"]])
+      object$sd[["B"]] <- c(setNames(object$sd$beta0[1], "Intercept"),object$sd[["B"]])
     }
     if (is.null(which.Xcoef))
       which.Xcoef <- 1:length(object$params$B)

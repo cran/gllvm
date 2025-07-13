@@ -16,44 +16,61 @@
 #' @aliases update update.gllvm
 #' @method update gllvm
 #' @importFrom stats update
-#'
+#' 
+#' @export
 #' @export update.gllvm
 update.gllvm <- function(object, formula = NULL, lv.formula = NULL, row.eff = NULL, eval = TRUE, ...){
-  call <- getCall(object)
+  if(inherits(object, "gllvm")){
+    call <- getCall(object)  
+  }else{
+    call <- object
+  }
+  
   match.call(expand.dots = FALSE, call = call)
   
-  # args <- list(...)
+  args <- list(...)
   
-  if(!is.null(formula)){
+  if(!missing(formula)){
     formula.new <- formula
     formula_ <- call$formula
-    if(!is.null(formula_)){
-    call$formula <- update.formula(formula_, formula.new)
+    if(!is.null(formula_) && !is.null(formula.new)){
+      call$formula <- update.formula(formula_, formula.new)
     }else{
       call$formula <- formula.new
     }
   }
-  if(!is.null(lv.formula)){
-    lv.formula.new <- args$lv.formula
+  if(!missing(lv.formula)){
+    lv.formula.new <- lv.formula
     lv.formula_ <- call$lv.formula
     
-    if(!is.null(lv.formula_)){
+    if(!is.null(lv.formula_)  && !is.null(lv.formula.new)){
       call$lv.formula <- update.formula(lv.formula_, lv.formula.new)
     }else{
       call$lv.formula <- lv.formula.new
     }
   }
-  if(!is.null(row.eff)){
-    row.eff.new <- args$row.eff
+  if(!missing(row.eff) && is.language(row.eff)){
+    row.eff.new <- row.eff
     row.eff_ <- call$row.eff
     
-    if(!is.null(row.eff_)){
+    if(!is.null(row.eff_) && !is.null(row.eff.new) && is.language(row.eff)){
       call$row.eff <- update.formula(row.eff_, row.eff.new)
     }else{
       call$row.eff <- row.eff.new
     }
+  }else if(!is.null(row.eff)){
+    call[["row.eff"]] <- row.eff
   }
   
+  # Add or override other arguments from ...
+  for (arg_name in names(args)) {
+    if(exists(arg_name, parent.frame()) && !is.function(get(arg_name, envir=parent.frame()))){
+      call[[arg_name]] <- as.name(arg_name)
+    }else {
+      call[[arg_name]] <- args[[arg_name]]
+    }
+  }
+
   if(eval){
     eval(call, parent.frame())
   }else{
