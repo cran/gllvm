@@ -15,13 +15,14 @@
   reps = 150,
   envelope.col = c("blue", "lightblue"),
   n.plot = NULL,
+  spp = NULL,
   ...
 )
 }
 \arguments{
 \item{x}{an object of class 'gllvm'.}
 
-\item{which}{if a subset of the plots is required, specify a subset of the numbers 1:5, see caption below.}
+\item{which}{if a subset of the plots is required, specify a subset of the numbers 1:5, see caption below. For objects of class "glmmVA" it should be a subset of 1:3.}
 
 \item{caption}{captions to appear above the plots.}
 
@@ -36,6 +37,8 @@
 \item{envelope.col}{colors for envelopes, vector with length of two}
 
 \item{n.plot}{number of species (response variables) to be plotted. Defaults to \code{NULL} when all response variables are plotted. Might be useful when data is very high dimensional.}
+
+\item{spp}{integer vector or \code{NULL}, defaults to \code{NULL}. If provided, residuals are computed only for the selected species (column indices in response matrix).}
 
 \item{...}{additional graphical arguments.}
 }

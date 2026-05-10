@@ -19,21 +19,21 @@ X <- scale(as.matrix(antTraits$env))
 TR <- antTraits$traits
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  gllvm(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, num.lv = 2, family,
-#        method = "VA", row.eff = FALSE, offset = NULL, Power = 1.5, starting.val = "res", ...)
+# gllvm(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, num.lv = 2, family,
+#       method = "VA", row.eff = FALSE, offset = NULL, Power = 1.5, starting.val = "res", ...)
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  # Model without predictors:
-#  gllvm(y, family = "negative.binomial")
+# # Model without predictors:
+# gllvm(y, family = "negative.binomial")
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  # Model where environmental variables, that is, all variables in X are included:
-#  gllvm(y, X, family = "negative.binomial")
+# # Model where environmental variables, that is, all variables in X are included:
+# gllvm(y, X, family = "negative.binomial")
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  # Fourth corner model, where all main effects for environmental variables in X and
-#  # all interactions between variables in X and variables in TR are included:
-#  gllvm(y, X, TR, family = "negative.binomial")
+# # Fourth corner model, where all main effects for environmental variables in X and
+# # all interactions between variables in X and variables in TR are included:
+# gllvm(y, X, TR, family = "negative.binomial")
 
 ## -----------------------------------------------------------------------------
 yX <- reshape(data.frame(cbind(y, X)), direction = "long", varying =
@@ -43,13 +43,13 @@ datalong <- merge(yX, TR2, by = "sp")
 datalong[1:3, ]
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  # Model without predictors:
-#  gllvm(formula = y ~ 1, data = datalong, family = "negative.binomial")
+# # Model without predictors:
+# gllvm(formula = y ~ 1, data = datalong, family = "negative.binomial")
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  # Model with environmental variables Bare.ground and Shrub.cover as predictors
-#  gllvm(formula = y ~ (Bare.ground + Shrub.cover), data = datalong,
-#        family = "negative.binomial")
+# # Model with environmental variables Bare.ground and Shrub.cover as predictors
+# gllvm(formula = y ~ (Bare.ground + Shrub.cover), data = datalong,
+#       family = "negative.binomial")
 
 ## -----------------------------------------------------------------------------
 fitp <- gllvm(y, family = poisson())
@@ -81,19 +81,19 @@ ordiplot(fit_ord, biplot = TRUE, ind.spp = 15, xlim = c(-3, 3), ylim = c(-2, 1.6
          main = "Biplot", jitter = TRUE, cex.spp = 0.8)
 
 ## ----eval = FALSE, warning = FALSE--------------------------------------------
-#  criteria <- NULL
-#  for(i in 1:5){
-#    fiti <- gllvm(y, X, family = "negative.binomial", num.lv = i, sd.errors = FALSE,
-#                  formula = ~ Bare.ground + Canopy.cover + Volume.lying.CWD, seed = 1234)
-#    criteria[i] <- summary(fiti)$AICc
-#    names(criteria)[i] = i
-#  }
+# criteria <- NULL
+# for(i in 1:5){
+#   fiti <- gllvm(y, X, family = "negative.binomial", num.lv = i, sd.errors = FALSE,
+#                 formula = ~ Bare.ground + Canopy.cover + Volume.lying.CWD, seed = 1234)
+#   criteria[i] <- summary(fiti)$AICc
+#   names(criteria)[i] = i
+# }
 
 ## ----eval = FALSE, warning = FALSE--------------------------------------------
-#  # Compare AICc values
-#  criteria
-#  #>        1        2        3        4        5
-#  #> 4163.565 4215.446 4311.091 4462.069 4612.805
+# # Compare AICc values
+# criteria
+# #>        1        2        3        4        5
+# #> 4163.565 4215.446 4311.091 4462.069 4612.805
 
 ## ----warning = FALSE----------------------------------------------------------
 fit_env <- gllvm(y, X, family = "negative.binomial", num.lv = 1,
@@ -111,17 +111,17 @@ coefplot(fit_env, cex.ylab = 0.7, order = FALSE, mfrow=c(1,1))
 rownames(fit_env$params$Xcoef) <- colnames(fit_env$y)
 
 ## ----eval = FALSE, warning = FALSE--------------------------------------------
-#  library(MuMIn)
-#  fit_table <- dredge(fiti,varying=list(num.lv=1:5), rank="AICc")
-#  subset(fit_table, delta<2)
-#  # Global model call: gllvm(y = y, X = X, formula = ~Bare.ground + Canopy.cover +  Volume.lying.CWD,
-#  #     family = "negative.binomial", num.lv = i, sd.errors = FALSE,
-#  #     seed = 1234)
-#  # ---
-#  # Model selection table
-#  #    (Int) Cnp.cvr num.lv  df    logLik   AICc delta weight
-#  # 11     +       +      1 164 -1839.914 4058.6     0      1
-#  # Models ranked by AICc(x)
+# library(MuMIn)
+# fit_table <- dredge(fiti,varying=list(num.lv=1:5), rank="AICc")
+# subset(fit_table, delta<2)
+# # Global model call: gllvm(y = y, X = X, formula = ~Bare.ground + Canopy.cover +  Volume.lying.CWD,
+# #     family = "negative.binomial", num.lv = i, sd.errors = FALSE,
+# #     seed = 1234)
+# # ---
+# # Model selection table
+# #    (Int) Cnp.cvr num.lv  df    logLik   AICc delta weight
+# # 11     +       +      1 164 -1839.914 4058.6     0      1
+# # Models ranked by AICc(x)
 
 ## ----fig.show='hold'----------------------------------------------------------
 # Residual correlation matrix:
@@ -159,38 +159,38 @@ rcov0$trace; rcov$trace
 1 - rcov$trace / rcov0$trace
 
 ## ----warning=FALSE, eval = FALSE----------------------------------------------
-#  fit_4th <- gllvm(y, X, TR, family = "negative.binomial", num.lv = 1,
-#                   formula = y ~ (Bare.ground + Canopy.cover + Volume.lying.CWD) +
-#                  (Bare.ground + Canopy.cover + Volume.lying.CWD) : (Pilosity +
-#                  Polymorphism + Webers.length), seed = 123,
-#                  row.eff = "random", control.start =list(n.init = 3, jitter.var = 0.01),
-#                  randomX = ~ Bare.ground + Canopy.cover + Volume.lying.CWD)
+# fit_4th <- gllvm(y, X, TR, family = "negative.binomial", num.lv = 1,
+#                  formula = y ~ (Bare.ground + Canopy.cover + Volume.lying.CWD) +
+#                 (Bare.ground + Canopy.cover + Volume.lying.CWD) : (Pilosity +
+#                 Polymorphism + Webers.length), seed = 123,
+#                 row.eff = "random", control.start =list(n.init = 3, jitter.var = 0.01),
+#                 randomX = ~ Bare.ground + Canopy.cover + Volume.lying.CWD)
 
 ## ----echo=FALSE, warning = TRUE, eval = FALSE---------------------------------
-#  load(file = "fit_4th.Rdata")
+# load(file = "fit_4th.Rdata")
 
 ## ----F4, fig.show='hold', out.width='49%', warning = TRUE, eval = FALSE, echo=TRUE----
-#  library(lattice)
-#  coefplot.gllvm(fit_4th, mar = c(4, 11, 1, 1), cex.ylab = 0.8)
-#  fourth <- fit_4th$fourth.corner
-#  a <- 1.5
-#  colort <- colorRampPalette(c("blue", "white", "red"))
-#  plot.4th <- levelplot((as.matrix(fourth)), xlab = "Environmental Variables",
-#                        ylab = "Species traits", col.regions = colort(100), cex.lab = 1.3,
-#                        at = seq(-a, a, length = 100), scales = list(x = list(rot = 45)))
-#  plot.4th
+# library(lattice)
+# coefplot.gllvm(fit_4th, mar = c(4, 11, 1, 1), cex.ylab = 0.8)
+# fourth <- fit_4th$fourth.corner
+# a <- 1.5
+# colort <- colorRampPalette(c("blue", "white", "red"))
+# plot.4th <- levelplot((as.matrix(fourth)), xlab = "Environmental Variables",
+#                       ylab = "Species traits", col.regions = colort(100), cex.lab = 1.3,
+#                       at = seq(-a, a, length = 100), scales = list(x = list(rot = 45)))
+# plot.4th
 
 ## ----warning=FALSE, eval=FALSE------------------------------------------------
-#  fit_4th2 <- gllvm(y, X, TR, family = "negative.binomial", num.lv = 1,
-#          formula = y ~ (Bare.ground + Canopy.cover + Volume.lying.CWD), seed = 123,
-#                   row.eff = "random", control.start =list(n.init = 3, jitter.var = 0.01),
-#                   randomX = ~ Bare.ground + Canopy.cover + Volume.lying.CWD)
-#  # Test interactions using likelihood ratio test:
-#  anova(fit_4th, fit_4th2)
-#  # Model  1 :  y ~ (Bare.ground + Canopy.cover + Volume.lying.CWD)
-#  # Model  2 :  y ~ (Bare.ground + Canopy.cover + Volume.lying.CWD) + (Bare.ground +
-#  # Canopy.cover + Volume.lying.CWD):(Pilosity + Polymorphism + Webers.length)
-#  # Resid.Df        D Df.diff     P.value
-#  # 1     1097  0.00000       0
-#  # 2     1079 61.26473      18 1.27598e-06
+# fit_4th2 <- gllvm(y, X, TR, family = "negative.binomial", num.lv = 1,
+#         formula = y ~ (Bare.ground + Canopy.cover + Volume.lying.CWD), seed = 123,
+#                  row.eff = "random", control.start =list(n.init = 3, jitter.var = 0.01),
+#                  randomX = ~ Bare.ground + Canopy.cover + Volume.lying.CWD)
+# # Test interactions using likelihood ratio test:
+# anova(fit_4th, fit_4th2)
+# # Model  1 :  y ~ (Bare.ground + Canopy.cover + Volume.lying.CWD)
+# # Model  2 :  y ~ (Bare.ground + Canopy.cover + Volume.lying.CWD) + (Bare.ground +
+# # Canopy.cover + Volume.lying.CWD):(Pilosity + Polymorphism + Webers.length)
+# # Resid.Df        D Df.diff     P.value
+# # 1     1097  0.00000       0
+# # 2     1079 61.26473      18 1.27598e-06
 

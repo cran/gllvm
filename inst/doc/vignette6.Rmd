@@ -1,7 +1,7 @@
 ---
 title: 'Ordination with predictors'
 author: "Bert van der Veen"
-date: "2025-04-01"
+date: "`r Sys.Date()`"
 output:  rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Ordination with predictors}

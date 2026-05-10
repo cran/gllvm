@@ -13,6 +13,11 @@
   type = "link",
   level = 1,
   offset = TRUE,
+  se.fit = FALSE,
+  alpha = 0.95,
+  seed = 42,
+  ordinal.cat = NULL,
+  spp = NULL,
   ...
 )
 }
@@ -25,11 +30,21 @@
 
 \item{newLV}{A new matrix of latent variables.  If omitted, the original matrix of latent variables is used. Note that number of rows/sites must be the same for \code{newX} (if X covariates are included in the model).}
 
-\item{type}{the type of prediction required. The default (\code{"link"}) is on the scale of the linear predictors; the alternative \code{"response"} is on the scale of the response variable. that is, the predictions for the binomial model are predicted probabilities. In case of ordinal data, \code{type = "response"} gives predicted probabilities for each level of ordinal variable.}
+\item{type}{the type of prediction required. The default (\code{"link"}) is on the scale of the linear predictors; the alternatives are \code{"response"} and \code{"class"} (predicted classes, works only for binomial model with 1 trial or ordinal model). \code{"response"} is on the scale of the response variable. That is, the predictions for the binomial model are predicted probabilities. In case of ordinal data, \code{type = "response"} gives predicted probabilities for each level of ordinal variable.}
 
 \item{level}{specification for how to predict. Level one (\code{level = 1}) attempts to use the predicted site scores from variational approximations or laplace approximation or given site scores in \code{newLV}. Level 0 sets the latent variable to zero. Defaults to 1.}
 
 \item{offset}{specification whether of not offset values are included to the predictions in case they are in the model, defaults to \code{TRUE} when offset values that are used to fit the model are included to the predictions. Alternatives are matrix/vector (number of rows must match with the \code{newX}) of new offset values or \code{FALSE}, when offsets are ignored.}
+
+\item{se.fit}{logical. If \code{TRUE}, performs 1000 simulations from the asymptotic covariance matrix for fixed effects, and from the CMSEP covariance matrix for the random effects. If an integer is provided, it is used as the number of simulations instead.}
+
+\item{alpha}{numerical between 0 and 1, defaults to 0.95. The confidence level for se.fit.}
+
+\item{seed}{numeric, defaults to 42. Seed used for simulation in se.fit.}
+
+\item{ordinal.cat}{integer or \code{NULL}, defaults to \code{NULL}. For ordinal models with \code{type = "response"}, selects a single category to return instead of the full K×n×p array. When set, the return value is an n×p matrix of probabilities for that category. Primarily used internally by \code{predictSR} and \code{goodnessOfFit} to reduce memory use.}
+
+\item{spp}{integer vector or \code{NULL}, defaults to \code{NULL}. If provided, predictions are computed only for the selected species (column indices into the response matrix), returning an \eqn{n \times \text{length(spp)}} matrix. All parameter-level computations (\code{beta0}, \code{Xcoef}, \code{theta}, etc.) are subsetted accordingly, so no unnecessary computation is performed for the remaining species.}
 
 \item{...}{not used.}
 }

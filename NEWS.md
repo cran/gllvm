@@ -1,3 +1,68 @@
+Version 2.0.10
+=============
+
+* CRAN update version 2.0.10
+* See updates in 2.0.6-2.0.10
+
+Version 2.0.9
+=============
+
+* Added beta-binomial family with method = "LA"
+* Method is not automatically changed if family is not implemented. Instead informative message is printed about available options.
+* Added an option to choose which response variables residual diagnostics are plotted.
+
+## Bugfixes
+
+* Residual Correlation calculation didn't take into account adjustments for 01-model. Fixed.
+
+Version 2.0.8
+=============
+
+* New predictSR function for predicting species richness
+* New poisson-binomial PMF function (for predictSR)
+* New residuals.predict.SR function for dunn-smyth residuals of species richness
+* New predictPairwise function (simple wrapper for predicting joint occurrence)
+* Implemented prediction functionality with when providing new measurements for covariates in the row effects
+* Improved output of AICc.gllvm to be in line with the AIC and BIC returned tables
+* AUC added to goodnessOfFit statistics
+* Added VA-EVA hybrid approximation for the orderedBeta model with logit link
+* Added 'spp' argument to predict.gllvm, for when only predictions are needed for selected species
+
+## Bugfixes
+* row.eff was ignoring 'diag'
+* 2.0.7 did not install on ubuntu due to string error in new enum check
+* bugfix in plot.gllvm that left plots empty under particular settings
+* bugfix in nested random row effects
+* bugfix in phyloplot.gllvm that prevented uncertain random effects from being crossed out
+
+Version 2.0.7
+=============
+
+* Mixed response type model implemented
+* Added simulated confidence intervals to predict.gllvm, see #24
+
+Version 2.0.6
+=============
+
+* Added cloglog link for binomial, ZIB and ZNIB.
+* Added negative binomial (1) (VA via PIG augmentation)
+* Ntrials can vary per site/species
+* New function to fit univariate GLMMs: glmmVA
+* New propto structure for random (row) effects (possibly with correlations)
+* lvCor compatible with num.lv.c
+* More generally expanded the (row.eff) formula interface for glmmVA to kronecker structures (e.g., corExp(0+a+b|group) has a 2x2 covarariance for the LHS and a nxn for the RHS)
+* Added Nagelkerke's, McFadden's and Cox & Snell's Pseudo r2 measures in goodnessOfFit
+* In predict.gllvm type = "class" implemented for ordinal and binomial models.
+* corWithin fixed to work also for not balanced study designs 
+
+## Bugfixes
+
+* Bugfix in VP for random effects in formula
+* Bugfix in starting values for models involving both random row effects and random species effects
+* Bugfix in predict for fourth-corner model with random effects species via lme4-style formula
+* Bugfix in prediction with random and fixed row effects
+* Bugfix goodnessOfFit fixed for ordinal model
+
 Version 2.0.5
 =============
 

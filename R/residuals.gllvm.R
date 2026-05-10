@@ -11,7 +11,7 @@
 #' \deqn{r_{ij}=\Phi^{-1}(u_{ij}F_{ij}(y_{ij})  + (1-u_{ij})F_{ij}^-(y_{ij})),}
 #'
 #' where \eqn{\Phi(.)} and \eqn{F_{ij}(.)} are the cumulative probability functions of the standard normal
-#' distribution, \eqn{F_{ij}^-(y))} is the limit as \eqn{F_{ij}(y)} is approached from the negative side, and \eqn{u_{ij}} has been
+#' distribution and distribution of the responses, respectively, \eqn{F_{ij}^-(y))} is the limit as \eqn{F_{ij}(y)} is approached from the negative side, and \eqn{u_{ij}} has been
 #' generated at random from the standard uniform distribution.
 #'
 #' @return 
@@ -36,9 +36,9 @@
 #'# residuals
 #'res <- residuals(fit)
 #'}
-#'@export
-
-
+#'
+#' @method residuals gllvm
+#' @export
 residuals.gllvm <- function(object, ...) {
   n <- NROW(object$y)
   p <- NCOL(object$y)
@@ -46,249 +46,307 @@ residuals.gllvm <- function(object, ...) {
   Ntrials <- object$Ntrials
   args <- list(...)
   replace = TRUE
+  if(length(object$family) != p) object$family = rep(object$family,p) [1:p]
+  
   if(!all(c("mu", "eta.mat")%in%names(args))){
     eta.mat = predict(object, type = "link")
     mu = predict(object, type = "response")
+    if(any(object$family == "ordinal") & !all(object$family == "ordinal")) mu <- mu[1,,]
   }else{
     eta.mat <- args$eta.mat
     mu = args$mu
     if("replace"%in%names(args))replace = args$replace
   }
   
- 
+  
   ds.res = matrix(NA, n, p)
-
-        
-      if (object$family == "poisson") {
-        b  <- ppois(as.vector(y), as.vector(mu))
-        a <- pmin(b, ppois(as.vector(unlist(y)) - 1, as.vector(mu)))
-        u = a+(b-a)*runif(n*p)
-        
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u), n, p)
-      }
-      if (object$family == "negative.binomial") {
-        phis <- object$params$phi + 1e-05
-        b <- pnbinom(as.vector(y), mu = as.vector(mu), size = 1 / rep(phis, each = n))
-        a <- pmin(b,pnbinom(as.vector(unlist(y)) - 1, mu = as.vector(mu), size = 1 / rep(phis, each = n)))
-        
-        u = a+(b-a)*runif(n*p)
-        
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "gaussian") {
-        phis <- object$params$phi
-        b <- pnorm(as.vector(y), as.vector(mu), sd = rep(phis, each = n))
-        a <- pmin(b, pnorm(as.vector(y), as.vector(mu), sd = rep(phis, each = n)))
-        
-        u = a+(b-a)*runif(n*p)
-        
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "gamma") {
-        phis <- object$params$phi # - 1
-        b <- pgamma(as.vector(y), shape = rep(phis, each = n), scale = as.vector(mu)/rep(phis, each = n))
-        a <- pmin(b, pgamma(as.vector(y), shape = rep(phis, each = n), scale = as.vector(mu)/rep(phis, each = n)))
-        
-        u = a+(b-a)*runif(n*p)
-        
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "beta") {
-        b <- pbeta(as.vector(y), shape1 = rep(object$params$phi, each = n)*as.vector(mu), shape2 = rep(object$params$phi, each = n)*(1-as.vector(mu)))
-        a <- pmin(b, pbeta(as.vector(y), shape1 = rep(object$params$phi, each = n)*as.vector(mu), shape2 = rep(object$params$phi, each = n)*(1-as.vector(mu))))
-        
-        u = a+(b-a)*runif(n*p)
-        
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "betaH") {
-        for (i in 1:n) {
-          for (j in 1:p) {
-            # a = 0; b = 1
-            if(!is.na(y[i, j])){
-              if(y[i, j]==0){
-                b = 1 - binomial(link = object$link)$linkinv(eta.mat[i,p+j])
-                a = 0
-              } else {
-                b <- a <- 1 - binomial(link = object$link)$linkinv(eta.mat[i,p+j]) + binomial(link = object$link)$linkinv(eta.mat[i,p+j])*pbeta(as.vector(unlist(y[i, j])), shape1 = object$params$phi[j]*mu[i, j], shape2 = object$params$phi[j]*(1-mu[i, j]))
-              }
-            
-              u <- runif(n = 1, min = a, max = b)
-              if(u==1&&replace) u=1-1e-16
-              if(u==0&&replace) u=1e-16
-              ds.res[i, j] <- qnorm(u)
-            }
-          }
-        }
-      }
-      if (object$family == "orderedBeta") {
-        for (i in 1:n) {
-          for (j in 1:p) {
-            # a = 0; b = 1
-            if(!is.na(y[i, j])){
-              if(y[i, j]==1){
-                b = 1
-                a = 1 - binomial(link = object$link)$linkinv(eta.mat[i,j] - object$params$zeta[j,2])
-              } else if(y[i, j]==0){
-                b = 1 - binomial(link = object$link)$linkinv(eta.mat[i,j] - object$params$zeta[j,1])
-                a = 0
-              } else {
-                b <- a <- 1 - binomial(link = object$link)$linkinv(eta.mat[i,j] - object$params$zeta[j,1]) + (binomial(link = object$link)$linkinv(eta.mat[i,j] - object$params$zeta[j,1]) - binomial(link = object$link)$linkinv(eta.mat[i,j] - object$params$zeta[j,2]))*pbeta(as.vector(unlist(y[i, j])), shape1 = object$params$phi[j]*mu[i, j], shape2 = object$params$phi[j]*(1-mu[i, j]))
-              }
-            
-            u <- try({runif(n = 1, min = a, max = b)})
-            if(u==1&&replace) u=1-1e-16
-            if(u==0&&replace) u=1e-16
-            ds.res[i, j] <- qnorm(u)
-            }
-          }
-        }
-      }
-      if (object$family == "exponential") {
-        b <- pexp(as.vector(y), rate = 1/as.vector(mu))
-        a <- pmin(b, pexp(as.vector(y), rate = 1/as.vector(mu)))
-        
-        u = a+(b-a)*runif(n*p)
-        
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "ZIP") {
-        mu = exp(eta.mat)
-        b <- pzip(as.vector(y), mu = as.vector(mu), sigma = rep(object$params$phi, each = n))
-        a <- pmin(b, pzip(as.vector(y) - 1, mu = as.vector(mu), sigma = rep(object$params$phi, each = n)))
-        
-        u = a+(b-a)*runif(n*p)
-        
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "ZINB") {
-        mu = exp(eta.mat)
-        b <- pzinb(as.vector(y), mu = as.vector(mu), p = rep(object$params$phi, each = n), sigma = rep(object$params$ZINB.phi, each = n))
-        a <- pmin(b, pzinb(as.vector(y) - 1, mu = as.vector(mu), p = rep(object$params$phi, each = n), sigma = rep(object$params$ZINB.phi, each = n)))
-
-        u = a+(b-a)*runif(n*p)
-
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "binomial") {
-        if(length(Ntrials)==1)Ntrials <- rep(Ntrials,p)
-        if(length(Ntrials)==p)Ntrials <- rep(Ntrials, each = n)
-        
-        b <- pbinom(as.vector(y), Ntrials, as.vector(mu))
-        a <- pmin(b, pbinom(as.vector(y) - 1, Ntrials, as.vector(mu)))
-
-        u = a+(b-a)*runif(n*p)
-
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "ZIB") {
-        if(length(Ntrials)==1)Ntrials <- rep(Ntrials,p)
-        if(length(Ntrials)==p)Ntrials <- rep(Ntrials, each = n)
-        
-        b <- pzib(as.vector(y), Ntrials = Ntrials, mu = as.vector(mu), sigma = rep(object$params$phi, each = n))
-        a <- pmin(b, pzib(as.vector(y) - 1, Ntrials = Ntrials, mu = as.vector(mu), sigma = rep(object$params$phi, each = n)))
-        
-        u = a+(b-a)*runif(n*p)
-        
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "ZNIB") {
-        if(length(Ntrials)==1)Ntrials <- rep(Ntrials,p)
-        if(length(Ntrials)==p)Ntrials <- rep(Ntrials, each = n)
-        
-        phis0 = object$params$phi/(1+object$params$phi + object$params$ZINB.phi);
-        phisN = object$params$ZINB.phi/(1+object$params$phi + object$params$ZINB.phi);
-        
-        b <- pznib(as.vector(y), Ntrials = Ntrials, mu = as.vector(mu), p0 = rep(phis0, each = n), pN = rep(phisN, each = n))
-        a <- pmin(b, pznib(as.vector(y) - 1, Ntrials = Ntrials, mu = as.vector(mu), p0 = rep(phis0, each = n), pN = rep(phisN, each = n)))
-        
-        u = a+(b-a)*runif(n*p)
-        
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "tweedie") {
-        phis <- object$params$phi + 1e-05
-        b <- fishMod::pTweedie(as.vector(y), mu = as.vector(mu), phi = rep(phis, each = n), p = object$Power)
-        a <- pmin(b, fishMod::pTweedie(as.vector(y) - 1, mu = as.vector(mu), phi = rep(phis, each = n), p = object$Power));
-        
-        anew =  ifelse((as.vector(y) - 1)<0, 0, a)
-        
-        u = anew+(b-anew)*runif(n*p)
-        
-        if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
-        if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
-        ds.res <- matrix(qnorm(u),n,p)
-      }
-      if (object$family == "ordinal") {
-        linkfun <- switch(object$link, "probit" = pnorm, "logit" = plogis)
-        for (i in 1:n) {
-          for (j in 1:p) {
-          if(object$zeta.struc == "species"){
-            probK <- NULL
-            probK[1] <- linkfun(object$params$zeta[j, 1] - eta.mat[i, j], log.p = FALSE)
-            probK[max(y[, j]) + 1 - min(y[, j])] <- 1 - linkfun(object$params$zeta[j, max(y[, j]) - min(y[, j])] - eta.mat[i, j])
-            if(length(unique(y[,j]))>2) {
-              j.levels <- 2:(max(y[, j]) - min(y[, j]))#
-              for (k in j.levels) {
-                probK[k] <- linkfun(object$params$zeta[j, k] - eta.mat[i, j]) - linkfun(object$params$zeta[j, k - 1] - eta.mat[i, j])
-              }
-            }
-            probK <- c(0, probK)
-            cumsum.b <- sum(probK[1:(y[i,j]+ifelse(min(y[,j])==0,1,0) + 1)])
-            cumsum.a <- min(cumsum.b, sum(probK[1:(y[i,j]+ifelse(min(y[,j])==0,1,0))]))
-            u <- runif(n = 1, min = cumsum.a, max = cumsum.b)
-            if (abs(u - 1) < 1e-05)
-              u <- 1
-            if (abs(u - 0) < 1e-05)
-              u <- 0
-            ds.res[i, j] <- qnorm(u)
+  kz <- any(object$family == "orderedBeta")*2 # For indexing of zeta
+  
+  
+  if (any(object$family == "poisson")) {
+    p_f = sum(object$family == "poisson")
+    b  <- ppois(as.vector(y[,object$family == "poisson"]), as.vector(mu[,object$family == "poisson"]))
+    a <- pmin(b, ppois(as.vector(unlist(y[,object$family == "poisson"])) - 1, as.vector(mu[,object$family == "poisson"])))
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "poisson"] <- matrix(qnorm(u), n, p_f)
+  }
+  if (any(object$family == "negative.binomial")) {
+    p_f = sum(object$family == "negative.binomial")
+    phis <- object$params$phi[object$family == "negative.binomial"] + 1e-05
+    b <- pnbinom(as.vector(y[,object$family == "negative.binomial"]), mu = as.vector(mu[,object$family == "negative.binomial"]), size = 1 / rep(phis, each = n))
+    a <- pmin(b,pnbinom(as.vector(unlist(y[,object$family == "negative.binomial"])) - 1, mu = as.vector(mu[,object$family == "negative.binomial"]), size = 1 / rep(phis, each = n)))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "negative.binomial"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "negative.binomial1")) {
+    p_f = sum(object$family == "negative.binomial1")
+    phis <- object$params$phi[object$family == "negative.binomial1"] + 1e-05
+    b <- pnbinom(as.vector(y[,object$family == "negative.binomial1"]), mu = as.vector(mu[,object$family == "negative.binomial1"]), size = as.vector(mu[,object$family == "negative.binomial1"])*rep(phis, each = n))
+    a <- pmin(b,  pnbinom(as.vector(y[,object$family == "negative.binomial1"]) - 1, mu = as.vector(mu[,object$family == "negative.binomial1"]), size = as.vector(mu[,object$family == "negative.binomial1"])*rep(phis, each = n)))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "negative.binomial1"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "gaussian")) {
+    p_f = sum(object$family == "gaussian")
+    phis <- object$params$phi[object$family == "gaussian"]
+    b <- pnorm(as.vector(y[,object$family == "gaussian"]), as.vector(mu[,object$family == "gaussian"]), sd = rep(phis, each = n))
+    a <- pmin(b, pnorm(as.vector(y[,object$family == "gaussian"]), as.vector(mu[,object$family == "gaussian"]), sd = rep(phis, each = n)))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "gaussian"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "gamma")) {
+    p_f = sum(object$family == "gamma")
+    phis <- object$params$phi[object$family == "gamma"] # - 1
+    b <- pgamma(as.vector(y[,object$family == "gamma"]), shape = rep(phis, each = n), scale = as.vector(mu[,object$family == "gamma"])/rep(phis, each = n))
+    a <- pmin(b, pgamma(as.vector(y[,object$family == "gamma"]), shape = rep(phis, each = n), scale = as.vector(mu[,object$family == "gamma"])/rep(phis, each = n)))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "gamma"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "beta")) {
+    p_f = sum(object$family == "beta")
+    b <- pbeta(as.vector(y[,object$family == "beta"]), shape1 = rep(object$params$phi[object$family == "beta"], each = n)*as.vector(mu[,object$family == "beta"]), shape2 = rep(object$params$phi[object$family == "beta"], each = n)*(1-as.vector(mu[,object$family == "beta"])))
+    a <- pmin(b, pbeta(as.vector(y[,object$family == "beta"]), shape1 = rep(object$params$phi[object$family == "beta"], each = n)*as.vector(mu[,object$family == "beta"]), shape2 = rep(object$params$phi[object$family == "beta"], each = n)*(1-as.vector(mu[,object$family == "beta"]))))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "beta"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "betaH")) {
+    p_f = sum(object$family == "betaH")
+    bH_ind <- c(1:p)[object$family == "betaH"]
+    for (i in 1:n) {
+      for (j in 1:p_f) {
+        linkj <- object$link[pmin(length(object$link), j)]
+        # a = 0; b = 1
+        if(!is.na(y[i, bH_ind[j]])){
+          if(y[i, bH_ind[j]]==0){
+            b = 1 - binomial(link = linkj)$linkinv(eta.mat[i,p+j])
+            a = 0
           } else {
-            probK <- NULL
-            probK[1] <- linkfun(object$params$zeta[1] - eta.mat[i, j], log.p = FALSE)
-            probK[max(y) + 1 - min(y)] <- 1 - linkfun(object$params$zeta[max(y) - min(y)] - eta.mat[i, j])
-              levels <- 2:(max(y) - min(y))#
-              for (k in levels) {
-                probK[k] <- linkfun(object$params$zeta[k] - eta.mat[i, j]) - linkfun(object$params$zeta[k - 1] - eta.mat[i, j])
-              }
-            probK <- c(0, probK)
-            cumsum.b <- sum(probK[1:(y[i,j]+ifelse(min(y)==0,1,0) + 1)])
-            cumsum.a <- min(cumsum.b, sum(probK[1:(y[i,j]+ifelse(min(y)==0,1,0))]))
-            u <- runif(n = 1, min = cumsum.a, max = cumsum.b)
-            if (abs(u - 1) < 1e-05)
-              u <- 1
-            if (abs(u - 0) < 1e-05)
-              u <- 0
-            ds.res[i, j] <- qnorm(u)
+            b <- a <- 1 - binomial(link = linkj)$linkinv(eta.mat[i,p+j]) + binomial(link = linkj)$linkinv(eta.mat[i,p+j])*pbeta(as.vector(unlist(y[i, bH_ind[j]])), shape1 = object$params$phi[bH_ind[j]]*mu[i, bH_ind[j]], shape2 = object$params$phi[bH_ind[j]]*(1-mu[i, bH_ind[j]]))
           }
-          }
+          
+          u <- runif(n = 1, min = a, max = b)
+          if(u==1&&replace) u=1-1e-16
+          if(u==0&&replace) u=1e-16
+          ds.res[i, bH_ind[j]] <- qnorm(u)
         }
       }
+    }
+  }
+  if (any(object$family == "orderedBeta")) {
+    if(!is.matrix(object$params$zeta)) object$params$zeta = matrix(object$params$zeta, nrow=1)
+    p_f = sum(object$family == "orderedBeta")
+    oB_ind <- c(1:p)[object$family == "orderedBeta"]
+    for (i in 1:n) {
+      for (j in 1:p_f) {
+        linkj <- object$link[pmin(length(object$link), j)]
+        # a = 0; b = 1
+        if(!is.na(y[i, oB_ind[j]])){
+          if(y[i, oB_ind[j]]==1){
+            b = 1
+            a = 1 - binomial(link = linkj)$linkinv(eta.mat[i,oB_ind[j]] - object$params$zeta[min(nrow(object$params$zeta),oB_ind[j]),2])
+          } else if(y[i, oB_ind[j]]==0){
+            b = 1 - binomial(link = linkj)$linkinv(eta.mat[i,oB_ind[j]] - object$params$zeta[min(nrow(object$params$zeta),oB_ind[j]),1])
+            a = 0
+          } else {
+            b <- a <- 1 - binomial(link = linkj)$linkinv(eta.mat[i,oB_ind[j]] - object$params$zeta[min(nrow(object$params$zeta),oB_ind[j]),1]) + (binomial(link = linkj)$linkinv(eta.mat[i,oB_ind[j]] - object$params$zeta[min(nrow(object$params$zeta),oB_ind[j]),1]) - binomial(link = linkj)$linkinv(eta.mat[i,oB_ind[j]] - object$params$zeta[min(nrow(object$params$zeta),oB_ind[j]),2]))*pbeta(as.vector(unlist(y[i, oB_ind[j]])), shape1 = object$params$phi[oB_ind[j]]*mu[i, oB_ind[j]], shape2 = object$params$phi[oB_ind[j]]*(1-mu[i, oB_ind[j]]))
+          }
+          
+          u <- try({runif(n = 1, min = a, max = b)})
+          if(u==1&&replace) u=1-1e-16
+          if(u==0&&replace) u=1e-16
+          ds.res[i, oB_ind[j]] <- qnorm(u)
+        }
+      }
+    }
+  }
+  if (any(object$family == "exponential")) {
+    p_f = sum(object$family == "exponential")
+    b <- pexp(as.vector(y[,object$family == "exponential"]), rate = 1/as.vector(mu[,object$family == "exponential"]))
+    a <- pmin(b, pexp(as.vector(y[,object$family == "exponential"]), rate = 1/as.vector(mu[,object$family == "exponential"])))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "exponential"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "ZIP")) {
+    p_f = sum(object$family == "ZIP")
+    mu_f = exp(eta.mat[,object$family == "ZIP", drop=FALSE])
+    b <- pzip(as.vector(y[,object$family == "ZIP"]), mu = as.vector(mu_f), sigma = rep(object$params$phi[object$family == "ZIP"], each = n))
+    a <- pmin(b, pzip(as.vector(y[,object$family == "ZIP"]) - 1, mu = as.vector(mu_f), sigma = rep(object$params$phi[object$family == "ZIP"], each = n)))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "ZIP"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "ZINB")) {
+    p_f = sum(object$family == "ZINB")
+    mu_f = exp(eta.mat[,object$family == "ZINB", drop=FALSE])
+    b <- pzinb(as.vector(y[,object$family == "ZINB"]), mu = as.vector(mu_f), p = rep(object$params$phi[object$family == "ZINB"], each = n), sigma = rep(object$params$ZINB.phi[object$family == "ZINB"], each = n))
+    a <- pmin(b, pzinb(as.vector(y[,object$family == "ZINB"]) - 1, mu = as.vector(mu_f), p = rep(object$params$phi[object$family == "ZINB"], each = n), sigma = rep(object$params$ZINB.phi[object$family == "ZINB"], each = n)))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "ZINB"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "binomial")) {
+    p_f = sum(object$family == "binomial")
+    if(length(Ntrials)==1)Ntrials <- rep(Ntrials,p_f)
+    if(length(Ntrials)==p)Ntrials <- rep(Ntrials[object$family == "binomial"], each = n)
+    if(is.matrix(Ntrials))Ntrials <- c(Ntrials[,object$family == "binomial"])
+    
+    b <- pbinom(as.vector(y[,object$family == "binomial"]), Ntrials, as.vector(mu[,object$family == "binomial"]))
+    a <- pmin(b, pbinom(as.vector(y[,object$family == "binomial"]) - 1, Ntrials, as.vector(mu[,object$family == "binomial"])))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "binomial"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "ZIB")) {
+    p_f = sum(object$family == "ZIB")
+    if(length(Ntrials)==1)Ntrials <- rep(Ntrials,p_f)
+    if(length(Ntrials)==p)Ntrials <- rep(Ntrials, each = n)
+    if(is.matrix(Ntrials))Ntrials <- c(Ntrials)
+    
+    b <- pzib(as.vector(y[,object$family == "ZIB"]), Ntrials = Ntrials, mu = as.vector(mu[,object$family == "ZIB"]), sigma = rep(object$params$phi[object$family == "ZIB"], each = n))
+    a <- pmin(b, pzib(as.vector(y[,object$family == "ZIB"]) - 1, Ntrials = Ntrials, mu = as.vector(mu[,object$family == "ZIB"]), sigma = rep(object$params$phi[object$family == "ZIB"], each = n)))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "ZIB"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "ZNIB")) {
+    p_f = sum(object$family == "ZNIB")
+    if(length(Ntrials)==1)Ntrials <- rep(Ntrials,p_f)
+    if(length(Ntrials)==p)Ntrials <- rep(Ntrials, each = n)
+    if(is.matrix(Ntrials))Ntrials <- c(Ntrials)
+    
+    phis0 = (object$params$phi/(1+object$params$phi + object$params$ZINB.phi))[object$family == "ZNIB"];
+    phisN = (object$params$ZINB.phi/(1+object$params$phi + object$params$ZINB.phi))[object$family == "ZNIB"];
+    
+    b <- pznib(as.vector(y[,object$family == "ZNIB"]), Ntrials = Ntrials, mu = as.vector(mu[,object$family == "ZNIB"]), p0 = rep(phis0, each = n), pN = rep(phisN, each = n))
+    a <- pmin(b, pznib(as.vector(y[,object$family == "ZNIB"]) - 1, Ntrials = Ntrials, mu = as.vector(mu[,object$family == "ZNIB"]), p0 = rep(phis0, each = n), pN = rep(phisN, each = n)))
+    
+    u = a+(b-a)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "ZNIB"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "beta.binomial")) {
+    p_f = sum(object$family == "beta.binomial")
+    phis <- rep(object$params$phi[object$family == "beta.binomial"], each = n)
+    if(length(Ntrials)==1)Ntrials <- rep(Ntrials,p_f)
+    if(length(Ntrials)==p)Ntrials <- rep(Ntrials[object$family == "beta.binomial"], each = n)
+    if(is.matrix(Ntrials))Ntrials <- c(Ntrials[,object$family == "beta.binomial"])
+
+    b <- pbetabinom(as.vector(y[,object$family == "beta.binomial"]), mu = as.vector(mu[,object$family == "beta.binomial"]), phi = phis, Ntrials = Ntrials)
+    a <- pmin(b, pbetabinom(as.vector(y[,object$family == "beta.binomial"]) - 1, mu = as.vector(mu[,object$family == "beta.binomial"]), phi = phis, Ntrials = Ntrials))
+
+    u = a+(b-a)*runif(n*p_f)
+
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "beta.binomial"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "tweedie")) {
+    p_f = sum(object$family == "tweedie")
+    phis <- object$params$phi[object$family == "tweedie"] + 1e-05
+    b <- fishMod::pTweedie(as.vector(y[,object$family == "tweedie"]), mu = as.vector(mu[,object$family == "tweedie"]), phi = rep(phis, each = n), p = object$Power)
+    a <- pmin(b, fishMod::pTweedie(as.vector(y[,object$family == "tweedie"]) - 1, mu = as.vector(mu[,object$family == "tweedie"]), phi = rep(phis, each = n), p = object$Power));
+    
+    anew =  ifelse((as.vector(y[,object$family == "tweedie"]) - 1)<0, 0, a)
+    
+    u = anew+(b-anew)*runif(n*p_f)
+    
+    if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+    if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+    ds.res[,object$family == "tweedie"] <- matrix(qnorm(u),n,p_f)
+  }
+  if (any(object$family == "ordinal")) {
+    
+    o_ind <- c(1:p)[object$family == "ordinal"]
+        if(object$zeta.struc == "species"){
+          k.max <- apply(object$params$zeta, 1, function(x) length(x[!is.na(x)])) + 1
+          
+          for (j in o_ind) {
+            linkj <- object$link[pmin(length(object$link), j)]
+            probK <- matrix(nrow=k.max[j],ncol=n)
+            probK[1:(k.max[j]-1),] <- binomial(link=linkj)$linkinv(outer(object$params$zeta[j,1:k.max[j]-1], eta.mat[,j], function(zeta, eta)zeta-eta))
+              if(k.max[j]>2){
+                probK[2:(k.max[j]-1), ] <- probK[2:(k.max[j]-1),,drop=FALSE] - probK[1:(k.max[j]-2),,drop=FALSE]
+              }
+            probK[k.max[j],] <- 1 - binomial(link=linkj)$linkinv(object$params$zeta[j,k.max[j] - 1] - eta.mat[, j])
+            probK <- rbind(0, probK)
+            cumsum.b <- colSums(probK*outer(1:(k.max[j]+1),y[,j]+ifelse(min(y[,j])==0,1,0)+1,"<="))
+            cumsum.a <- pmin(cumsum.b, colSums(probK[-nrow(probK),]*outer(1:k.max[j],y[,j]+ifelse(min(y[,j])==0,1,0),"<=")))
+          
+            u = cumsum.a+(cumsum.b-cumsum.a)*runif(n)
+          
+            if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+            if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+            ds.res[, j] <- qnorm(u)
+          }
+          
+        } else {
+          kz <- any(object$family == "orderedBeta")*2
+          k.max <- length(object$params$zeta) + 1 - kz
+          
+          for (j in o_ind) {
+            linkj <- object$link[pmin(length(object$link), j)]
+            probK <- matrix(nrow=k.max,ncol=n)
+            probK[1:(k.max-1),] <- binomial(link=linkj)$linkinv(outer(tail(object$params$zeta,k.max-1), eta.mat[,j], function(zeta, eta)zeta-eta))
+            if(k.max>2){
+              probK[2:(k.max-1), ] <- probK[2:(k.max-1),,drop=FALSE] - probK[1:(k.max-2),,drop=FALSE]
+            }
+            probK[k.max,] <- 1 - binomial(link=linkj)$linkinv(object$params$zeta[k.max - 1 + kz] - eta.mat[, j])
+            probK <- rbind(0, probK)
+            cumsum.b <- colSums(probK*outer(1:(k.max+1),y[,j]+ifelse(min(y[,o_ind])==0,1,0)+1,"<="))
+            cumsum.a <- pmin(cumsum.b, colSums(probK[-nrow(probK),]*outer(1:k.max,y[,j]+ifelse(min(y[,o_ind])==0,1,0),"<=")))
+            
+            u = cumsum.a+(cumsum.b-cumsum.a)*runif(n)
+            
+            if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
+            if(any(u==0, na.rm = TRUE)&&replace)u[u==0] <- 1e-16
+            ds.res[, j] <- qnorm(u)
+        }
+      }
+    }
 
   rownames(ds.res) <- rownames(y)
   colnames(ds.res) <- colnames(y)
-
+  
   return(list(residuals = ds.res, linpred = eta.mat))
 }
-

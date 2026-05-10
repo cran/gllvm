@@ -21,7 +21,7 @@ or introductions for using `gllvm` for [ordination](https://jenniniku.github.io/
 
 Other available vignettes are:  [Analysing microbial community data](https://CRAN.R-project.org/package=gllvm/vignettes/vignette2.html),
 [How to use the quadratic response model](https://CRAN.R-project.org/package=gllvm/vignettes/vignette5.html),
-[Ordination with predictors](https://CRAN.R-project.org/package=gllvm/vignettes/vignette6.html), [Analysing percent cover data](https://jenniniku.github.io/gllvm/articles/vignette8.html) and 
+[Ordination with predictors](https://CRAN.R-project.org/package=gllvm/vignettes/vignette6.html), [Phylogenetic random effects](https://jenniniku.github.io/gllvm/articles/vignette7.html), [Analysing percent cover data](https://jenniniku.github.io/gllvm/articles/vignette8.html) and 
 [Structured and correlated random effects and latent variables](https://jenniniku.github.io/gllvm/articles/vignette9.html).
 
 # Citation
@@ -44,9 +44,11 @@ The `citation` function in R provides information on how to cite the methods in 
 
 [van der Veen, B., Hui, F. K. C., Hovstad, K.A., and O'Hara, R.B. (2023). Concurrent ordination: simultaneous unconstrained and constrained latent variable modelling. Methods in Ecology and Evolution, 14(2), 683-695.](https://doi.org/10.1111/2041-210X.14035)
 
-[van der Veen, B. and O'Hara, R.B. (2024). Fast fitting of phylogenetic mixed effects models. arxiv.](https://www.arxiv.org/abs/2408.05333)
+[van der Veen, B. and O'Hara, R.B. (2024). Fast fitting of phylogenetic mixed effects models. arxiv.](https://arxiv.org/abs/2408.05333)
 
 [Korhonen, P., Hui, F. K. C., Niku, J., and Taskinen, S. (2023). Fast and universal estimation of latent variable models using extended variational approximations. Statistics and Computing, 33(1), 1-16.](https://doi.org/10.1007/s11222-022-10189-w)
+
+[Korhonen, P., Hui, F. K., Niku, J., Taskinen, S., & van der Veen, B. (2025). gllvm 2.0: fast fitting of advanced ordination methods and joint species distribution models. PeerJ, 13, e20338.](https://peerj.com/articles/20338/)
 
 ## Other references
 

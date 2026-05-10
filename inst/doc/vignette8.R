@@ -15,18 +15,13 @@ table(SPinfo$GROUP)
 # Select only the macroalgae:
 Yalg <- Yabund[,SPinfo$GROUP=="ALGAE"]
 
-# Remove empty rows and rows with missing values from the data
-rem0 <- which((rowSums(Yalg)==0) | is.na(rowSums(Yalg)))
-Yalg <- Yalg[-rem0,]
-Xenv <- Xenv[-rem0,]
-
-# Use only the data from the year 2016:
-
+# To demonstrate the models, use only the data from the year 2016:
 Yalg <- Yalg[Xenv$YEAR==2016,]
 Xenv <- Xenv[Xenv$YEAR==2016,]
 
-# Remove species which have no observations
-Yalg <- Yalg[,-which(colSums(Yalg>0)==0)]
+# Remove species which have no observations or just one
+Yalg <- Yalg[,-which(colSums(Yalg>0)<2)]
+
 # Number of obs. and species:
 dim(Yalg)
 
@@ -45,4 +40,25 @@ fit$params$Xcoef
 
 ## -----------------------------------------------------------------------------
 ordiplot(fit, jitter = TRUE, s.cex = .8)
+
+## -----------------------------------------------------------------------------
+sum(Yalg ==1)
+
+## -----------------------------------------------------------------------------
+colSums(Yalg>0)
+
+## -----------------------------------------------------------------------------
+# save the number of species to object m
+m <- ncol(Yalg)
+fit_ob <- gllvm(Yalg, X=Xenv, formula = Xformulai, family = "orderedBeta", 
+    method="EVA", num.lv = 2, link="logit",
+    disp.formula = rep(1, m), zetacutoff = c(0, 20),
+    setMap = list(zeta = factor(rbind(1:m, rep(NA, m)))) )
+fit_ob
+
+## -----------------------------------------------------------------------------
+fit_ob$params$zeta
+
+## -----------------------------------------------------------------------------
+ordiplot(fit_ob, jitter = TRUE, s.cex = .8)
 

@@ -13,13 +13,13 @@ load(file = "ftUneqTol.RData")
 ftEqTol$col.eff$col.eff <- ftComTol$col.eff$col.eff <- ftUneqTol$col.eff$col.eff <- FALSE
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  ftEqTol <- gllvm(Y, family = "poisson", row.eff = "random", num.lv = 2)
+# ftEqTol <- gllvm(Y, family = "poisson", row.eff = "random", num.lv = 2)
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  ftComTol <- gllvm(Y, family = "poisson", num.lv = 2, quadratic = "LV")
+# ftComTol <- gllvm(Y, family = "poisson", num.lv = 2, quadratic = "LV")
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  ftUneqTol <- gllvm(Y, family = "poisson", num.lv = 2, quadratic = TRUE)
+# ftUneqTol <- gllvm(Y, family = "poisson", num.lv = 2, quadratic = TRUE)
 
 ## -----------------------------------------------------------------------------
 AICc(ftEqTol,ftComTol,ftUneqTol)

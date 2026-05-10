@@ -21,7 +21,7 @@
 #' @param heights vector of length two. Relative row heights, defaults to \code{c(0.55, 0.35)}.
 #' @param widths vector of length two. Relative column widths, defaults to \code{c(0.64, 0.10)}.
 #' @param phy.place not (yet) in use.
-#' @param ...	additional not in use.
+#' @param ...	 additional not in use.
 #'
 #' @details
 #' Plots phylogenetically structured random effects together with the phylogeny,
@@ -61,7 +61,7 @@
 #'@export
 #'@export phyloplot.gllvm
 
-phyloplot.gllvm <- function(object, tree, comm.eff = TRUE, row.eff = FALSE, which.Xcoef = NULL, xlim = NULL, level = 0.95, col = c("#E69F00","white","#009E73"), col.sym = TRUE, tick.length = 2, mar.spec = c(3, 2, 0, 0), mar.phy = c(0, 2, 2, 0), mar.comm = c(3, 0.5, 2, 1.5), cex = 0.6, lwd = 1, col.edge = "black", pch = "x", heights = c(0.55, 0.35), widths = c(0.64, 0.1),  phy.place = "top", ...){
+phyloplot.gllvm <- function(object, tree = NULL, comm.eff = TRUE, row.eff = FALSE, which.Xcoef = NULL, xlim = NULL, level = 0.95, col = c("#E69F00","white","#009E73"), col.sym = TRUE, tick.length = 2, mar.spec = c(3, 2, 0, 0), mar.phy = c(0, 2, 2, 0), mar.comm = c(3, 0.5, 2, 1.5), cex = 0.6, lwd = 1, col.edge = "black", pch = "x", heights = c(0.55, 0.35), widths = c(0.64, 0.1),  phy.place = "top", ...){
 # add option to change the order of the plot
 # graphical pars for every plot
   
@@ -79,7 +79,7 @@ phyloplot.gllvm <- function(object, tree, comm.eff = TRUE, row.eff = FALSE, whic
   if(sd.err && comm.eff)stop("No standard errors in the model.")
   
   # strike uncertain REs if possible
-  if(sd.err){
+  if(!sd.err){
   alpha = (1- level)/2
   PEs <- gllvm::getPredictErr(object)
   PIs <- data.frame(cbind(LI = c(object$params$Br)+c(PEs$Br*qnorm(alpha)), UI = c(object$params$Br)+c(PEs$Br*qnorm(1-alpha))))
@@ -102,9 +102,9 @@ phyloplot.gllvm <- function(object, tree, comm.eff = TRUE, row.eff = FALSE, whic
     object$params$Br <- object$params$Br[row.names(object$params$Br)%in%which.Xcoef[[1]],,drop=FALSE]
   }
   if(col.sym){
-    breaks = seq(-max(abs(object$params$Br)), max(object$params$Br), by = 0.01)
+    breaks = seq(-max(abs(object$params$Br),na.rm=TRUE), max(object$params$Br,na.rm=TRUE), by = 0.01)
   }else{
-    breaks = seq(min(object$params$Br), max(object$params$Br), by = 0.01)
+    breaks = seq(min(object$params$Br,na.rm=TRUE), max(object$params$Br,na.rm=TRUE), by = 0.01)
   }
   
   image(1L:ncol(object$y), 1:nrow(object$params$Br), t(object$params$Br[,tree$tip.label, drop=FALSE]), col = colorRampPalette(col)(length(breaks)-1), axes = FALSE, ylim = 0.5+c(0, nrow(object$params$Br)), xlim = 0.5+c(0,ncol(object$y)), xlab = NA, breaks = breaks, ylab = NA)
@@ -196,7 +196,6 @@ phyloplot.gllvm <- function(object, tree, comm.eff = TRUE, row.eff = FALSE, whic
     }   
     }
   
-  on.exit(par(org.par), add = TRUE)
 }
 
 # This function plots the phylogenetic tree

@@ -35,9 +35,12 @@ logLik.gllvm <- function(object, ...)
   if (!is.null(object$params$ZINB.inv.phi)) {
     object$params$ZINB.inv.phi <- NULL
   }
-    if(object$family=="ordinal"){
-      if(object$zeta.struc=="species")object$params$zeta <-object$params$zeta[,-1]
-      if(object$zeta.struc=="common")object$params$zeta <-object$params$zeta[-1]
+    if(any(object$family=="ordinal")){
+      if(object$zeta.struc=="species")object$params$zeta[object$family=="ordinal",1] <-NA
+      if(object$zeta.struc=="common"){
+        if(any(object$family=="orderedBeta")) {kz<- 2} else {kz <- 0}
+        object$params$zeta[kz+1] <-NA
+      }
     }
   
     # backward compatibility
@@ -50,6 +53,9 @@ logLik.gllvm <- function(object, ...)
     
   if (!is.null(object$params$row.params.random))
     object$params$row.params.random <- NULL
+  if(!is.null(object$params$sigmaijr)){
+    object$params$sigmaijr[upper.tri(object$params$sigmaijr, diag = TRUE)] <- NA
+  }
   if(object$beta0com) object$params$beta0 <- 1
   if (!is.null(object$randomX) || object$col.eff$col.eff == "random"){
     object$params$Br <- NULL

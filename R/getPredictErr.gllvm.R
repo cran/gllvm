@@ -87,7 +87,8 @@ getPredictErr.gllvm = function(object, CMSEP = TRUE, cov = FALSE, ...)
       }
       if(object$randomB!=FALSE) out$b.lv <- sqrt(abs(object$prediction.errors$Ab.lv))
       if(!is.null(object$randomX)){
-        out$Br  <- sqrt(apply(object$prediction.errors$Br,1,diag))
+        out$Br  <- sqrt(object$prediction.errors$Br)
+        # out$Br  <- sqrt(apply(object$prediction.errors$Br,1,diag))
       }
     }
   }
@@ -95,41 +96,74 @@ getPredictErr.gllvm = function(object, CMSEP = TRUE, cov = FALSE, ...)
   if((object$method %in% c("VA", "EVA"))){
     if(CMSEP) {
       sdb <- CMSEPf(object)
+
       # sdb<-sdA(object)
-      if(num.RR>0){
-        #variational covariances but add 0s for RRR
-        A <- array(0,dim=c(n,num.lv.c+num.RR+num.lv,num.lv.c+num.RR+num.lv))
-        A[,-c((num.lv.c+1):(num.lv.c+num.RR)),-c((num.lv.c+1):(num.lv.c+num.RR))] <- object$A
-      } else if((object$num.lvcor > 1) && (object$Lambda.struc %in% c("diagU","UNN","UU"))) {
+      if(object$num.lvcor >0){
+        if((object$num.lvcor > 1) && (object$Lambda.struc %in% c("diagU","UNN","UU"))) {
           A<-array(diag(object$A[,,1]), dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
           for (i in 1:dim(A)[1]) {
             A[i,,]<-A[i,,]*object$AQ
           }
-      } else if((object$num.lvcor > 0) & (object$corP$cstruclv !="diag")) {
-        A<-array(0, dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
-        for (i in 1:object$num.lvcor) {
-          A[,i,i]<- diag(object$A[,,i])
+        } else if((object$num.lvcor > 0) & (object$corP$cstruclv !="diag")) {
+          A<-array(0, dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
+          if(all(dim(A) == dim(object$A))){
+            A<- object$A
+          } else {
+            for (i in 1:object$num.lvcor) {
+              A[,i,i]<- diag(object$A[,,i])
+            }
+          }
+          if(object$num.lvcor==1) A <- matrix(A[,1,1])
+        } else if((num.lv.c+num.lv)>0 & num.RR==0){
+          A<-object$A
+          if((num.lv.c+num.lv)==1) A <- A[,1,1]
         }
-        if(object$num.lvcor==1) A <- A[,1,1]
-      }else if((num.lv.c+num.lv)>0){
+        
+        if(object$num.lv.c > 0 |object$num.RR > 0){
+          # if(NROW(A) != n) {
+          if(inherits(object$lvCor,"formula")){
+            if(length(dim(A)) <3) {
+              object$A <- A <- as.matrix(object$TMBfn$env$data$dLV%*%A)
+            } else {
+              object$A <- array(0,dim=c(n,dim(A)[2:3]))
+              for (k in 1:dim(A)[3]) {
+                object$A[,,k] = as.matrix(object$TMBfn$env$data$dLV%*%A[,,k]) # !!!
+              }
+              A <- object$A
+            }
+          }
+        }
+        if(num.RR>0){
+          #variational covariances but add 0s for RRR
+          A <- array(0,dim=c(n,num.lv.c+num.RR+num.lv,num.lv.c+num.RR+num.lv))
+          A[,-c((num.lv.c+1):(num.lv.c+num.RR)),-c((num.lv.c+1):(num.lv.c+num.RR))] <- object$A
+        }
+      } else if(num.RR>0){
+        #variational covariances but add 0s for RRR
+        A <- array(0,dim=c(n,num.lv.c+num.RR+num.lv,num.lv.c+num.RR+num.lv))
+        A[,-c((num.lv.c+1):(num.lv.c+num.RR)),-c((num.lv.c+1):(num.lv.c+num.RR))] <- object$A
+      } else if((num.lv.c+num.lv)>0 & num.RR==0){
         A<-object$A
         if((num.lv.c+num.lv)==1) A <- A[,1,1]
       }
       
       if(!is.null(object$params$row.params.random)){
-        for(re in 1:length(object$TMBfn$env$data$nr))
+        for(re in 1:ncol(object$TMBfn$env$data$trmsize))
         object$Ar[[re]]<-diag(sdb$Ar[[re]]+object$Ar[[re]])
       }
       if(object$col.eff$col.eff == "random" | !is.null(object$randomX)){
         if(object$col.eff$Ab.struct %in% c("diagonal", "blockdiagonal")){
           object$Ab <- matrix(diag(sdb$Ab+Matrix::bdiag(object$Ab)), ncol = p)
         }else if(object$col.eff$Ab.struct == "diagonalCL2"){
+          # ordering is m independent blocks of p
           object$Ab <- matrix(diag(sdb$Ab+Matrix::bdiag(object$Ab)[order(rep(1:p,times=nrow(object$params$Br))),order(rep(1:p,times=nrow(object$params$Br)))]), ncol = p)
-        }else if(object$col.eff$Ab.struct %in% c("unstructured", "diagonalsp", "blockdiagonalsp")){
+        }else if(object$col.eff$Ab.struct %in% c("unstructured")){
           object$Ab <- matrix(diag(sdb$Ab+object$Ab[[1]]), ncol = p)
         }else if(object$col.eff$Ab.struct %in% c("MNdiagonal", "MNunstructured")){
+          # ordering is p blocks of m
           object$Ab <- matrix(diag(sdb$Ab + kronecker(cov2cor(object$Ab[[2]]), object$Ab[[1]])), ncol = p)
         }else if(object$col.eff$Ab.struct %in% c("diagonalCL1", "CL1", "CL2")){
+          # ordering is m blocks of size p
           object$Ab <- matrix(diag(sdb$Ab),ncol=p)+matrix(diag(object$Ab),byrow=TRUE,ncol=p)
         }
       }

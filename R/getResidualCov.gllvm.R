@@ -31,11 +31,14 @@
 #' which leads to the residual covariance matrix \eqn{\Theta \Theta' + 2 \Gamma_j \Gamma_j' + diag(\Phi)}, where \eqn{\Gamma_j} holds the quadratic coefficients.
 #' Since the quadratic coefficients are constrained to be positive, the residual covariance in the latter case is, given the same coefficients on the linear term, equal or more positive than in the linear case.
 #' 
-#' The residual covariance matrix with \code{adjust = 2} can be obtained by using Poisson-Gamma parametri-zation
+#' The residual covariance matrix with \code{adjust = 2} can be obtained by using Poisson-Gamma parametrization
 #' \deqn{Y_{ij} \sim Poisson(\mu_{ij} \lambda_j),}
 #' where \eqn{\lambda_j \sim Gamma(1/\phi_j, 1/\phi_j)} and \eqn{\mu_{ij}} is as above. The mean and the variance are of similar form as above and we have that
 #' \deqn{V(log(\mu_{ij} \lambda_j)) = V(log\mu_{ij}) + V(log\lambda_j) = \theta_j'\theta_j + \psi^{(1)}(1/\phi_j),}
-#' where \eqn{\psi^{(1)}} is the trigamma function.
+#' where \eqn{\psi^{(1)}} is the trigamma function. 
+#' 
+#' For the negative binomial (1) parameterization, we instead have \eqn{\lambda_{ij} \sim Gamma(\mu_{ij}\phi_j, \phi_j)}, so that \eqn{V(log \lambda_{ij} = \psi^{(1)}(\mu_{ij}\phi_j)}.
+#' As this makes the variance of the link-scale model-dependent, no correction is currently applied.
 #' 
 #' In the case of binomial distribution, the adjustment terms (\code{adjust = 1}) are 1 for probit link and \eqn{\pi^2/3} for logit link.
 #' These are obtained by treating binomial model as latent variable model. Assume
@@ -80,6 +83,7 @@ getResidualCov.gllvm = function(object, adjust = 1, x = NULL, ...)
 {
   #backward compatibility
   opts <- list(...)
+  if(length(object$family) != ncol(object$y)) object$family = rep(object$family,ncol(object$y)) [1:ncol(object$y)]
   if("site.index"%in%names(opts)){
     site.index <- opts$site.index
     x <- object$lv.X.design[site.index[1],]
@@ -144,25 +148,46 @@ getResidualCov.gllvm = function(object, adjust = 1, x = NULL, ...)
   }
   
   
-  if(adjust > 0 && object$family %in% c("negative.binomial", "binomial", "gaussian","ordinal", "ZIB", "ZNIB", "ZINB")){
-  if(object$family %in% c("negative.binomial", "ZINB")){ 
+  if(adjust > 0 && any(object$family %in% c("negative.binomial","binomial", "gaussian","ordinal", "ZIB", "ZNIB", "ZINB", "beta.binomial"))){
+  if(any(object$family %in% c("negative.binomial", "ZINB"))){
+    nbfam <- object$family %in% c("negative.binomial", "ZINB")
     if(adjust == 1) {
-        ResCov <- ResCov + diag(log(object$params$phi + 1), ncol=ncol(ResCov))
+        ResCov[nbfam,nbfam] <- ResCov[nbfam,nbfam, drop=FALSE] + diag(log(object$params$phi[nbfam] + 1), ncol=sum(nbfam))
       }else if(adjust == 2){
-        ResCov <- ResCov + diag(trigamma(1/object$params$phi), ncol=ncol(ResCov))
+        ResCov[nbfam,nbfam] <- ResCov[nbfam,nbfam, drop=FALSE] + diag(trigamma(1/object$params$phi[nbfam]), ncol=sum(nbfam))
      }
     
   }
-    if(object$family == "binomial"||object$family=="ordinal"||object$family=="ZNIB"||object$family=="ZIB"){ 
-      if(object$link == "probit"){
-        ResCov <- ResCov + diag(ncol(object$y))
+    if(any(object$family %in% c("binomial","ordinal","ZNIB","ZIB","beta.binomial"))){
+      binfam <- object$family %in% c("binomial","ordinal","ZNIB","ZIB","beta.binomial")
+      
+      if(any(object$link == "probit")){
+        ResCov[binfam & (object$link == "probit"),binfam & (object$link == "probit")] <- ResCov[binfam & (object$link == "probit"),binfam & (object$link == "probit"), drop=FALSE] + diag(sum(binfam & (object$link == "probit")))
       } 
-      if(object$link == "logit"){
-        ResCov <- ResCov + diag(ncol(object$y))*pi^2/3
+      if(any(object$link == "logit")){
+        ResCov[binfam & (object$link == "logit"),binfam & (object$link == "logit")] <- ResCov[binfam & (object$link == "logit"),binfam & (object$link == "logit"), drop=FALSE] + diag(sum(binfam & (object$link == "logit")))*pi^2/3
+      } 
+      if(any(object$link == "cloglog")){
+        ResCov[binfam & (object$link == "cloglog"),binfam & (object$link == "cloglog")] <- ResCov[binfam & (object$link == "cloglog"),binfam & (object$link == "cloglog"), drop=FALSE] + diag(sum(binfam & (object$link == "cloglog")))*pi^2/6
       } 
     }
-    if(object$family == "gaussian"){
-          ResCov <- ResCov + diag((object$params$phi^2))
+    if(any(object$family == "gaussian")){
+          ResCov[object$family == "gaussian",object$family == "gaussian"] <- ResCov[object$family == "gaussian",object$family == "gaussian", drop=FALSE] + diag((object$params$phi[object$family == "gaussian"]^2))
+    }
+    # Adjust for Hurdle model
+    if(any(object$family %in% "betaH")){
+      famv <- c(object$family, rep("H", sum(object$family =="betaH")))
+      linkv <- c(object$link, object$link[object$family =="betaH"])
+      bhfam <- famv %in% c("H")
+      if(any(linkv == "probit")){
+        ResCov[bhfam & (linkv == "probit"),bhfam & (linkv == "probit")] <- ResCov[bhfam & (linkv == "probit"),bhfam & (linkv == "probit"), drop=FALSE] + diag(sum(bhfam & (linkv == "probit")))
+      } 
+      if(any(linkv == "logit")){
+        ResCov[bhfam & (linkv == "logit"),bhfam & (linkv == "logit")] <- ResCov[bhfam & (linkv == "logit"),bhfam & (linkv == "logit"), drop=FALSE] + diag(sum(bhfam & (linkv == "logit")))*pi^2/3
+      } 
+      if(any(linkv == "cloglog")){
+        ResCov[bhfam & (linkv == "cloglog"),bhfam & (linkv == "cloglog")] <- ResCov[bhfam & (linkv == "cloglog"),bhfam & (linkv == "cloglog"), drop=FALSE] + diag(sum(bhfam & (linkv == "cloglog")))*pi^2/6
+      } 
     }
   }
   ResCov.q <- sapply(1:(object$num.lv+object$num.lv.c), function(q) sum(diag(ResCov.q[[q]])))
@@ -190,9 +215,10 @@ getResidualCov.gllvm = function(object, adjust = 1, x = NULL, ...)
     }  
   }
   
-  
-  colnames(ResCov) <- colnames(object$y)
-  rownames(ResCov) <- colnames(object$y)
+  ynames <- colnames(object$y)
+  if(any(object$family=="betaH")) ynames <- c(ynames, paste0("H01_",ynames[object$family=="betaH"]))
+  colnames(ResCov) <- ynames
+  rownames(ResCov) <- ynames
   if(inherits(object,"gllvm.quadratic")){
     out <- list(cov = ResCov, trace = sum(diag(ResCov)), var.q = ResCov.q, var.q2 = ResCov.q2)
   }else if((object$num.lv+object$num.lv.c)>0){

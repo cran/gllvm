@@ -10,15 +10,15 @@ knitr::opts_chunk$set(
   )
 
 ## ----eval = FALSE, echo=TRUE, warning=FALSE-----------------------------------
-#  # From CRAN
-#  install.packages(gllvm)
-#  # OR
-#  # From GitHub using devtools package's function install_github
-#  devtools::install_github("JenniNiku/gllvm")
+# # From CRAN
+# install.packages(gllvm)
+# # OR
+# # From GitHub using devtools package's function install_github
+# devtools::install_github("JenniNiku/gllvm")
 
 ## ----eval = FALSE, echo=TRUE--------------------------------------------------
-#  gllvm(y = NULL, X = NULL, TR = NULL, family, num.lv = 2,
-#   formula = NULL, method = "VA", row.eff = FALSE, n.init=1, starting.val ="res", ...)
+# gllvm(y = NULL, X = NULL, TR = NULL, family, num.lv = 2,
+#  formula = NULL, method = "VA", row.eff = FALSE, n.init=1, starting.val ="res", ...)
 
 ## ----eval = TRUE, echo=TRUE---------------------------------------------------
 library(gllvm)
@@ -58,8 +58,8 @@ spider$x
 boxplot(spider$abund)
 
 ## ----eval = FALSE, echo=TRUE, warning=FALSE-----------------------------------
-#  # Take a look at the function documentation for help:
-#  ?gllvm
+# # Take a look at the function documentation for help:
+# ?gllvm
 
 ## ----eval = TRUE, echo=TRUE, warning=FALSE, fig.width=8, fig.height=5---------
 # Fit a GLLVM to data
@@ -75,12 +75,12 @@ plot(fitp, which = 1:2)
 plot(fitnb, which = 1:2)
 
 ## ----eval = FALSE, echo=TRUE, warning=FALSE-----------------------------------
-#  fitLAp <- gllvm(y=spider$abund, family = poisson(), method = "LA", num.lv = 2)
-#  fitLAnb <- gllvm(y=spider$abund, family = "negative.binomial", method = "LA", num.lv = 2)
-#  fitLAzip <- gllvm(y=spider$abund, family = "ZIP", method = "LA", num.lv = 2)
-#  AIC(fitLAp)
-#  AIC(fitLAnb)
-#  AIC(fitLAzip)
+# fitLAp <- gllvm(y=spider$abund, family = poisson(), method = "LA", num.lv = 2)
+# fitLAnb <- gllvm(y=spider$abund, family = "negative.binomial", method = "LA", num.lv = 2)
+# fitLAzip <- gllvm(y=spider$abund, family = "ZIP", method = "LA", num.lv = 2)
+# AIC(fitLAp)
+# AIC(fitLAnb)
+# AIC(fitLAzip)
 
 ## ----eval = TRUE, echo=TRUE, warning=FALSE------------------------------------
 # `soil.dry` and `reflection` are in columns 1 and 6
@@ -106,9 +106,9 @@ confint(fitx1, parm = "Xcoef")
 fitnb <- gllvm(spider$abund, family = "negative.binomial", num.lv = 2)
 
 ## ----eval = FALSE, echo=TRUE, fig.width=4.5-----------------------------------
-#  fitnb <- gllvm(spider$abund, family = "negative.binomial", num.lv = 2)
-#  ordiplot(fitnb, biplot = TRUE)
-#  abline(h = 0, v = 0, lty=2)
+# fitnb <- gllvm(spider$abund, family = "negative.binomial", num.lv = 2)
+# ordiplot(fitnb, biplot = TRUE)
+# abline(h = 0, v = 0, lty=2)
 
 ## ----eval = TRUE, echo=FALSE, fig.width=4.5, fig.height=3.8-------------------
 par(mfrow=c(1,1), mar=c(4,4,0.1,0.1))
@@ -122,8 +122,8 @@ library(corrplot);
 corrplot(cr, diag = FALSE, type = "lower", method = "square", tl.srt = 25)
 
 ## ----eval = FALSE, echo=TRUE, fig.width=5-------------------------------------
-#  ordiplot(fitnb, biplot = TRUE)
-#  abline(h = 0, v = 0, lty=2)
+# ordiplot(fitnb, biplot = TRUE)
+# abline(h = 0, v = 0, lty=2)
 
 ## ----eval = TRUE, echo=TRUE, fig.width=8, fig.height=4------------------------
 rbPal <- c("#00FA9A", "#00EC9F", "#00DFA4", "#00D2A9", "#00C5AF", "#00B8B4", "#00ABB9", "#009DBF", "#0090C4", "#0083C9", "#0076CF", "#0069D4", "#005CD9", "#004EDF", "#0041E4", "#0034E9", "#0027EF", "#001AF4", "#000DF9", "#0000FF")

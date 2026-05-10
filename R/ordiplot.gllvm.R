@@ -21,7 +21,7 @@
 #' @param arrow.scale positive value, to scale arrows
 #' @param arrow.spp.scale positive value, to scale arrows of species
 #' @param arrow.ci represent statistical uncertainty for arrows in constrained or concurrent ordination using confidence or prediction interval? Defaults to \code{TRUE}
-#' @param arrow.lty linetype for arrows in constrained
+#' @param arrow.lty linetype for arrows in constrained ordination
 #' @param fac.center logical. If \code{TRUE} place labels for binary variables at their estimated location.
 #' @param predict.region if \code{TRUE} or \code{"sites"} prediction regions for the predicted latent variables are plotted, defaults to \code{FALSE}. EXTENSION UNDER DEVELOPMENT: if \code{"species"} uncertainty estimate regions for the estimated latent variable loadings are plotted. Works only if \code{biplot = TRUE}.
 #' @param level level for prediction regions.
@@ -118,7 +118,6 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
   a <- jitter.amount
   Nlv <- n <- NROW(object$y)
   
-  if(object$num.lv+object$num.lv.c+object$num.lvcor>0) try(Nlv <- NROW(object$lvs), silent = TRUE)
   
   p <- NCOL(object$y)
   num.lv <- object$num.lv
@@ -206,6 +205,7 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
   }
   
   lv <- getLV(object, type = type)
+  if(object$num.lv+object$num.lv.c+object$num.lvcor>0) try(Nlv <- NROW(lv), silent = TRUE)
   
   if ((num.lv+(num.lv.c+num.RR)) == 1|ncol(lv) == 1|length(which.lvs)==1) {
     if(ncol(lv)>1 && length(which.lvs) == 1){
@@ -213,7 +213,7 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
     }
     if(length(which.lvs)>1)which.lvs <- 1
     if(which.lvs>(num.RR+num.lv.c)){
-      plot(1:Nlv, lv, ylab = paste0("LV", which.lvs-(num.lv.c+num.RR)), xlab = "Row index", type="n") 
+      plotfun(1:Nlv, lv, ylab = paste0("LV", which.lvs-(num.lv.c+num.RR)), xlab = "Row index", type="n", ...) 
       if (symbols) {
         points(lv, col = s.colors, cex = s.cex, ...)
       } else {
@@ -225,7 +225,7 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
         
       }
     }else{
-      plot(1:Nlv, lv, ylab = paste0("CLV",which.lvs), xlab = "Row index", type="n") 
+      plotfun(1:Nlv, lv, ylab = paste0("CLV",which.lvs), xlab = "Row index", type="n", ...) 
       if (symbols) {
         points(lv, col = s.colors, cex = s.cex, ...)
       } else {
@@ -236,6 +236,7 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
         }      
       }
     }    
+    choose.lvs =lv
   }
   
   if ((num.lv+num.lv.c+num.RR) > 1 & ncol(lv) > 1 & length(which.lvs)>1) {
@@ -257,9 +258,7 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
       svd_rotmat_species <- diag(ncol(lv))
     }    
     
-    
-    
-    
+
     choose.lvs <- lv
     if(quadratic == FALSE){choose.lv.coefs <- object$params$theta}else{choose.lv.coefs<-optima(object,sd.errors=F)}  
     
@@ -339,6 +338,36 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
           
           sdb<-CMSEPf(object, type = type)$A
           
+          if((object$num.lvcor > 1) && (object$Lambda.struc %in% c("diagU","UNN","UU"))) { #Not used at the moment, under development
+            A<-array(diag(object$A[,,1]), dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
+            for (i in 1:dim(A)[1]) {
+              A[i,,]<-A[i,,]*object$AQ
+            }
+            object$A <- A
+          } else if((object$num.lvcor > 0) & (object$corP$cstruclv !="diag")) {#Not used at the moment, under development
+            A<-array(0, dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
+            if(all(dim(A) == dim(object$A))){
+              A<- object$A
+            } else {
+              for (i in 1:object$num.lvcor) {
+                A[,i,i]<- diag(object$A[,,i])
+              }
+            }
+            object$A <- A
+          }
+          if((object$num.lv.c > 0 |object$num.RR > 0) & type!="residual"){
+            if(NROW(object$A) != n) {
+              if(length(dim(object$A)) <3) {
+                object$A <- A <- as.matrix(object$TMBfn$env$data$dLV%*%object$A)
+              } else {
+                A <- array(0,dim=c(n,dim(object$A)[2:3]))
+                for (k in 1:dim(object$A)[3]) {
+                  A[,,k] = as.matrix(object$TMBfn$env$data$dLV%*%object$A[,,k])
+                }
+                object$A <- A
+              }
+            }
+          }
           #If not marginal add variational covariances
           if(type!="residual"){
             #variational covariances but add 0s for RRR
@@ -347,23 +376,13 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
             A <- array(0,dim=c(Nlv,(num.lv*ifelse(type=="marginal",0,1)+num.lv.c+num.RR*ifelse(type!="residual",1,0)),(num.lv*ifelse(type=="marginal",0,1)+num.lv.c+num.RR*ifelse(type!="residual",1,0))))
             if(type!="marginal"&num.RR>0)A[,-c((num.lv.c+1):(num.lv.c+num.RR)),-c((num.lv.c+1):(num.lv.c+num.RR))] <- object$A
             if(type!="marginal"&num.RR==0) A <- object$A
+            
           } else {A<-object$A}
           
-          if((object$num.lvcor > 1) && (object$Lambda.struc %in% c("diagU","UNN","UU"))) { #Not used at the moment, under development
-            A<-array(diag(object$A[,,1]), dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
-            for (i in 1:dim(A)[1]) {
-              A[i,,]<-A[i,,]*object$AQ
-            }
-          } else if((object$num.lvcor > 0) & (object$corP$cstruclv !="diag")) {#Not used at the moment, under development
-            A<-array(0, dim = c(nrow(object$A[,,1]), object$num.lvcor,object$num.lvcor))
-            if(all(dim(A) == dim(object$A))){
-              A<- object$A
-            } else {
-              for (i in 1:object$num.lvcor) {
-                A[,i,i]<- (object$A[,i])
-              }
-            }
-          }
+
+          # else if(object$num.lvcor > 1 & type!="residual") {
+          #   
+          # }
           
           #If conditional scale variational covariances for concurrent ordination by sigma
           if(type=="conditional" & num.lv.c>0){
@@ -435,7 +454,7 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
             text(
               (choose.lvs[, which.lvs][, 1] + runif(n,-a,a)),
               (choose.lvs[, which.lvs][, 2] + runif(n,-a,a)),
-              label = row.names(lv), cex = s.cex, col = s.colors )          
+              label = row.names(lv), cex = s.cex, col = s.colors )
           }
         }
     }
@@ -534,7 +553,11 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
       }
       
       if (predict.region %in% c("species")) {
-        if(length(col.ellips)!=p){ col.ellips2 =rep(col.ellips[1],p)}
+        if(length(col.ellips)!=p){
+          col.ellips2 <- rep(col.ellips[1],p)
+        } else {
+          col.ellips2 <- col.ellips
+          }
         # col.ellips2=rep("grey",p)
         
         covMload<-object$sd$theta%*%( diag(object$params$sigma.lv, length(object$params$sigma.lv)) ); #diag(covMT)=1
@@ -657,11 +680,11 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
           rotSD[i,] <- sqrt(abs(diag(t(svd_rotmat_sites[1:(num.lv.c+num.RR),1:(num.lv.c+num.RR)])%*%covB[seq(i,(num.RR+num.lv.c)*ncol(object$lv.X.design),by=ncol(object$lv.X.design)),seq(i,(num.RR+num.lv.c)*ncol(object$lv.X.design),by=ncol(object$lv.X.design))]%*%svd_rotmat_sites[1:(num.lv.c+num.RR),1:(num.lv.c+num.RR)])))
         }
         rotSD <- rotSD[,which.lvs]
-        cilow <- LVcoef+qnorm( (1 - 0.95) / 2)*rotSD
-        ciup <-LVcoef+qnorm(1- (1 - 0.95) / 2)*rotSD
-        lty <- rep(arrow.lty,ncol(object$lv.X.design))
+        cilow <- LVcoef+qnorm( (1 - level) / 2)*rotSD
+        ciup <-LVcoef+qnorm(1- (1 - level) / 2)*rotSD
+        lty <- rep("solid",ncol(object$lv.X.design))
         col <- rep("red", ncol(object$lv.X.design))
-        lty[sign(cilow[,1])!=sign(ciup[,1])|sign(cilow[,2])!=sign(ciup[,2])] <- "solid"
+        lty[sign(cilow[,1])!=sign(ciup[,1])|sign(cilow[,2])!=sign(ciup[,2])] <- arrow.lty
         col[sign(cilow[,1])!=sign(ciup[,1])|sign(cilow[,2])!=sign(ciup[,2])] <- hcl(0, 100, 80)#rgb(1,0,0,alpha=0.3)
         
       }else{
@@ -719,6 +742,23 @@ ordiplot.gllvm <- function(object, biplot = FALSE, ind.spp = NULL, alpha = 0.5, 
     }else if(num.lv>0&(num.lv.c+num.RR)>0){warning("Cannot add arrows to plot, when num.lv>0 and with reduced rank constraints.")}
   }
   
+  
+  ## set up object for returning sites/loadings if ordiplot() is assigned to an object ##
+  coords <- list()
+  coords$sites <- choose.lvs # site coordinates
+  
+  # add loadings if biplot is specified
+  if(biplot) {
+    coords$loadings <- choose.lv.coefs 
+  }
+  # add coefs if predictors are included (condition copied from further up)
+  if(num.lv==0&(num.lv.c+num.RR)>0&type!="residual"|(num.lv.c+num.RR)>0&num.lv>0&type=="marginal") {
+    # adding only the SD-error scaled coefficient loadings, not the plot-window scaled (i.e. "ends" object)
+    coords$coefs <- LVcoef
+  }
+  
+  # return if assigned
+  invisible(coords)
 }
 
 

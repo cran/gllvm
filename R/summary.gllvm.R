@@ -102,6 +102,31 @@ summary.gllvm <- function(object, by = "all", digits = max(3L, getOption("digits
   if((num.lv+num.lv.c+num.RR)>0 && Lvcoefs){
     newnams <- c(newnams, dimnames(object$params$theta)[[2]][1:(num.lv+num.lv.c+num.RR)])
   }
+  
+  if(any(object$TMBfn$env$data$cstruc %in% c(-1,0,5:10)) & ( "sigma" %in% names(object$params) | !is.null(object$params$sigmaijr))){
+    # check with terms are diag/ustruc
+    # we don't report the other here for the moment
+    
+    cstrucn <- object$TMBfn$env$data$cstruc
+    trmsize <- object$TMBfn$env$data$trmsize
+    nsigmas <- ifelse(cstrucn %in% c(-1, 0, 1, 3, 5:10), as.numeric(trmsize[1, ]), 2)
+    idxsigmas <- rep(cstrucn, nsigmas) %in% c(0,-1, 5:10)
+    sigmas <- object$params$sigma[!grepl(".rho|.Scale", names(object$params$sigma))] # get rid of these for summary
+    
+    Rowcovs <- data.frame(Name = names(sigmas[idxsigmas]),
+                          Variance = format(round(sigmas[idxsigmas]^2, digits), nsmall = digits), 
+                          Std.Dev = format(round(sigmas[idxsigmas], digits), nsmall = digits))
+    
+    if(!is.null(object$params$sigmaijr)){
+    cors <- format(round(object$params$sigmaijr, digits), nsmall = digits)
+    cors[upper.tri(cors, diag = TRUE)] <- ""
+    cors <- rbind(cors, matrix("", ncol = ncol(cors), nrow = nrow(Rowcovs)-nrow(cors)))
+    Rowcovs <- cbind(Rowcovs, cors, deparse.level = 0L)
+    colnames(Rowcovs)[tail(1:ncol(Rowcovs), ncol(cors))] <- c("Corr", rep("", ncol(cors) - 1))
+    }
+    sumry$Rowcovs <- Rowcovs
+  }
+  
   if(object$col.eff$col.eff=="random" || !is.null(object$randomX)){
     REcovs <- data.frame(Name = colnames(object$params$sigmaB), Variance = format(round(diag(object$params$sigmaB), digits), nsmall = digits), Std.Dev = format(round(sqrt(diag(object$params$sigmaB)), digits), nsmall = digits))
     if(!is.null(object$params$rho.sp)){
@@ -168,10 +193,14 @@ summary.gllvm <- function(object, by = "all", digits = max(3L, getOption("digits
   if(!is.null(object$params$row.params.fixed) && !is.null(object$sd$row.params.fixed)){
   pars <- c(object$params$row.params.fixed)
   se <- c(object$sd$row.params.fixed)
+  if(inherits(object, "glmmVA")){
+    pars <- c(setNames(object$params$beta0[1], "(Intercept)"), pars)
+    se <- c(object$sd$beta0[1], se)
+  }
   zval <- pars/se
   pvalue <- 2 * pnorm(-abs(zval))
   coef.table2 <- cbind(pars, se, zval, pvalue)
-  dimnames(coef.table2) <- list(names(object$params$row.params.fixed), c("Estimate", "Std. Error", "z value", "Pr(>|z|)"))
+  dimnames(coef.table2) <- list(names(pars), c("Estimate", "Std. Error", "z value", "Pr(>|z|)"))
   coef.table <- rbind(coef.table, coef.table2)
   }
   
@@ -211,11 +240,11 @@ summary.gllvm <- function(object, by = "all", digits = max(3L, getOption("digits
         covB <- object$Hess$cov.mat.mod
         colnames(covB) <- row.names(covB) <- names(object$TMBfn$par)[object$Hess$incl]
         covB <- covB[row.names(covB)=="b_lv",colnames(covB)=="b_lv"]
+        if(any(diag(covB)<0))warning("Negative diagonal entries detected in the covariance matrix. This might give some odd results.\n")
         for(i in 1:ncol(object$lv.X.design)){
           idx <- seq(i,ncol(object$lv.X.design)*(object$num.lv.c+object$num.RR),ncol(object$lv.X.design))
           b <- object$params$LvXcoef[i,]
           S <- MASS::ginv(covB[idx,idx])
-          if(any(diag(S)<0)){warning("Negative diagonal entries detected in the covariance matrix. This might give some odd results.\n")}
           zval[i] <- b%*%S%*%b
           pvalue[i] <- 1-pchisq(zval[i],object$num.lv.c+object$num.RR)
         }
@@ -225,6 +254,7 @@ summary.gllvm <- function(object, by = "all", digits = max(3L, getOption("digits
         covB <- object$Hess$cov.mat.mod
         colnames(covB) <- row.names(covB) <- names(object$TMBfn$par)[object$Hess$incl]
         covB <- covB[row.names(covB)=="b_lv",colnames(covB)=="b_lv"]
+        if(any(diag(covB)<0))warning("Negative diagonal entries detected in the covariance matrix. This might give some odd results.\n")
         for(i in 1:(object$num.RR+object$num.lv.c)){
           b <- object$params$LvXcoef[,i]
           zval[1+ncol(object$lv.X.design)*(i-1)] <- b%*%MASS::ginv(covB[(1:ncol(object$lv.X.design))+ncol(object$lv.X.design)*(i-1),(1:ncol(object$lv.X.design))+ncol(object$lv.X.design)*(i-1)])%*%b
@@ -239,6 +269,7 @@ summary.gllvm <- function(object, by = "all", digits = max(3L, getOption("digits
       covB <- object$Hess$cov.mat.mod
       colnames(covB) <- row.names(covB) <- names(object$TMBfn$par)[object$Hess$incl]
       covB <- covB[row.names(covB)=="b_lv",colnames(covB)=="b_lv", drop=FALSE]
+      if(any(diag(covB)<0))warning("Negative diagonal entries detected in the covariance matrix. This might give some odd results.\n")
       zval <- pvalue <- rep(NA,length(pars))
       rotSD <- matrix(0,ncol=num.RR+num.lv.c,nrow=ncol(object$lv.X.design)) 
       for(i in 1:ncol(object$lv.X.design)){
@@ -358,20 +389,21 @@ summary.gllvm <- function(object, by = "all", digits = max(3L, getOption("digits
     sumry$'Variance of random row intercepts' <- object$params$sigma2
   }
   
-  if (object$family == "negative.binomial") {
-    sumry$'Dispersion parameters' <- object$params$phi
+  # if (any(object$family == "tweedie")) {
+  #   sumry$'Dispersion parameters' <- object$params$phi[object$family == "tweedie"]
+  # }
+  if (any(object$family %in% c("negative.binomial", "negative.binomial1", "tweedie"))) {
+    sumry$'Dispersion parameters' <- object$params$phi[object$family %in% c("negative.binomial", "negative.binomial1", "tweedie")]
   }
-  if (object$family == "gamma") {
-    sumry$'Shape parameters' <- object$params$phi
+  if (any(object$family %in% c("gamma", "beta", "orderedBeta", "betaH"))) {
+    sumry$'Shape parameters' <- object$params$phi[object$family %in% c("gamma", "beta", "orderedBeta", "betaH")]
   }
-  if (object$family == "tweedie") {
-    sumry$'Dispersion parameters' <- object$params$phi
+
+  if (any(object$family == "ZIP")) {
+    sumry$'Zero inflation p' <- object$params$phi[object$family == "ZIP"]
   }
-  if (object$family == "ZIP") {
-    sumry$'Zero inflation p' <- object$params$phi
-  }
-  if(object$family == "gaussian"){
-    sumry$'Standard deviations' <- object$params$phi
+  if(any(object$family == "gaussian")){
+    sumry$'Standard deviations' <- object$params$phi[object$family == "gaussian"]
   }
   if(!is.null(coef.table)){
     sumry$'Coef.tableX' <- coef.table
@@ -382,7 +414,7 @@ summary.gllvm <- function(object, by = "all", digits = max(3L, getOption("digits
     object$params$sigma.lv <- c(object$params$sigma.lv[1:num.lv.c],rep(0,num.RR), if(num.lv>0)object$params$sigma.lv[-c(1:(num.lv.c+num.RR))])
     
     if(rotate){
-      object$params$sigma.lv <- sqrt(diag(t(svd_rotmat_sites)%*%diag(object$params$sigma.lv^2, ncol = num.lv+num.lv.c, nrow = num.lv+num.lv.c)%*%svd_rotmat_sites))
+      object$params$sigma.lv <- sqrt(diag(t(svd_rotmat_sites)%*%diag(object$params$sigma.lv^2, ncol = num.lv+num.lv.c+num.RR, nrow = num.lv+num.lv.c+num.RR)%*%svd_rotmat_sites))
     }
     sumry$sigma.lv <- object$params$sigma.lv
   }
@@ -400,7 +432,7 @@ print.summary.gllvm <- function (x, ...)
 {
   cat("\nCall:\n", paste(deparse(x$Call), sep = "\n", 
                          collapse = "\n"), "\n\n", sep = "")
-  cat("Family: ", x$family, "\n\n")
+  cat("Family: ", unique(x$family), "\n\n")
   
   AIC <- round(x$AIC,x$digits)
   BIC <- round(x$BIC,x$digits)
@@ -408,23 +440,33 @@ print.summary.gllvm <- function (x, ...)
   
   cat("AIC: ", AIC, "AICc: ", AICc, "BIC: ", BIC, "LL: ", zapsmall(x$`log-likelihood`, x$digits), "df: ", x$df, "\n\n")
   
-  cat("Informed LVs: ", x$num.lv.c, "\n")
-  cat("Constrained LVs: ", x$num.RR,"\n")
-  cat("Unconstrained LVs: ", x$num.lv, "\n")
-  
+  if(!grepl('glmmVA',deparse1(x$Call))){
+    cat("Informed LVs: ", x$num.lv.c, "\n")
+    cat("Constrained LVs: ", x$num.RR,"\n")
+    cat("Unconstrained LVs: ", x$num.lv, "\n")
+  }
   #this scenario we don't want the SD from num.lv as it is meaningless
   if(x$num.lv>0&(x$num.RR+x$num.lv.c)>0 & isFALSE(x$quadratic))x$sigma.lv <- x$sigma.lv[1:(x$num.lv.c+x$num.RR)]
   
   #only print SD from LV if model is quadratic or if (hybrid) concurrent
   if((x$num.lv.c)>0|!isFALSE(x$quadratic)){cat("Residual standard deviation of LVs: ", zapsmall(x$sigma.lv,x$digits),"\n\n")}else{cat("\n")}
   
+  if(!grepl('glmmVA',deparse1(x$Call))){
   cat("Formula: ", paste(x$formula, collapse = ""), "\n")
   cat("LV formula: ", ifelse(is.null(x$lv.formula),"~ 0", paste(x$lv.formula,collapse="")), "\n")
   cat("Row effect: ", ifelse(isFALSE(x$row.eff),"~ 1", paste(x$row.eff,collapse="")), "\n")
+  }else{
+    cat("Formula: ", paste(x$row.eff, collapse = ""), "\n")  
+  }
   
   if(!is.null(x$REcovs)){
-    cat("\nRandom effects:\n")
+    cat("\n Multispecies random effects:\n")
     print(x$REcovs, row.names = FALSE, right = FALSE)
+  }
+  
+  if(!is.null(x$Rowcovs)){
+    cat("\n Random effects:\n")
+    print(x$Rowcovs, row.names = FALSE, right = FALSE)
   }
   
   df <- x[["df"]]
@@ -467,26 +509,34 @@ print.summary.gllvm <- function (x, ...)
   }
   if(x$dispersion){
     
-    if (x$family == "negative.binomial") {
+    if (any(x$family %in% c("negative.binomial", "negative.binomial1", "tweedie"))) {
       phi <- x$'Dispersion parameters'
-    }
-    if (x$family == "gamma") {
-      phi <- x$'Shape parameters'
-    }
-    if (x$family == "tweedie") {
-      phi <- x$'Dispersion parameters'
-    }
-    if (x$family == "ZIP") {
-      phi <- x$'Zero inflation p'
-    }
-    if(x$family == "gaussian"){
-      phi <- x$'Standard deviations'
-    }
-    if(x$family%in%c("negative.binomial","gamma","tweedie","ZIP","gaussian")){
-      # names(phi) <- row.names(x$Coefficients)
-      cat("\n(Dispersion estimates for ", x$family, ":\n")
+      cat("\n(Dispersion estimates for ", unique(x$family[x$family %in% c("negative.binomial", "negative.binomial1", "tweedie")]), ":\n")
       print(phi)
     }
+    if (any(x$family %in% c("gamma", "beta", "orderedBeta", "betaH"))) {
+      phi <- x$'Shape parameters'
+      cat("\n(Shape estimates for ", unique(x$family[x$family %in% c("gamma", "beta", "orderedBeta", "betaH")]), ":\n")
+      print(phi)
+    }
+    # if (any(x$family == "tweedie")) {
+    #   phi <- x$'Dispersion parameters'
+    # }
+    if (any(x$family == "ZIP")) {
+      phi <- x$'Zero inflation p'
+      cat("\n(Zero inflation p estimates for ", unique(x$family[x$family == "ZIP"]), ":\n")
+      print(phi)
+    }
+    if(any(x$family == "gaussian")){
+      phi <- x$'Standard deviations'
+      cat("\n(Standard deviations for ", unique(x$family[x$family == "gaussian"]), ":\n")
+      print(phi)
+    }
+    # if(any(x$family%in%c("negative.binomial","gamma","tweedie","ZIP","gaussian"))){
+    #   # names(phi) <- row.names(x$Coefficients)
+    #   cat("\n(Dispersion estimates for ", unique(x$family), ":\n")
+    #   print(phi)
+    # }
   }
   
   invisible(x)

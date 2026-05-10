@@ -1,4 +1,52 @@
-#makeForm
+# Extract correlation structure from formula 
+# Extracts precision matrix from propto terms
+proptoMat<-function (term) 
+{
+
+  if (length(term) == 2) {
+    if(c(term[[1]]) == "propto"){
+        stop("No propto matrix found.")
+    } else return(proptoMat(term[[2]]))
+  }
+  if(length(term) == 3){
+    if(c(term[[1]]) == "propto"){
+      if(length(c(term[[1]])) == 4 && isTRUE(term[[4]])){
+        return(list(eval(term[[3]], envir = globalenv())))  
+      }else{
+        return(list(solve(eval(term[[3]], envir = globalenv()))))  
+      }
+    }
+    }else if(length(term) == 2){
+      return(proptoMat(term[[2]]))
+    }else{
+      return(NULL)
+    }
+  
+  if(length(term) == 4){
+    if(c(term[[1]]) == "propto"){
+      if(length(c(term)) == 4 && isTRUE(term[[4]])){
+        return(list(eval(term[[3]], envir = globalenv())))
+      }else{
+        return(list(solve(eval(term[[3]], envir = globalenv()))))
+      }
+    }else{
+      return(proptoMat(terms[[2]]))
+    }
+    }
+  
+  stopifnot(length(term) >= 3)
+  
+  mats <- list()
+  for (j in 2:length(term)) {
+    res <- proptoMat(term[[j]])
+    if(length(res)>0){
+    mats[[j-1]] <- res
+    }
+  }
+  Filter(Negate(is.null), mats)
+}
+
+
 # Extract correlation structure from formula 
 corstruc<-function (term) 
 {
@@ -11,7 +59,11 @@ corstruc<-function (term)
       return("corCS")
     } else if(c(term) == "corMatern"){
       return("corMatern")
-    }else {return("diag")}
+    } else if(c(term) == "diag"){
+      return("diag")
+    } else if(c(term) == "propto"){
+      return("propto")
+    } else if(term == "("){return("ustruc")}
   if (length(term) == 2) {
     if(c(term[[1]]) %in% c("corAR1")){
       # term <- corstruc(term[[2]])
@@ -22,13 +74,22 @@ corstruc<-function (term)
       return("corCS")
     } else if(c(term[[1]]) == "corMatern"){
       return("corMatern")
-    } else if(c(term[[1]]) == "diag"){
+    }else if(c(term[[1]]) == "diag"){
       return("diag")
+    }else if(c(term[[1]]) == "propto"){
+      return("propto")  
     } else if(term[[1]] == "("){return("ustruc")}
     else return(corstruc(term[[2]])) #term[[2]] <- corstruc(term[[2]])
-    
   }
+  if(length(term) == 3 && c(term[[1]]) == "propto"){
+      return("propto")
+  }
+  if(length(term) == 4 && c(term[[1]]) == "propto"){
+    return("propto")
+  }
+
   stopifnot(length(term) >= 3)
+  
   
   for (j in 2:length(term)) {
     term[[j]] <- corstruc(term[[j]])
@@ -91,12 +152,20 @@ subbars1<-function (term)
   if (is.name(term) || !is.language(term)) 
     return(term)
   if (length(term) == 2) {
-    if(c((term[[1]])) %in% c("corCS", "corAR1", "corExp", "corMatern"))
+    if(c((term[[1]])) %in% c("corCS", "corAR1", "corExp", "corMatern", "diag", "propto"))
       term <- subbars1(term[[2]])
     else term[[2]] <- subbars1(term[[2]])
     return(term)
   }
+  if(length(term) == 3 && c(term[[1]]) == "propto"){
+    term <- subbars1(term[[2]])
+  }
+  if(length(term) == 4 && c(term[[1]]) == "propto"){
+    term <- subbars1(term[[2]])
+  }
+  
   stopifnot(length(term) >= 3)
+  
   if (is.call(term) && term[[1]] == as.name("|")) 
     term[[1]] <- as.name("+")
   if (is.call(term) && term[[1]] == as.name("||")) 
@@ -125,8 +194,8 @@ auxFun <- function(x) {
   return(out)
 }
 
-mkModMlist <- function (x, frloc) {
-  frloc <- factorize(x, frloc)
+mkModMlist <- function (x, frloc, drop.unused.levels = TRUE) {
+  frloc <- factorize(x, frloc, drop.unused.levels = drop.unused.levels)
   # safeguard for issues with numeric in factor levels
   # There is probably a better way to do this
   if(suppressWarnings(any(!is.na(as.numeric(unlist(frloc[,all.vars(x[[3]])])))))){
@@ -136,14 +205,16 @@ mkModMlist <- function (x, frloc) {
       levels(frloc[,colnames(frloc[,all.vars(x[[3]]), drop = FALSE])[i]]) <- ilev
     }
   }
-  ff <- eval(substitute(factor(fac), list(fac = x[[3]])), frloc)
+  ff <- eval(substitute(fac, list(fac = x[[3]])), frloc)
+  # interactions with unobserved combinations need to be caught
+  if(is.factor(ff) && drop.unused.levels)ff <- droplevels(ff) 
   nl <- length(levels(ff))
   
   trms <- terms(eval(base::substitute(~foo, list(foo = x[[2]]))))
   cntrsts <- lapply(data.frame(lapply(frloc[, sapply(frloc, is.factor)|sapply(frloc, is.character),drop=FALSE],as.factor)),contrasts,contrasts=FALSE)
   mm <- model.matrix(trms, frloc, contrasts.arg = cntrsts[-which(!names(cntrsts)%in%labels(trms))])
   
-  sm <- Matrix::fac2sparse(ff, to = "d", drop.unused.levels = TRUE)
+  sm <- Matrix::fac2sparse(ff, to = "d", drop.unused.levels = drop.unused.levels)
   
   fm <- NULL
   
@@ -151,7 +222,8 @@ mkModMlist <- function (x, frloc) {
     sm <- matrix(1, ncol = nrow(mm))
   }
   # row.names(fm) <- paste0(levels(ff),colnames(mm[,which(colnames(mm)!="(Intercept)"),drop=FALSE])) 
-  if(length(levels(ff))==1 && levels(ff)==as.character(1)){
+  if(!is.factor(ff) && length(ff)==1|| is.factor(ff) && length(ff) == 1 && all(levels(ff)==as.character(1))){
+    ff <- factor(ff)
     levels(ff) <- ""
   }
   
@@ -173,7 +245,7 @@ mkModMlist <- function (x, frloc) {
   if("(Intercept)"%in%colnames(mm)){
     levels(ff2)[1]<- NA # exclude reference category for identifiability
     if(length(levels(ff2))>1 | length(ff2) == nrow(mm)){
-      fm2 <- Matrix::fac2sparse(ff2, to = "d", drop.unused.levels = TRUE)
+      fm2 <- Matrix::fac2sparse(ff2, to = "d", drop.unused.levels = drop.unused.levels)
     }else{
       fm2 <- matrix(ncol = nrow(mm),nrow=0) # no categorical variables, nothing should be happening here
     }
@@ -193,11 +265,13 @@ mkModMlist <- function (x, frloc) {
     colnames(mm)[colnames(mm)%in%"(Intercept)"] <- ""
   }
   
+  if(!is.factor(ff))ff <- as.factor(ff)
   dimnames(sm) <- list(make.names(paste0(rep(colnames(mm), length(levels(ff))), rep(levels(ff), each=ncol(mm)))), row.names(mm))
-  list(ff = ff, sm = sm, nl = nl, cnms = row.names(sm), fm = fm)
+  list(ff = ff, sm = sm, nl = nl, nc = ncol(mm), cnms = row.names(sm), fm = fm)
 }
 
-mkReTrms1 <- function (bars, fr, ...) 
+# for formula
+mkReTrms1 <- function (bars, fr, drop.unused.levels = TRUE, ...) 
 {
   # drop.unused.levels = TRUE; 
   reorder.vars = FALSE
@@ -213,7 +287,7 @@ mkReTrms1 <- function (bars, fr, ...)
   term.names <- vapply(bars, safeDeparse, "")
   
   #
-  blist <- lapply(bars, mkModMlist, fr) #drop.unused.levels, reorder.vars = reorder.vars)
+  blist <- lapply(bars, mkModMlist, fr, drop.unused.levels = drop.unused.levels)#, reorder.vars = reorder.vars)
   nl <- vapply(blist, `[[`, 0L, "nl")
   cnms <- lapply(blist,`[[`,"cnms")
   names(nl) <- unlist(lapply(cnms, auxFun))
@@ -243,10 +317,52 @@ mkReTrms1 <- function (bars, fr, ...)
   ll
 }
 
-factorize <- function (x, frloc, char.only = FALSE) {
+# # for row.eff
+# mkReTrms2 <- function (bars, fr, ...) 
+# {
+#   # drop.unused.levels = TRUE; 
+#   reorder.vars = FALSE
+#   if (!length(bars)) 
+#     stop("No random effects terms specified in formula", 
+#          call. = FALSE)
+#   stopifnot(is.list(bars), vapply(bars, is.language, NA), inherits(fr,"data.frame"))
+#   
+#   safeDeparse <- function(x) paste(deparse(x, 500L), collapse = " ")
+#   barnames <- function(bars) vapply(bars, function(x) safeDeparse(x[[3]]), "")
+#   
+#   names(bars) <- vapply(bars, function(x) paste(deparse(x[[3]], 500L), collapse = " "), "")
+#   term.names <- vapply(bars, safeDeparse, "")
+#   
+#   #
+#   blist <- lapply(bars, mkModMlist, fr) #drop.unused.levels, reorder.vars = reorder.vars)
+#   nl <- vapply(blist, `[[`, 0L, "nl") # number of groups in RE
+#   nc <- vapply(blist, `[[`, 0L, "nc") # number of LHS covariates in RE
+#   cnms <- lapply(blist,`[[`,"cnms")
+#   names(nl) <- unlist(lapply(cnms, auxFun))
+#   if(any(nc>1)){
+#     stop("still working out how to fix the covariance matrix thing here")
+#     #we have a nc by nc covariance matrix per group, and the same covariance matrix across groups..
+#      cs <- which(as.matrix(Matrix::bdiag(lapply(blist,function(x)lower.tri(matrix(ncol=length(x),nrow=length(x)))*1)))==1, arr.ind = TRUE)
+#      
+#   }else{
+#     cs <- NULL
+#   }
+#   Ztlist <- lapply(blist, `[[`, "sm")
+#   Zt <- do.call(rbind, Ztlist)
+#   # try({row.names(Zt) <- unlist(lapply(blist, function(x)if(x$nl>1 && all(x$cnms!="(Intercept)")){paste0(x$cnms, row.names(x$sm))}else if(all(x$cnms!="(Intercept)")){make.unique(x$cnms)}else{row.names(x$sm)}))}, silent = TRUE)
+#   names(Ztlist) <- term.names
+#   
+#   # Design matrix RE means
+#   Xtlist <- lapply(blist, `[[`, "fm")
+#   Xt <- do.call(rbind, Xtlist)
+#   
+#   ll <- list(Zt = Zt, grps = grps,  cs = cs, nl = nl, Xt = Xt)
+#   ll
+# }
+factorize <- function (x, frloc, char.only = FALSE, drop.unused.levels = TRUE) {
   for (i in all.vars(x[[length(x)]])) {
     if (!is.null(curf <- frloc[[i]])) 
-      frloc[[i]] <- factor(curf)
+      frloc[[i]] <- factor(curf, levels = if(!is.factor(curf)||is.factor(curf)&&drop.unused.levels){unique(curf)}else if(is.factor(curf)){levels(curf)})
   }
   return(frloc)
 }
@@ -390,6 +506,36 @@ nobars1 <- function (term)
   }
   environment(nb) <- e
   nb
+}
+
+remove.offset <- function(expr) {
+  if (is.call(expr)) {
+    # If it's an offset, remove it
+    if (expr[[1]] == as.name("offset")) {
+      return(NULL)
+    }
+    
+    # If it's a binary call like `+`, process both sides and remove NULLs
+    if (expr[[1]] == as.name("+")) {
+      left <- remove.offset(expr[[2]])
+      right <- remove.offset(expr[[3]])
+      
+      if (is.null(left) && is.null(right)) {
+        return(NULL)
+      } else if (is.null(left)) {
+        return(right)
+      } else if (is.null(right)) {
+        return(left)
+      } else {
+        return(call("+", left, right))
+      }
+    }
+    
+    # Otherwise, recurse into other calls
+    expr[] <- lapply(expr, remove.offset)
+  }
+  
+  return(expr)
 }
 
 nobars1_ <- function (term) 

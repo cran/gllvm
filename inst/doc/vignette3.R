@@ -10,15 +10,15 @@ knitr::opts_chunk$set(
   )
 
 ## ----eval = FALSE, echo=TRUE, warning=FALSE-----------------------------------
-#  # From CRAN
-#  install.packages(gllvm)
-#  # OR
-#  # From GitHub using devtools package's function install_github
-#  devtools::install_github("JenniNiku/gllvm")
+# # From CRAN
+# install.packages(gllvm)
+# # OR
+# # From GitHub using devtools package's function install_github
+# devtools::install_github("JenniNiku/gllvm")
 
 ## ----eval = FALSE, echo=TRUE--------------------------------------------------
-#  gllvm(y = NULL, X = NULL, TR = NULL, family, num.lv = 2,
-#   formula = NULL, method = "VA", row.eff = FALSE, n.init=1, starting.val ="res", ...)
+# gllvm(y = NULL, X = NULL, TR = NULL, family, num.lv = 2,
+#  formula = NULL, method = "VA", row.eff = FALSE, n.init=1, starting.val ="res", ...)
 
 ## ----eval = TRUE, echo=TRUE---------------------------------------------------
 library(gllvm)
@@ -54,8 +54,8 @@ spider$x
 boxplot(spider$abund)
 
 ## ----eval = FALSE, echo=TRUE, warning=FALSE-----------------------------------
-#  # Take a look at the function documentation for help:
-#  ?gllvm
+# # Take a look at the function documentation for help:
+# ?gllvm
 
 ## ----eval = TRUE, echo=TRUE, warning=FALSE, fig.width=8, fig.height=5---------
 # Fit a GLLVM to data
@@ -70,12 +70,12 @@ plot(fitp)
 plot(fitnb)
 
 ## ----eval = FALSE, echo=TRUE, warning=FALSE-----------------------------------
-#  fitLAp <- gllvm(y = spider$abund, family = poisson(), method = "LA", num.lv = 2)
-#  fitLAnb <- gllvm(y = spider$abund, family = "negative.binomial", method = "LA", num.lv = 2)
-#  fitLAzip <- gllvm(y = spider$abund, family = "ZIP", method = "LA", num.lv = 2)
-#  AIC(fitLAp)
-#  AIC(fitLAnb)
-#  AIC(fitLAzip)
+# fitLAp <- gllvm(y = spider$abund, family = poisson(), method = "LA", num.lv = 2)
+# fitLAnb <- gllvm(y = spider$abund, family = "negative.binomial", method = "LA", num.lv = 2)
+# fitLAzip <- gllvm(y = spider$abund, family = "ZIP", method = "LA", num.lv = 2)
+# AIC(fitLAp)
+# AIC(fitLAnb)
+# AIC(fitLAzip)
 
 ## ----eval = TRUE, echo=TRUE, warning=FALSE------------------------------------
 # Parameters:

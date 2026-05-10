@@ -7,6 +7,7 @@
 #' @param groupnames a vector of strings given as names for the groups defined in group
 #' @param adj.cov logical, whether or not to adjust co-variation within the group
 #' @param grouplvs logical, whether or not to group latent variables to one group
+#' @param calcr2scaled logical, whether or not to also calculate r2 scaled variance partitioning. Defaults to FALSE. If true, squared correlation between data and predictions is used for continuous data (normal, gamma, exponent, beta, tweedie), squared spearman correlation for count and ordinal data, and Tjur's R2 for binary data. Note, interpret these cautiously.
 #' 
 #' @details
 #' 
@@ -34,7 +35,7 @@
 #'
 #'\dontrun{
 #'# Plot the result of  variance partitioning
-#'plot(VP, col = palette(hcl.colors(5, "Roma")))
+#'plot(VP, col = palette(hcl.colors(5, "Roma")), las =2)
 #'
 #'}
 #'
@@ -42,8 +43,8 @@
 #'@export
 #'@export print.VP.gllvm 
 
-VP.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov = TRUE, grouplvs=FALSE, ...) {
-  if (!any(class(object) == "gllvm"))
+VP.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov = TRUE, grouplvs=FALSE, calcr2scaled = FALSE, ...) {
+  if (!inherits(object, "gllvm"))
     stop("Class of the object isn't 'gllvm'.")
   if(!is.null(object$lv.X) && is.null(object$lv.X.design))object$lv.X.design <- object$lv.X #for backward compatibility
   Z <- NULL
@@ -54,7 +55,7 @@ VP.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov = TRUE, grou
   
   r0 <- NULL
   p <- ncol(object$y)
-  if(object$family == "betaH") p <- p*2
+  if(any(object$family == "betaH")) p <- p + sum(object$family == "betaH")
   n <- nrow(object$y)
 
   if (!is.null(object$X)) {
@@ -126,7 +127,7 @@ VP.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov = TRUE, grou
 
     blist <- lapply(bars, mkModMlist, mf)
     groupFs <- table(lapply(blist, function(x)row.names(x$sm)%in%colnames(object$col.eff$spdr)))
-    groupF <- c(groupF, rep(1:length(groupFs), groupFs)+max(groupF))
+    groupF <- c(groupF, rep(1:length(groupFs), groupFs)+max(0, groupF))
     
     X.d <- object$col.eff$spdr#[, colnames(object$col.eff$spdr)!= "Intercept", drop=FALSE]
     x_in_model = colnames(X.d)
@@ -163,7 +164,7 @@ VP.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov = TRUE, grou
       lv.X <- object$lv.X.design
       # lv.X variances Separated only if quaratic = FALSE
       if ((object$num.lv.c + object$num.RR) > 0 & object$quadratic == FALSE) {
-        if(is.null(object$params$corsLvXcoef)){
+        if(is.null(object$params$corsLvXcoef) && !anyBars(object$lv.formula)){
         groupnamesF <- c(groupnamesF, paste("CLV:",labels(terms(object$lv.formula)), sep = ""))
         groupF <- c(groupF, attr(model.matrix(object$lv.formula, data = as.data.frame(object$lv.X)), "assign")[-1] + max(groupF,0))
         }else{
@@ -378,10 +379,31 @@ VP.gllvm <- function(object, group = NULL, groupnames=NULL, adj.cov = TRUE, grou
   # Species specific variance partitioning:
   PropExplainedVarSp <- t(LVpartit)/LtotV
   
-  if(object$family == "betaH"){
-    out <- list(PropExplainedVarSp=PropExplainedVarSp[1:(p/2),, drop=FALSE],PropExplainedVarHurdleSp=PropExplainedVarSp[-(1:(p/2)),, drop=FALSE], LtotV=LtotV, LVpartit=t(LVpartit), group = group, groupnames = groupnames, family = object$family)
+  if(any(object$family == "betaH")){
+    out <- list(PropExplainedVarSp=PropExplainedVarSp[1:(p-sum(object$family == "betaH")),, drop=FALSE],PropExplainedVarHurdleSp=PropExplainedVarSp[-(1:(p-sum(object$family == "betaH"))),, drop=FALSE], LtotV=LtotV, LVpartit=t(LVpartit), group = group, groupnames = groupnames, family = object$family)
   } else {
     out <- list(PropExplainedVarSp=PropExplainedVarSp, LtotV=LtotV, LVpartit=t(LVpartit), group = group, groupnames = groupnames, family = object$family)
+  }
+  
+  if(calcr2scaled){
+    r2s<- rep(NA, length(object$family))
+    if(any(object$family %in% c("binomial")) & all(object$Ntrials ==1)){
+      r2s[object$family %in% c("binomial")] <- goodnessOfFit(object = object, measure = "TjurR2", species = TRUE)$TjurR2[object$family %in% c("binomial")]
+    } 
+    if(any(object$family %in% c("gaussian", "tweedie", "gamma", "exponential", "beta", "orderedBeta"))){
+      r2s[object$family %in% c("gaussian", "tweedie", "gamma", "exponential", "beta", "orderedBeta")] <- goodnessOfFit(object = object, measure = "R2", species = TRUE)$R2[object$family %in% c("gaussian", "tweedie", "gamma", "exponential", "beta", "orderedBeta")]
+    } 
+    if(any(object$family %in% c("poisson","negative.binomial","binomial","ZIP", "ZINB", "ZIB", "ZNIB", "beta.binomial"))) {
+      r2s[object$family %in% c("poisson","negative.binomial","binomial","ZIP", "ZINB", "ZIB", "ZNIB", "beta.binomial")] <- goodnessOfFit(object = object, measure = "sR2", species = TRUE)$sR2[object$family %in% c("poisson","negative.binomial","binomial","ZIP", "ZINB", "ZIB", "ZNIB", "beta.binomial")]
+    }
+    if(any(object$family %in% "betaH")) {
+      pred <- predict(object, type = "response")
+      ycover<- object$y[,object$family %in% "betaH"]; ycover[ycover==0]<- NA;
+      r2s[object$family %in% "betaH"] <- goodnessOfFit(y = ycover, pred = pred[, (1:ncol(object$y))[object$family %in% "betaH"], drop=FALSE], measure = "R2", species = TRUE)$R2
+      out$r2Hspecies <- goodnessOfFit(y = (object$y[,object$family %in% "betaH"]>0)*1, pred = pred[, -(1:ncol(object$y)), drop=FALSE], measure = "TjurR2", species = TRUE)$TjurR2
+    }
+    out$r2scaledExplainedVarSp <- out$PropExplainedVarSp*r2s
+    out$r2species <- r2s
   }
   class(out) <- "VP.gllvm"
   return(out)
@@ -410,7 +432,7 @@ varPartitioning <- function(object, ...)
 #'@rdname VP.gllvm 
 print.VP.gllvm <- function (x, ...) {
   
-  if(x$family == "betaH"){
+  if(any(x$family == "betaH")){
     print.text <- data.frame(Effect = colnames(x$PropExplainedVarHurdleSp), "Mean explained variance" = paste0(format(round(colMeans(x$PropExplainedVarHurdleSp), digits = 3)*100, nsmall = 1), "%"))
   } else {
     print.text <- data.frame(Effect = colnames(x$PropExplainedVarSp), "Mean explained variance" = paste0(format(round(colMeans(x$PropExplainedVarSp), digits = 3)*100, nsmall = 1), "%"))

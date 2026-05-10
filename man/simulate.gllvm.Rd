@@ -5,7 +5,7 @@
 \alias{simulate}
 \title{Simulate data from gllvm fit}
 \usage{
-\method{simulate}{gllvm}(object, nsim = 1, seed = NULL, conditional = FALSE, ...)
+\method{simulate}{gllvm}(object, nsim = 1, seed = NULL, conditional = FALSE, newX = NULL, ...)
 }
 \arguments{
 \item{object}{an object of class 'gllvm'.}
@@ -15,6 +15,8 @@
 \item{seed}{an optional integer to set seed number, passed to set.seed. Defaults to a random seed number.}
 
 \item{conditional}{if \code{conditional = FALSE} simulates marginally over the latent variables.}
+
+\item{newX}{A new data frame of environmental variables. If omitted, the original matrix of environmental variables is used.}
 
 \item{...}{not used.}
 }

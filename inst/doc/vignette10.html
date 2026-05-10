@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Jenni Niku" />
+
+<meta name="date" content="2026-03-20" />
+
+<title>Assessing Convergence in gllvm models</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Assessing Convergence in gllvm models</h1>
+<h4 class="author">Jenni Niku</h4>
+<h4 class="date">2026-03-20</h4>
+
+
+
+<p>In this vignette, we demonstrate how to assess the convergence of a
+gllvm model. When fitting GLLVMs using gllvm, as well as with any method
+with any package, assessing convergence is essential to ensure reliable
+inference. The model need to be well converged so that the estimated
+parameter values are reliable and that the principles of Maximum
+Likelihood (ML) inference can be validly applied. We also show what
+steps can be taken if the initial model fails to converge.</p>
+<div id="how-convergence-is-assessed-in-maximum-likelihood-estimation" class="section level2">
+<h2>How Convergence Is Assessed in Maximum Likelihood Estimation</h2>
+<p>When fitting a generalized linear latent variable model (GLLVM) using
+maximum likelihood (ML) estimation, the optimization algorithm
+iteratively searches for parameter values that maximize the
+log-likelihood. Convergence refers to the point at which the algorithm
+stops because it has (ideally) located a stable maximum.</p>
+<p>In ML estimation, convergence is typically assessed using several
+criteria:</p>
+<ul>
+<li><p>Gradient conditions: At the optimum, the gradient of the
+log-likelihood with respect to the parameters should be close to zero.
+Large gradients indicate that the algorithm stopped before reaching a
+maximum.</p></li>
+<li><p>Hessian matrix: The Hessian matrix at the optimum should be
+negative definite, indicating that the algorithm found a local maximum
+rather than a saddle point. Non‑definite Hessians often signal
+incomplete convergence or identification problems.</p></li>
+<li><p>Parameter stability: Parameter estimates should be reasonable and
+not lie at theoretical boundaries (e.g., variance parameter =
+0).</p></li>
+<li><p>Iteration behavior: The log-likelihood should ideally increase
+smoothly and stabilize as iterations proceed. Irregular jumps or
+oscillation may be a sign of instability in the optimization process.
+This can happen when the likelihood surface is difficult (non‑convex or
+with sharp curvature, multimodality, flat), the gradient or Hessian is
+poorly behaved or the initial values are far from the optimum.</p></li>
+</ul>
+<p>Next we present some tools on how we can asses the convergence for
+gllvm models.</p>
+</div>
+<div id="assessing-convergence-for-a-gllvm" class="section level2">
+<h2>Assessing Convergence for a GLLVM</h2>
+<p>Below we demonstrate how to assess convergence using the gllvm
+package. Let’s first fit a model that we can demonstrate these
+things.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(gllvm)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="co"># Example dataset</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="fu">data</span>(beetle)</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>y<span class="ot">&lt;-</span>beetle<span class="sc">$</span>Y</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>X<span class="ot">&lt;-</span> beetle<span class="sc">$</span>X</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>X[,<span class="fu">unlist</span>(<span class="fu">lapply</span>(X, is.numeric))] <span class="ot">=</span> <span class="fu">scale</span>(X[,<span class="fu">unlist</span>(<span class="fu">lapply</span>(X, is.numeric))])</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>TR <span class="ot">&lt;-</span> beetle<span class="sc">$</span>TR</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>TR[,<span class="fu">unlist</span>(<span class="fu">lapply</span>(TR, is.numeric))] <span class="ot">=</span> <span class="fu">scale</span>(TR[,<span class="fu">unlist</span>(<span class="fu">lapply</span>(TR, is.numeric))])</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">gllvm</span>(<span class="at">y =</span> y,  <span class="at">X =</span> X, <span class="at">formula =</span> <span class="sc">~</span>Management, <span class="at">family =</span> <span class="st">&quot;negative.binomial&quot;</span>,  <span class="at">num.lv =</span> <span class="dv">2</span>, <span class="at">seed =</span> <span class="dv">123</span>)</span></code></pre></div>
+<p><strong>Gradient values</strong>: Near-zero values suggest
+convergence. Gradient function for the fitted model can be obtained with
+<code>fit$TMBfn$gr()</code>. Gradient values can be checked, for
+example, visually like below:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">c</span>(fit<span class="sc">$</span>TMBfn<span class="sc">$</span><span class="fu">gr</span>()))</span></code></pre></div>
+<div class="figure" style="text-align: center">
+<img role="img" aria-label="plot of chunk grad1" src="data:image/png;base64,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" alt="plot of chunk grad1" width="70%" />
+<p class="caption">
+plot of chunk grad1
+</p>
+</div>
+<p>From the figure we can see that all gradients are close to zero, now
+<span class="math inline">\(&lt;0.01\)</span> suggesting that model is
+converged.</p>
+<p><strong>Hessian matrix condition</strong>: Hessian <span class="math inline">\(H(log L(\hat{\boldsymbol \theta}))\)</span> for
+log likelihood should be negative definite so that <span class="math inline">\(log L\)</span> is a concave surface around <span class="math inline">\(\hat{\boldsymbol \theta}\)</span>. That is,
+negative hessian <span class="math inline">\(- H(log L(\hat{\boldsymbol
+\theta}))\)</span> should then be positive definite and invertible, so
+that standard errors can be computed reliably and variances are
+positive, as <span class="math inline">\(Cov(\hat{\boldsymbol \theta}) =
+\[- H(log L(\hat{\boldsymbol \theta}))\]^{-1}\)</span>. <strong>Note
+that, in gllvm we find the maximum by minimizing the negative
+log-likelihood so then things flip around and we straight get negative
+Hessian <span class="math inline">\(H(- log L(\hat{\boldsymbol \theta}))
+= - H(log L(\hat{\boldsymbol \theta}))\)</span>, which should be
+positive definite. Or alternatively, we need to multiply it with minus
+like below.</strong></p>
+<p>Let’s check concavity of likelihood with the Hessian</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="co"># If standard errors were calculated, negative hessian is</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="co"># already calculated and can be extracted, but for definiteness checks take minus to get Hessian:</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>H <span class="ot">&lt;-</span> <span class="sc">-</span> fit<span class="sc">$</span>Hess<span class="sc">$</span>Hess.full</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="co"># But if SEs not yet calculated, for method =&quot;VA&quot; and method =&quot;EVA&quot;:</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>H <span class="ot">&lt;-</span> <span class="sc">-</span> fit<span class="sc">$</span>TMBfn<span class="sc">$</span><span class="fu">he</span>(fit<span class="sc">$</span>TMBfn<span class="sc">$</span>par)</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co"># And if model is fitted with method = &quot;LA&quot;</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>H <span class="ot">&lt;-</span> <span class="sc">-</span> <span class="fu">optimHess</span>(fit<span class="sc">$</span>TMBfn<span class="sc">$</span>par, fit<span class="sc">$</span>TMBfn<span class="sc">$</span>fn, fit<span class="sc">$</span>TMBfn<span class="sc">$</span>gr)</span></code></pre></div>
+<p>There are number of ways to check for negative definiteness. Some
+ways are more robust than others but here we present a couple of ways.
+In numerical optimization process, small numerical inaccuracies in
+Hessian due rounding errors, small non‑symmetries, or near‑singularity,
+are common so we can use a couple of different ways like eigenvalues or
+cholesky factorization as a test for negative definiteness.</p>
+<p>First, we can check if matrix is negative definite by seeing if all
+eigenvalues are negative:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># Symmetrize H1 explicitly, as even  tiny asymmetries can cause definiteness tests to fail:</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>Hsym <span class="ot">&lt;-</span> <span class="fl">0.5</span> <span class="sc">*</span> (H <span class="sc">+</span> <span class="fu">t</span>(H))</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="co"># Calculate eigenvalues and check sign:</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>ev <span class="ot">&lt;-</span> <span class="fu">eigen</span>(Hsym, <span class="at">symmetric =</span> <span class="cn">TRUE</span>)<span class="sc">$</span>values</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="fu">all</span>(ev <span class="sc">&lt;</span> <span class="dv">0</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="fu">max</span>(ev)</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt; [1] -0.003032225</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="fu">plot</span>(ev)</span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co"># All eigenvalues are negative -&gt; Hessian is negative definite</span></span></code></pre></div>
+<div class="figure" style="text-align: center">
+<img role="img" aria-label="plot of chunk eigencheck" src="data:image/png;base64,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" alt="plot of chunk eigencheck" width="70%" />
+<p class="caption">
+plot of chunk eigencheck
+</p>
+</div>
+<p>One numerically stable check is to check definiteness by attempting
+to apply cholesky factorization to negative Hessian, which should
+succeed when Hessian is negative definite/ negative Hessian is positive
+definite.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">tryCatch</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  CHf <span class="ot">&lt;-</span> <span class="fu">chol</span>(<span class="sc">-</span>Hsym),</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="at">error =</span> <span class="cf">function</span>(e) <span class="st">&quot;Not negative definite&quot;</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>)</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co"># Cholesky factorization succeeded so -H is positive definite and thus Hessian is negative definite</span></span></code></pre></div>
+<p>If the Hessian is almost negative definite, but not exactly only due
+rounding errors and other numerical reasons, one can evaluate it with
+function <code>nearPD</code> from <em>Matrix</em> package to find the
+closest positive semidefinite matrix for minus Hessian and then compare
+it.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">library</span>(Matrix)</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="co"># Find nearest positive semidefinite matrix for -Hsym:</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>nH_corrected <span class="ot">&lt;-</span> <span class="fu">nearPD</span>(<span class="sc">-</span>Hsym)<span class="sc">$</span>mat</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="fu">range</span>(<span class="sc">-</span>Hsym <span class="sc">-</span> nH_corrected)</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co"># Hessian is negative definite and likelihood is concave</span></span></code></pre></div>
+<p>On default, gllvm calculates standard errors, and checks if Hessian
+is invertible. If standard error calculation does not succeed, it
+indicates that there is a problem.</p>
+<p>In addition to these checks, we also encourage to check that
+parameter estimates and standard errors seems reasonable. For example,
+theoretically extreme parameter values and standard errors of zero may
+be an indication of poor model fit.</p>
+<p>Below we take a look at the estimated parameters and standard errors
+for the fitted model <em>fit</em>. Parameters look reasonable. There are
+few coefficients that seem a bit extreme, which can be due low number of
+observations of some species in this data. Also, standard errors look
+reasonable (note that upper diagonal of theta is fixed, that is the
+reason for exact zeros in their sd’s).</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>fit<span class="sc">$</span>params</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="co">#&gt; $theta</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="co">#&gt;                   LV1         LV2</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co">#&gt; agonfuli  1.000000000  0.00000000</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="co">#&gt; agonmuel  0.837767809  1.00000000</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt; amaraene  0.461520371 -1.28403440</span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt; amarapri  0.078103590  2.50729849</span></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt; amarauli  0.181730803  1.42494621</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt; amarbifo  0.716034252  3.28828304</span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt; amarcomm  0.278302702  1.77946330</span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="co">#&gt; amareury  0.147034359  1.92333736</span></span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a><span class="co">#&gt; amarfami -0.121039949  0.90831527</span></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a><span class="co">#&gt; amarluni  0.002883691  1.61929358</span></span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a><span class="co">#&gt; amarpleb  0.770673851  2.15960961</span></span>
+<span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a><span class="co">#&gt; anchdors -0.031944657  1.17663470</span></span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a><span class="co">#&gt; asapflav  0.705425516  0.72357509</span></span>
+<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a><span class="co">#&gt; bembaene  1.575409055  1.19604363</span></span>
+<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a><span class="co">#&gt; bembbrux  0.141876329 -2.20545819</span></span>
+<span id="cb8-19"><a href="#cb8-19" tabindex="-1"></a><span class="co">#&gt; bembgutt  0.621979991  0.40756937</span></span>
+<span id="cb8-20"><a href="#cb8-20" tabindex="-1"></a><span class="co">#&gt; bemblamp  0.245578965  0.37753683</span></span>
+<span id="cb8-21"><a href="#cb8-21" tabindex="-1"></a><span class="co">#&gt; bembmann  0.726773451  0.02570166</span></span>
+<span id="cb8-22"><a href="#cb8-22" tabindex="-1"></a><span class="co">#&gt; bembobtu  0.172296874  3.15882345</span></span>
+<span id="cb8-23"><a href="#cb8-23" tabindex="-1"></a><span class="co">#&gt; bembtetr  0.577069524 -0.68359216</span></span>
+<span id="cb8-24"><a href="#cb8-24" tabindex="-1"></a><span class="co">#&gt; bradharp  0.191529366 -0.38062728</span></span>
+<span id="cb8-25"><a href="#cb8-25" tabindex="-1"></a><span class="co">#&gt; bradrufi -0.567384489 -0.86966837</span></span>
+<span id="cb8-26"><a href="#cb8-26" tabindex="-1"></a><span class="co">#&gt; calafusc  0.144091494  3.33288249</span></span>
+<span id="cb8-27"><a href="#cb8-27" tabindex="-1"></a><span class="co">#&gt; calamela -0.214518937  0.65156832</span></span>
+<span id="cb8-28"><a href="#cb8-28" tabindex="-1"></a><span class="co">#&gt; calamicr -0.480248524 -0.11038005</span></span>
+<span id="cb8-29"><a href="#cb8-29" tabindex="-1"></a><span class="co">#&gt; caraarve -0.713948459  1.58010693</span></span>
+<span id="cb8-30"><a href="#cb8-30" tabindex="-1"></a><span class="co">#&gt; caraglab -0.626429386 -0.46623647</span></span>
+<span id="cb8-31"><a href="#cb8-31" tabindex="-1"></a><span class="co">#&gt; caragran -0.097448255 -0.01836506</span></span>
+<span id="cb8-32"><a href="#cb8-32" tabindex="-1"></a><span class="co">#&gt; caranemo -0.359903625  2.85922859</span></span>
+<span id="cb8-33"><a href="#cb8-33" tabindex="-1"></a><span class="co">#&gt; caranite -0.627975026  1.31793747</span></span>
+<span id="cb8-34"><a href="#cb8-34" tabindex="-1"></a><span class="co">#&gt; caraprob -0.605394774  0.64526095</span></span>
+<span id="cb8-35"><a href="#cb8-35" tabindex="-1"></a><span class="co">#&gt; caraviol -0.342411182  0.29384530</span></span>
+<span id="cb8-36"><a href="#cb8-36" tabindex="-1"></a><span class="co">#&gt; clivfoss  0.452334244  0.30322183</span></span>
+<span id="cb8-37"><a href="#cb8-37" tabindex="-1"></a><span class="co">#&gt; cychcara  0.114943625  0.81193647</span></span>
+<span id="cb8-38"><a href="#cb8-38" tabindex="-1"></a><span class="co">#&gt; dyscglob  0.543391909 -1.66057583</span></span>
+<span id="cb8-39"><a href="#cb8-39" tabindex="-1"></a><span class="co">#&gt; elapcupr  0.750205614 -0.87840418</span></span>
+<span id="cb8-40"><a href="#cb8-40" tabindex="-1"></a><span class="co">#&gt; elapulig  0.530645224 -1.79632725</span></span>
+<span id="cb8-41"><a href="#cb8-41" tabindex="-1"></a><span class="co">#&gt; harpaffi -0.107102982  0.31762279</span></span>
+<span id="cb8-42"><a href="#cb8-42" tabindex="-1"></a><span class="co">#&gt; harplatu -0.425130389  1.42817642</span></span>
+<span id="cb8-43"><a href="#cb8-43" tabindex="-1"></a><span class="co">#&gt; harprufi  0.253055048  1.74962991</span></span>
+<span id="cb8-44"><a href="#cb8-44" tabindex="-1"></a><span class="co">#&gt; leisterm -0.074810741  0.04680055</span></span>
+<span id="cb8-45"><a href="#cb8-45" tabindex="-1"></a><span class="co">#&gt; loripili  0.475171678  0.34968156</span></span>
+<span id="cb8-46"><a href="#cb8-46" tabindex="-1"></a><span class="co">#&gt; nebrbrev  0.772912144  1.82319018</span></span>
+<span id="cb8-47"><a href="#cb8-47" tabindex="-1"></a><span class="co">#&gt; nebrsali -0.577595596  0.91388581</span></span>
+<span id="cb8-48"><a href="#cb8-48" tabindex="-1"></a><span class="co">#&gt; notiaqua -0.648224660  0.80928218</span></span>
+<span id="cb8-49"><a href="#cb8-49" tabindex="-1"></a><span class="co">#&gt; notibigu -0.242528279  1.09654234</span></span>
+<span id="cb8-50"><a href="#cb8-50" tabindex="-1"></a><span class="co">#&gt; notigerm -0.625992869  0.32927085</span></span>
+<span id="cb8-51"><a href="#cb8-51" tabindex="-1"></a><span class="co">#&gt; notipalu -0.166903862  1.65042451</span></span>
+<span id="cb8-52"><a href="#cb8-52" tabindex="-1"></a><span class="co">#&gt; notisubs  0.581380447  2.95748497</span></span>
+<span id="cb8-53"><a href="#cb8-53" tabindex="-1"></a><span class="co">#&gt; olisrotu -0.533203128  0.76391253</span></span>
+<span id="cb8-54"><a href="#cb8-54" tabindex="-1"></a><span class="co">#&gt; patrassi -0.197514593  1.34509973</span></span>
+<span id="cb8-55"><a href="#cb8-55" tabindex="-1"></a><span class="co">#&gt; patratro  1.558888457  2.83128458</span></span>
+<span id="cb8-56"><a href="#cb8-56" tabindex="-1"></a><span class="co">#&gt; poecvers -0.192959022  0.07267955</span></span>
+<span id="cb8-57"><a href="#cb8-57" tabindex="-1"></a><span class="co">#&gt; pteradst -1.001582894  0.95929776</span></span>
+<span id="cb8-58"><a href="#cb8-58" tabindex="-1"></a><span class="co">#&gt; pterdili  0.057125952  0.47637736</span></span>
+<span id="cb8-59"><a href="#cb8-59" tabindex="-1"></a><span class="co">#&gt; ptermadi -0.355033129  3.30668790</span></span>
+<span id="cb8-60"><a href="#cb8-60" tabindex="-1"></a><span class="co">#&gt; ptermela  0.554313568  1.05429302</span></span>
+<span id="cb8-61"><a href="#cb8-61" tabindex="-1"></a><span class="co">#&gt; pternige  0.228400382  1.31080262</span></span>
+<span id="cb8-62"><a href="#cb8-62" tabindex="-1"></a><span class="co">#&gt; pternigr  0.656075177  0.22144698</span></span>
+<span id="cb8-63"><a href="#cb8-63" tabindex="-1"></a><span class="co">#&gt; pterrhae -0.011308295 -0.22917531</span></span>
+<span id="cb8-64"><a href="#cb8-64" tabindex="-1"></a><span class="co">#&gt; pterstre  0.924358441 -0.03019306</span></span>
+<span id="cb8-65"><a href="#cb8-65" tabindex="-1"></a><span class="co">#&gt; ptervern  0.849231600 -0.63850121</span></span>
+<span id="cb8-66"><a href="#cb8-66" tabindex="-1"></a><span class="co">#&gt; stompumi  0.460615090  2.91006622</span></span>
+<span id="cb8-67"><a href="#cb8-67" tabindex="-1"></a><span class="co">#&gt; synuviva  0.280867819  2.35282600</span></span>
+<span id="cb8-68"><a href="#cb8-68" tabindex="-1"></a><span class="co">#&gt; trecmicr  0.979401881 -0.89955321</span></span>
+<span id="cb8-69"><a href="#cb8-69" tabindex="-1"></a><span class="co">#&gt; trecobtu  0.166596963 -1.65141079</span></span>
+<span id="cb8-70"><a href="#cb8-70" tabindex="-1"></a><span class="co">#&gt; trecquad  0.309475759  0.61706911</span></span>
+<span id="cb8-71"><a href="#cb8-71" tabindex="-1"></a><span class="co">#&gt; trecrube  0.792462957 -0.14490312</span></span>
+<span id="cb8-72"><a href="#cb8-72" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-73"><a href="#cb8-73" tabindex="-1"></a><span class="co">#&gt; $sigma.lv</span></span>
+<span id="cb8-74"><a href="#cb8-74" tabindex="-1"></a><span class="co">#&gt;       LV1       LV2 </span></span>
+<span id="cb8-75"><a href="#cb8-75" tabindex="-1"></a><span class="co">#&gt; 2.0729210 0.7131871 </span></span>
+<span id="cb8-76"><a href="#cb8-76" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-77"><a href="#cb8-77" tabindex="-1"></a><span class="co">#&gt; $beta0</span></span>
+<span id="cb8-78"><a href="#cb8-78" tabindex="-1"></a><span class="co">#&gt;    agonfuli    agonmuel    amaraene    amarapri    amarauli    amarbifo </span></span>
+<span id="cb8-79"><a href="#cb8-79" tabindex="-1"></a><span class="co">#&gt; -2.91073202  1.58112716 -2.07439516 -1.67963948 -1.43553497 -1.73012130 </span></span>
+<span id="cb8-80"><a href="#cb8-80" tabindex="-1"></a><span class="co">#&gt;    amarcomm    amareury    amarfami    amarluni    amarpleb    anchdors </span></span>
+<span id="cb8-81"><a href="#cb8-81" tabindex="-1"></a><span class="co">#&gt;  0.08970574 -3.16706102  0.05743325 -0.46608313  2.07730443 -0.14664634 </span></span>
+<span id="cb8-82"><a href="#cb8-82" tabindex="-1"></a><span class="co">#&gt;    asapflav    bembaene    bembbrux    bembgutt    bemblamp    bembmann </span></span>
+<span id="cb8-83"><a href="#cb8-83" tabindex="-1"></a><span class="co">#&gt; -3.70767302 -0.33260108 -2.96470608  1.70209373  2.12128204 -2.08629120 </span></span>
+<span id="cb8-84"><a href="#cb8-84" tabindex="-1"></a><span class="co">#&gt;    bembobtu    bembtetr    bradharp    bradrufi    calafusc    calamela </span></span>
+<span id="cb8-85"><a href="#cb8-85" tabindex="-1"></a><span class="co">#&gt; -2.40249604 -1.85126302 -0.89679161 -3.49478242  3.58726959  3.52645228 </span></span>
+<span id="cb8-86"><a href="#cb8-86" tabindex="-1"></a><span class="co">#&gt;    calamicr    caraarve    caraglab    caragran    caranemo    caranite </span></span>
+<span id="cb8-87"><a href="#cb8-87" tabindex="-1"></a><span class="co">#&gt; -2.91022436 -4.01549888 -3.68720013 -3.42244083 -1.41559816 -8.04594125 </span></span>
+<span id="cb8-88"><a href="#cb8-88" tabindex="-1"></a><span class="co">#&gt;    caraprob    caraviol    clivfoss    cychcara    dyscglob    elapcupr </span></span>
+<span id="cb8-89"><a href="#cb8-89" tabindex="-1"></a><span class="co">#&gt; -0.41666795 -0.80609887  2.67763171 -2.40658536 -3.23299718 -2.53174440 </span></span>
+<span id="cb8-90"><a href="#cb8-90" tabindex="-1"></a><span class="co">#&gt;    elapulig    harpaffi    harplatu    harprufi    leisterm    loripili </span></span>
+<span id="cb8-91"><a href="#cb8-91" tabindex="-1"></a><span class="co">#&gt; -7.75271612 -2.36776491 -2.00120806 -1.10011343 -0.89263253  3.24998845 </span></span>
+<span id="cb8-92"><a href="#cb8-92" tabindex="-1"></a><span class="co">#&gt;    nebrbrev    nebrsali    notiaqua    notibigu    notigerm    notipalu </span></span>
+<span id="cb8-93"><a href="#cb8-93" tabindex="-1"></a><span class="co">#&gt;  3.57141570  0.93381837 -1.24751985  1.33004510 -3.88623566 -6.92178651 </span></span>
+<span id="cb8-94"><a href="#cb8-94" tabindex="-1"></a><span class="co">#&gt;    notisubs    olisrotu    patrassi    patratro    poecvers    pteradst </span></span>
+<span id="cb8-95"><a href="#cb8-95" tabindex="-1"></a><span class="co">#&gt; -0.83080602 -2.59339386 -3.21741489 -2.40963672  0.23113332 -2.40962605 </span></span>
+<span id="cb8-96"><a href="#cb8-96" tabindex="-1"></a><span class="co">#&gt;    pterdili    ptermadi    ptermela    pternige    pternigr    pterrhae </span></span>
+<span id="cb8-97"><a href="#cb8-97" tabindex="-1"></a><span class="co">#&gt; -0.48400125  3.04437825  3.19084557  3.06431646  0.30255616 -0.66058392 </span></span>
+<span id="cb8-98"><a href="#cb8-98" tabindex="-1"></a><span class="co">#&gt;    pterstre    ptervern    stompumi    synuviva    trecmicr    trecobtu </span></span>
+<span id="cb8-99"><a href="#cb8-99" tabindex="-1"></a><span class="co">#&gt;  1.04373473 -1.27602074 -2.57674684  0.04435503 -1.70126603  1.64619177 </span></span>
+<span id="cb8-100"><a href="#cb8-100" tabindex="-1"></a><span class="co">#&gt;    trecquad    trecrube </span></span>
+<span id="cb8-101"><a href="#cb8-101" tabindex="-1"></a><span class="co">#&gt;  2.49510657 -3.82404713 </span></span>
+<span id="cb8-102"><a href="#cb8-102" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-103"><a href="#cb8-103" tabindex="-1"></a><span class="co">#&gt; $Xcoef</span></span>
+<span id="cb8-104"><a href="#cb8-104" tabindex="-1"></a><span class="co">#&gt;           Management</span></span>
+<span id="cb8-105"><a href="#cb8-105" tabindex="-1"></a><span class="co">#&gt; agonfuli -2.43731936</span></span>
+<span id="cb8-106"><a href="#cb8-106" tabindex="-1"></a><span class="co">#&gt; agonmuel  1.64443222</span></span>
+<span id="cb8-107"><a href="#cb8-107" tabindex="-1"></a><span class="co">#&gt; amaraene  0.90065500</span></span>
+<span id="cb8-108"><a href="#cb8-108" tabindex="-1"></a><span class="co">#&gt; amarapri  2.43202829</span></span>
+<span id="cb8-109"><a href="#cb8-109" tabindex="-1"></a><span class="co">#&gt; amarauli -0.14794434</span></span>
+<span id="cb8-110"><a href="#cb8-110" tabindex="-1"></a><span class="co">#&gt; amarbifo  1.96522311</span></span>
+<span id="cb8-111"><a href="#cb8-111" tabindex="-1"></a><span class="co">#&gt; amarcomm -0.59375431</span></span>
+<span id="cb8-112"><a href="#cb8-112" tabindex="-1"></a><span class="co">#&gt; amareury  1.45758361</span></span>
+<span id="cb8-113"><a href="#cb8-113" tabindex="-1"></a><span class="co">#&gt; amarfami  1.07782921</span></span>
+<span id="cb8-114"><a href="#cb8-114" tabindex="-1"></a><span class="co">#&gt; amarluni -0.52583279</span></span>
+<span id="cb8-115"><a href="#cb8-115" tabindex="-1"></a><span class="co">#&gt; amarpleb  1.71406938</span></span>
+<span id="cb8-116"><a href="#cb8-116" tabindex="-1"></a><span class="co">#&gt; anchdors  2.81110126</span></span>
+<span id="cb8-117"><a href="#cb8-117" tabindex="-1"></a><span class="co">#&gt; asapflav  0.74755647</span></span>
+<span id="cb8-118"><a href="#cb8-118" tabindex="-1"></a><span class="co">#&gt; bembaene  3.65701131</span></span>
+<span id="cb8-119"><a href="#cb8-119" tabindex="-1"></a><span class="co">#&gt; bembbrux  2.23376557</span></span>
+<span id="cb8-120"><a href="#cb8-120" tabindex="-1"></a><span class="co">#&gt; bembgutt  1.74563985</span></span>
+<span id="cb8-121"><a href="#cb8-121" tabindex="-1"></a><span class="co">#&gt; bemblamp  1.30498873</span></span>
+<span id="cb8-122"><a href="#cb8-122" tabindex="-1"></a><span class="co">#&gt; bembmann -0.02356087</span></span>
+<span id="cb8-123"><a href="#cb8-123" tabindex="-1"></a><span class="co">#&gt; bembobtu  3.36192285</span></span>
+<span id="cb8-124"><a href="#cb8-124" tabindex="-1"></a><span class="co">#&gt; bembtetr  3.48605441</span></span>
+<span id="cb8-125"><a href="#cb8-125" tabindex="-1"></a><span class="co">#&gt; bradharp -0.92032005</span></span>
+<span id="cb8-126"><a href="#cb8-126" tabindex="-1"></a><span class="co">#&gt; bradrufi -0.73069630</span></span>
+<span id="cb8-127"><a href="#cb8-127" tabindex="-1"></a><span class="co">#&gt; calafusc  1.35864169</span></span>
+<span id="cb8-128"><a href="#cb8-128" tabindex="-1"></a><span class="co">#&gt; calamela  0.96035027</span></span>
+<span id="cb8-129"><a href="#cb8-129" tabindex="-1"></a><span class="co">#&gt; calamicr -3.49218999</span></span>
+<span id="cb8-130"><a href="#cb8-130" tabindex="-1"></a><span class="co">#&gt; caraarve -3.45182204</span></span>
+<span id="cb8-131"><a href="#cb8-131" tabindex="-1"></a><span class="co">#&gt; caraglab -2.39071026</span></span>
+<span id="cb8-132"><a href="#cb8-132" tabindex="-1"></a><span class="co">#&gt; caragran -3.86123107</span></span>
+<span id="cb8-133"><a href="#cb8-133" tabindex="-1"></a><span class="co">#&gt; caranemo  0.32017458</span></span>
+<span id="cb8-134"><a href="#cb8-134" tabindex="-1"></a><span class="co">#&gt; caranite -6.41717862</span></span>
+<span id="cb8-135"><a href="#cb8-135" tabindex="-1"></a><span class="co">#&gt; caraprob -2.35664566</span></span>
+<span id="cb8-136"><a href="#cb8-136" tabindex="-1"></a><span class="co">#&gt; caraviol -1.80873999</span></span>
+<span id="cb8-137"><a href="#cb8-137" tabindex="-1"></a><span class="co">#&gt; clivfoss  1.02224294</span></span>
+<span id="cb8-138"><a href="#cb8-138" tabindex="-1"></a><span class="co">#&gt; cychcara -2.55055458</span></span>
+<span id="cb8-139"><a href="#cb8-139" tabindex="-1"></a><span class="co">#&gt; dyscglob -3.28912305</span></span>
+<span id="cb8-140"><a href="#cb8-140" tabindex="-1"></a><span class="co">#&gt; elapcupr -0.96332973</span></span>
+<span id="cb8-141"><a href="#cb8-141" tabindex="-1"></a><span class="co">#&gt; elapulig -5.68035166</span></span>
+<span id="cb8-142"><a href="#cb8-142" tabindex="-1"></a><span class="co">#&gt; harpaffi  0.83431319</span></span>
+<span id="cb8-143"><a href="#cb8-143" tabindex="-1"></a><span class="co">#&gt; harplatu -2.00988924</span></span>
+<span id="cb8-144"><a href="#cb8-144" tabindex="-1"></a><span class="co">#&gt; harprufi  2.12116557</span></span>
+<span id="cb8-145"><a href="#cb8-145" tabindex="-1"></a><span class="co">#&gt; leisterm -2.21113138</span></span>
+<span id="cb8-146"><a href="#cb8-146" tabindex="-1"></a><span class="co">#&gt; loripili  0.67878804</span></span>
+<span id="cb8-147"><a href="#cb8-147" tabindex="-1"></a><span class="co">#&gt; nebrbrev  1.36536418</span></span>
+<span id="cb8-148"><a href="#cb8-148" tabindex="-1"></a><span class="co">#&gt; nebrsali -1.34551499</span></span>
+<span id="cb8-149"><a href="#cb8-149" tabindex="-1"></a><span class="co">#&gt; notiaqua -1.56634130</span></span>
+<span id="cb8-150"><a href="#cb8-150" tabindex="-1"></a><span class="co">#&gt; notibigu  0.40811840</span></span>
+<span id="cb8-151"><a href="#cb8-151" tabindex="-1"></a><span class="co">#&gt; notigerm -1.98757464</span></span>
+<span id="cb8-152"><a href="#cb8-152" tabindex="-1"></a><span class="co">#&gt; notipalu -4.37055372</span></span>
+<span id="cb8-153"><a href="#cb8-153" tabindex="-1"></a><span class="co">#&gt; notisubs  1.28342071</span></span>
+<span id="cb8-154"><a href="#cb8-154" tabindex="-1"></a><span class="co">#&gt; olisrotu -0.48989968</span></span>
+<span id="cb8-155"><a href="#cb8-155" tabindex="-1"></a><span class="co">#&gt; patrassi -4.98435964</span></span>
+<span id="cb8-156"><a href="#cb8-156" tabindex="-1"></a><span class="co">#&gt; patratro  1.23495587</span></span>
+<span id="cb8-157"><a href="#cb8-157" tabindex="-1"></a><span class="co">#&gt; poecvers -1.51453820</span></span>
+<span id="cb8-158"><a href="#cb8-158" tabindex="-1"></a><span class="co">#&gt; pteradst -1.49724554</span></span>
+<span id="cb8-159"><a href="#cb8-159" tabindex="-1"></a><span class="co">#&gt; pterdili -2.43306442</span></span>
+<span id="cb8-160"><a href="#cb8-160" tabindex="-1"></a><span class="co">#&gt; ptermadi -0.37431865</span></span>
+<span id="cb8-161"><a href="#cb8-161" tabindex="-1"></a><span class="co">#&gt; ptermela  2.00555529</span></span>
+<span id="cb8-162"><a href="#cb8-162" tabindex="-1"></a><span class="co">#&gt; pternige  0.61911357</span></span>
+<span id="cb8-163"><a href="#cb8-163" tabindex="-1"></a><span class="co">#&gt; pternigr -0.72646922</span></span>
+<span id="cb8-164"><a href="#cb8-164" tabindex="-1"></a><span class="co">#&gt; pterrhae -3.05794923</span></span>
+<span id="cb8-165"><a href="#cb8-165" tabindex="-1"></a><span class="co">#&gt; pterstre  0.26197204</span></span>
+<span id="cb8-166"><a href="#cb8-166" tabindex="-1"></a><span class="co">#&gt; ptervern  0.15484745</span></span>
+<span id="cb8-167"><a href="#cb8-167" tabindex="-1"></a><span class="co">#&gt; stompumi  1.33348458</span></span>
+<span id="cb8-168"><a href="#cb8-168" tabindex="-1"></a><span class="co">#&gt; synuviva  1.59550154</span></span>
+<span id="cb8-169"><a href="#cb8-169" tabindex="-1"></a><span class="co">#&gt; trecmicr  1.48983921</span></span>
+<span id="cb8-170"><a href="#cb8-170" tabindex="-1"></a><span class="co">#&gt; trecobtu -0.40960327</span></span>
+<span id="cb8-171"><a href="#cb8-171" tabindex="-1"></a><span class="co">#&gt; trecquad  2.68172282</span></span>
+<span id="cb8-172"><a href="#cb8-172" tabindex="-1"></a><span class="co">#&gt; trecrube -0.59971827</span></span>
+<span id="cb8-173"><a href="#cb8-173" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-174"><a href="#cb8-174" tabindex="-1"></a><span class="co">#&gt; $inv.phi</span></span>
+<span id="cb8-175"><a href="#cb8-175" tabindex="-1"></a><span class="co">#&gt;   agonfuli   agonmuel   amaraene   amarapri   amarauli   amarbifo   amarcomm </span></span>
+<span id="cb8-176"><a href="#cb8-176" tabindex="-1"></a><span class="co">#&gt; 0.07961679 0.48524148 0.10686970 0.51439659 0.05394490 0.14244615 0.43898903 </span></span>
+<span id="cb8-177"><a href="#cb8-177" tabindex="-1"></a><span class="co">#&gt;   amareury   amarfami   amarluni   amarpleb   anchdors   asapflav   bembaene </span></span>
+<span id="cb8-178"><a href="#cb8-178" tabindex="-1"></a><span class="co">#&gt; 0.28759639 0.43164789 0.25655062 0.46344707 0.53159377 0.40347207 0.12581791 </span></span>
+<span id="cb8-179"><a href="#cb8-179" tabindex="-1"></a><span class="co">#&gt;   bembbrux   bembgutt   bemblamp   bembmann   bembobtu   bembtetr   bradharp </span></span>
+<span id="cb8-180"><a href="#cb8-180" tabindex="-1"></a><span class="co">#&gt; 0.11894098 0.31884436 0.24946745 0.03530924 0.07694324 0.31186033 0.10844062 </span></span>
+<span id="cb8-181"><a href="#cb8-181" tabindex="-1"></a><span class="co">#&gt;   bradrufi   calafusc   calamela   calamicr   caraarve   caraglab   caragran </span></span>
+<span id="cb8-182"><a href="#cb8-182" tabindex="-1"></a><span class="co">#&gt; 0.50165987 0.14115254 0.18420272 0.09709385 0.23345485 0.69887227 0.11265257 </span></span>
+<span id="cb8-183"><a href="#cb8-183" tabindex="-1"></a><span class="co">#&gt;   caranemo   caranite   caraprob   caraviol   clivfoss   cychcara   dyscglob </span></span>
+<span id="cb8-184"><a href="#cb8-184" tabindex="-1"></a><span class="co">#&gt; 0.06580549 0.10623581 0.63418710 0.24016392 0.69219547 0.27109900 0.04552533 </span></span>
+<span id="cb8-185"><a href="#cb8-185" tabindex="-1"></a><span class="co">#&gt;   elapcupr   elapulig   harpaffi   harplatu   harprufi   leisterm   loripili </span></span>
+<span id="cb8-186"><a href="#cb8-186" tabindex="-1"></a><span class="co">#&gt; 0.13297943 0.11178892 0.46558267 0.39283339 0.30213901 0.11923631 0.94302491 </span></span>
+<span id="cb8-187"><a href="#cb8-187" tabindex="-1"></a><span class="co">#&gt;   nebrbrev   nebrsali   notiaqua   notibigu   notigerm   notipalu   notisubs </span></span>
+<span id="cb8-188"><a href="#cb8-188" tabindex="-1"></a><span class="co">#&gt; 0.92102198 0.16100455 0.36770102 0.60749524 0.30358476 0.31078514 0.19620504 </span></span>
+<span id="cb8-189"><a href="#cb8-189" tabindex="-1"></a><span class="co">#&gt;   olisrotu   patrassi   patratro   poecvers   pteradst   pterdili   ptermadi </span></span>
+<span id="cb8-190"><a href="#cb8-190" tabindex="-1"></a><span class="co">#&gt; 0.10935610 0.23862073 0.09761954 0.04934841 0.22127126 0.17938607 0.38606473 </span></span>
+<span id="cb8-191"><a href="#cb8-191" tabindex="-1"></a><span class="co">#&gt;   ptermela   pternige   pternigr   pterrhae   pterstre   ptervern   stompumi </span></span>
+<span id="cb8-192"><a href="#cb8-192" tabindex="-1"></a><span class="co">#&gt; 0.22204844 0.31309505 0.26722119 0.25676952 0.49561601 0.32747064 0.31645909 </span></span>
+<span id="cb8-193"><a href="#cb8-193" tabindex="-1"></a><span class="co">#&gt;   synuviva   trecmicr   trecobtu   trecquad   trecrube </span></span>
+<span id="cb8-194"><a href="#cb8-194" tabindex="-1"></a><span class="co">#&gt; 0.40391601 0.33390763 0.10426620 0.68306486 0.21368271 </span></span>
+<span id="cb8-195"><a href="#cb8-195" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-196"><a href="#cb8-196" tabindex="-1"></a><span class="co">#&gt; $phi</span></span>
+<span id="cb8-197"><a href="#cb8-197" tabindex="-1"></a><span class="co">#&gt;  agonfuli  agonmuel  amaraene  amarapri  amarauli  amarbifo  amarcomm  amareury </span></span>
+<span id="cb8-198"><a href="#cb8-198" tabindex="-1"></a><span class="co">#&gt; 12.560164  2.060830  9.357189  1.944025 18.537433  7.020197  2.277961  3.477095 </span></span>
+<span id="cb8-199"><a href="#cb8-199" tabindex="-1"></a><span class="co">#&gt;  amarfami  amarluni  amarpleb  anchdors  asapflav  bembaene  bembbrux  bembgutt </span></span>
+<span id="cb8-200"><a href="#cb8-200" tabindex="-1"></a><span class="co">#&gt;  2.316703  3.897866  2.157744  1.881136  2.478486  7.947994  8.407531  3.136326 </span></span>
+<span id="cb8-201"><a href="#cb8-201" tabindex="-1"></a><span class="co">#&gt;  bemblamp  bembmann  bembobtu  bembtetr  bradharp  bradrufi  calafusc  calamela </span></span>
+<span id="cb8-202"><a href="#cb8-202" tabindex="-1"></a><span class="co">#&gt;  4.008539 28.321195 12.996593  3.206564  9.221636  1.993383  7.084534  5.428802 </span></span>
+<span id="cb8-203"><a href="#cb8-203" tabindex="-1"></a><span class="co">#&gt;  calamicr  caraarve  caraglab  caragran  caranemo  caranite  caraprob  caraviol </span></span>
+<span id="cb8-204"><a href="#cb8-204" tabindex="-1"></a><span class="co">#&gt; 10.299313  4.283484  1.430877  8.876850 15.196301  9.413022  1.576822  4.163823 </span></span>
+<span id="cb8-205"><a href="#cb8-205" tabindex="-1"></a><span class="co">#&gt;  clivfoss  cychcara  dyscglob  elapcupr  elapulig  harpaffi  harplatu  harprufi </span></span>
+<span id="cb8-206"><a href="#cb8-206" tabindex="-1"></a><span class="co">#&gt;  1.444679  3.688689 21.965795  7.519960  8.945430  2.147846  2.545608  3.309735 </span></span>
+<span id="cb8-207"><a href="#cb8-207" tabindex="-1"></a><span class="co">#&gt;  leisterm  loripili  nebrbrev  nebrsali  notiaqua  notibigu  notigerm  notipalu </span></span>
+<span id="cb8-208"><a href="#cb8-208" tabindex="-1"></a><span class="co">#&gt;  8.386707  1.060417  1.085750  6.211004  2.719601  1.646103  3.293973  3.217657 </span></span>
+<span id="cb8-209"><a href="#cb8-209" tabindex="-1"></a><span class="co">#&gt;  notisubs  olisrotu  patrassi  patratro  poecvers  pteradst  pterdili  ptermadi </span></span>
+<span id="cb8-210"><a href="#cb8-210" tabindex="-1"></a><span class="co">#&gt;  5.096709  9.144438  4.190751 10.243851 20.264079  4.519340  5.574569  2.590239 </span></span>
+<span id="cb8-211"><a href="#cb8-211" tabindex="-1"></a><span class="co">#&gt;  ptermela  pternige  pternigr  pterrhae  pterstre  ptervern  stompumi  synuviva </span></span>
+<span id="cb8-212"><a href="#cb8-212" tabindex="-1"></a><span class="co">#&gt;  4.503522  3.193918  3.742218  3.894543  2.017691  3.053709  3.159966  2.475762 </span></span>
+<span id="cb8-213"><a href="#cb8-213" tabindex="-1"></a><span class="co">#&gt;  trecmicr  trecobtu  trecquad  trecrube </span></span>
+<span id="cb8-214"><a href="#cb8-214" tabindex="-1"></a><span class="co">#&gt;  2.994840  9.590835  1.463990  4.679836</span></span>
+<span id="cb8-215"><a href="#cb8-215" tabindex="-1"></a>fit<span class="sc">$</span>sd</span>
+<span id="cb8-216"><a href="#cb8-216" tabindex="-1"></a><span class="co">#&gt; $theta</span></span>
+<span id="cb8-217"><a href="#cb8-217" tabindex="-1"></a><span class="co">#&gt;                LV1       LV2</span></span>
+<span id="cb8-218"><a href="#cb8-218" tabindex="-1"></a><span class="co">#&gt; agonfuli 0.0000000 0.0000000</span></span>
+<span id="cb8-219"><a href="#cb8-219" tabindex="-1"></a><span class="co">#&gt; agonmuel 0.3572453 0.0000000</span></span>
+<span id="cb8-220"><a href="#cb8-220" tabindex="-1"></a><span class="co">#&gt; amaraene 0.4324740 2.5187716</span></span>
+<span id="cb8-221"><a href="#cb8-221" tabindex="-1"></a><span class="co">#&gt; amarapri 0.4757138 3.1267860</span></span>
+<span id="cb8-222"><a href="#cb8-222" tabindex="-1"></a><span class="co">#&gt; amarauli 0.4480647 1.7618340</span></span>
+<span id="cb8-223"><a href="#cb8-223" tabindex="-1"></a><span class="co">#&gt; amarbifo 0.7527739 3.2740703</span></span>
+<span id="cb8-224"><a href="#cb8-224" tabindex="-1"></a><span class="co">#&gt; amarcomm 0.3538269 1.8985305</span></span>
+<span id="cb8-225"><a href="#cb8-225" tabindex="-1"></a><span class="co">#&gt; amareury 0.4507188 2.3609521</span></span>
+<span id="cb8-226"><a href="#cb8-226" tabindex="-1"></a><span class="co">#&gt; amarfami 0.2172873 1.3883474</span></span>
+<span id="cb8-227"><a href="#cb8-227" tabindex="-1"></a><span class="co">#&gt; amarluni 0.3373061 2.0906858</span></span>
+<span id="cb8-228"><a href="#cb8-228" tabindex="-1"></a><span class="co">#&gt; amarpleb 0.4857527 1.6920254</span></span>
+<span id="cb8-229"><a href="#cb8-229" tabindex="-1"></a><span class="co">#&gt; anchdors 0.2510424 1.6116139</span></span>
+<span id="cb8-230"><a href="#cb8-230" tabindex="-1"></a><span class="co">#&gt; asapflav 0.4535211 0.7575778</span></span>
+<span id="cb8-231"><a href="#cb8-231" tabindex="-1"></a><span class="co">#&gt; bembaene 0.6922553 1.2254738</span></span>
+<span id="cb8-232"><a href="#cb8-232" tabindex="-1"></a><span class="co">#&gt; bembbrux 0.5224786 3.1586522</span></span>
+<span id="cb8-233"><a href="#cb8-233" tabindex="-1"></a><span class="co">#&gt; bembgutt 0.2625319 0.5583872</span></span>
+<span id="cb8-234"><a href="#cb8-234" tabindex="-1"></a><span class="co">#&gt; bemblamp 0.1672008 0.4745348</span></span>
+<span id="cb8-235"><a href="#cb8-235" tabindex="-1"></a><span class="co">#&gt; bembmann 0.5810962 1.7980940</span></span>
+<span id="cb8-236"><a href="#cb8-236" tabindex="-1"></a><span class="co">#&gt; bembobtu 0.6548588 4.0599888</span></span>
+<span id="cb8-237"><a href="#cb8-237" tabindex="-1"></a><span class="co">#&gt; bembtetr 0.4149392 1.8932463</span></span>
+<span id="cb8-238"><a href="#cb8-238" tabindex="-1"></a><span class="co">#&gt; bradharp 0.2581557 0.9732227</span></span>
+<span id="cb8-239"><a href="#cb8-239" tabindex="-1"></a><span class="co">#&gt; bradrufi 0.3379864 0.5899299</span></span>
+<span id="cb8-240"><a href="#cb8-240" tabindex="-1"></a><span class="co">#&gt; calafusc 0.6675699 4.0899237</span></span>
+<span id="cb8-241"><a href="#cb8-241" tabindex="-1"></a><span class="co">#&gt; calamela 0.1971014 1.2489923</span></span>
+<span id="cb8-242"><a href="#cb8-242" tabindex="-1"></a><span class="co">#&gt; calamicr 0.2637686 0.8618619</span></span>
+<span id="cb8-243"><a href="#cb8-243" tabindex="-1"></a><span class="co">#&gt; caraarve 0.4557314 3.1692624</span></span>
+<span id="cb8-244"><a href="#cb8-244" tabindex="-1"></a><span class="co">#&gt; caraglab 0.2877429 0.5586975</span></span>
+<span id="cb8-245"><a href="#cb8-245" tabindex="-1"></a><span class="co">#&gt; caragran 0.2623044 0.6383333</span></span>
+<span id="cb8-246"><a href="#cb8-246" tabindex="-1"></a><span class="co">#&gt; caranemo 0.6119322 4.3611286</span></span>
+<span id="cb8-247"><a href="#cb8-247" tabindex="-1"></a><span class="co">#&gt; caranite 0.5458705 2.9484747</span></span>
+<span id="cb8-248"><a href="#cb8-248" tabindex="-1"></a><span class="co">#&gt; caraprob 0.2734075 1.7926400</span></span>
+<span id="cb8-249"><a href="#cb8-249" tabindex="-1"></a><span class="co">#&gt; caraviol 0.2330536 1.0403760</span></span>
+<span id="cb8-250"><a href="#cb8-250" tabindex="-1"></a><span class="co">#&gt; clivfoss 0.1865996 0.3822641</span></span>
+<span id="cb8-251"><a href="#cb8-251" tabindex="-1"></a><span class="co">#&gt; cychcara 0.2042124 0.9983491</span></span>
+<span id="cb8-252"><a href="#cb8-252" tabindex="-1"></a><span class="co">#&gt; dyscglob 0.4764319 3.2801646</span></span>
+<span id="cb8-253"><a href="#cb8-253" tabindex="-1"></a><span class="co">#&gt; elapcupr 0.4087661 2.4482087</span></span>
+<span id="cb8-254"><a href="#cb8-254" tabindex="-1"></a><span class="co">#&gt; elapulig 0.5099679 3.2971643</span></span>
+<span id="cb8-255"><a href="#cb8-255" tabindex="-1"></a><span class="co">#&gt; harpaffi 0.1769797 0.7590896</span></span>
+<span id="cb8-256"><a href="#cb8-256" tabindex="-1"></a><span class="co">#&gt; harplatu 0.3394745 2.5409698</span></span>
+<span id="cb8-257"><a href="#cb8-257" tabindex="-1"></a><span class="co">#&gt; harprufi 0.3524745 1.9652369</span></span>
+<span id="cb8-258"><a href="#cb8-258" tabindex="-1"></a><span class="co">#&gt; leisterm 0.1710353 0.6089073</span></span>
+<span id="cb8-259"><a href="#cb8-259" tabindex="-1"></a><span class="co">#&gt; loripili 0.1831219 0.3088544</span></span>
+<span id="cb8-260"><a href="#cb8-260" tabindex="-1"></a><span class="co">#&gt; nebrbrev 0.4256970 1.2386947</span></span>
+<span id="cb8-261"><a href="#cb8-261" tabindex="-1"></a><span class="co">#&gt; nebrsali 0.3171096 2.1198270</span></span>
+<span id="cb8-262"><a href="#cb8-262" tabindex="-1"></a><span class="co">#&gt; notiaqua 0.3083089 2.0863977</span></span>
+<span id="cb8-263"><a href="#cb8-263" tabindex="-1"></a><span class="co">#&gt; notibigu 0.2304660 1.8522379</span></span>
+<span id="cb8-264"><a href="#cb8-264" tabindex="-1"></a><span class="co">#&gt; notigerm 0.3161844 1.4260370</span></span>
+<span id="cb8-265"><a href="#cb8-265" tabindex="-1"></a><span class="co">#&gt; notipalu 0.4067044 2.5309468</span></span>
+<span id="cb8-266"><a href="#cb8-266" tabindex="-1"></a><span class="co">#&gt; notisubs 0.6031741 3.1811310</span></span>
+<span id="cb8-267"><a href="#cb8-267" tabindex="-1"></a><span class="co">#&gt; olisrotu 0.3442642 1.9517944</span></span>
+<span id="cb8-268"><a href="#cb8-268" tabindex="-1"></a><span class="co">#&gt; patrassi 0.2984194 2.1197482</span></span>
+<span id="cb8-269"><a href="#cb8-269" tabindex="-1"></a><span class="co">#&gt; patratro 0.8262774 1.8159808</span></span>
+<span id="cb8-270"><a href="#cb8-270" tabindex="-1"></a><span class="co">#&gt; poecvers 0.3376939 1.3048456</span></span>
+<span id="cb8-271"><a href="#cb8-271" tabindex="-1"></a><span class="co">#&gt; pteradst 0.4787786 2.8366450</span></span>
+<span id="cb8-272"><a href="#cb8-272" tabindex="-1"></a><span class="co">#&gt; pterdili 0.1615696 0.6981362</span></span>
+<span id="cb8-273"><a href="#cb8-273" tabindex="-1"></a><span class="co">#&gt; ptermadi 0.6273742 4.7627395</span></span>
+<span id="cb8-274"><a href="#cb8-274" tabindex="-1"></a><span class="co">#&gt; ptermela 0.3212001 0.7115682</span></span>
+<span id="cb8-275"><a href="#cb8-275" tabindex="-1"></a><span class="co">#&gt; pternige 0.2845555 1.4121102</span></span>
+<span id="cb8-276"><a href="#cb8-276" tabindex="-1"></a><span class="co">#&gt; pternigr 0.2757114 0.8647170</span></span>
+<span id="cb8-277"><a href="#cb8-277" tabindex="-1"></a><span class="co">#&gt; pterrhae 0.1567465 0.5089028</span></span>
+<span id="cb8-278"><a href="#cb8-278" tabindex="-1"></a><span class="co">#&gt; pterstre 0.3498252 1.4814495</span></span>
+<span id="cb8-279"><a href="#cb8-279" tabindex="-1"></a><span class="co">#&gt; ptervern 0.3691794 2.1300230</span></span>
+<span id="cb8-280"><a href="#cb8-280" tabindex="-1"></a><span class="co">#&gt; stompumi 0.5561962 3.1780419</span></span>
+<span id="cb8-281"><a href="#cb8-281" tabindex="-1"></a><span class="co">#&gt; synuviva 0.4724751 2.6221758</span></span>
+<span id="cb8-282"><a href="#cb8-282" tabindex="-1"></a><span class="co">#&gt; trecmicr 0.4498568 2.6679876</span></span>
+<span id="cb8-283"><a href="#cb8-283" tabindex="-1"></a><span class="co">#&gt; trecobtu 0.3454821 2.4549210</span></span>
+<span id="cb8-284"><a href="#cb8-284" tabindex="-1"></a><span class="co">#&gt; trecquad 0.1770213 0.4248561</span></span>
+<span id="cb8-285"><a href="#cb8-285" tabindex="-1"></a><span class="co">#&gt; trecrube 0.4490405 1.6207675</span></span>
+<span id="cb8-286"><a href="#cb8-286" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-287"><a href="#cb8-287" tabindex="-1"></a><span class="co">#&gt; $sigma.lv</span></span>
+<span id="cb8-288"><a href="#cb8-288" tabindex="-1"></a><span class="co">#&gt;       LV1       LV2 </span></span>
+<span id="cb8-289"><a href="#cb8-289" tabindex="-1"></a><span class="co">#&gt; 0.7472580 0.9205463 </span></span>
+<span id="cb8-290"><a href="#cb8-290" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-291"><a href="#cb8-291" tabindex="-1"></a><span class="co">#&gt; $beta0</span></span>
+<span id="cb8-292"><a href="#cb8-292" tabindex="-1"></a><span class="co">#&gt;  agonfuli  agonmuel  amaraene  amarapri  amarauli  amarbifo  amarcomm  amareury </span></span>
+<span id="cb8-293"><a href="#cb8-293" tabindex="-1"></a><span class="co">#&gt; 1.0788577 0.3065224 0.6450899 0.4900325 0.5882312 0.7944274 0.2865892 0.7296114 </span></span>
+<span id="cb8-294"><a href="#cb8-294" tabindex="-1"></a><span class="co">#&gt;  amarfami  amarluni  amarpleb  anchdors  asapflav  bembaene  bembbrux  bembgutt </span></span>
+<span id="cb8-295"><a href="#cb8-295" tabindex="-1"></a><span class="co">#&gt; 0.2336511 0.3259435 0.3389285 0.3425874 0.9537581 0.9073044 0.8237428 0.2833849 </span></span>
+<span id="cb8-296"><a href="#cb8-296" tabindex="-1"></a><span class="co">#&gt;  bemblamp  bembmann  bembobtu  bembtetr  bradharp  bradrufi  calafusc  calamela </span></span>
+<span id="cb8-297"><a href="#cb8-297" tabindex="-1"></a><span class="co">#&gt; 0.2358420 0.7666061 1.1041526 0.8071705 0.3921754 0.7502587 0.4780063 0.2655772 </span></span>
+<span id="cb8-298"><a href="#cb8-298" tabindex="-1"></a><span class="co">#&gt;  calamicr  caraarve  caraglab  caragran  caranemo  caranite  caraprob  caraviol </span></span>
+<span id="cb8-299"><a href="#cb8-299" tabindex="-1"></a><span class="co">#&gt; 1.1524608 1.3565654 1.1153224 1.2906133 0.7700233 3.7033704 0.3439890 0.3807160 </span></span>
+<span id="cb8-300"><a href="#cb8-300" tabindex="-1"></a><span class="co">#&gt;  clivfoss  cychcara  dyscglob  elapcupr  elapulig  harpaffi  harplatu  harprufi </span></span>
+<span id="cb8-301"><a href="#cb8-301" tabindex="-1"></a><span class="co">#&gt; 0.1804334 0.7067461 1.6108533 0.6688677 3.3263306 0.4335730 0.5158648 0.4464200 </span></span>
+<span id="cb8-302"><a href="#cb8-302" tabindex="-1"></a><span class="co">#&gt;  leisterm  loripili  nebrbrev  nebrsali  notiaqua  notibigu  notigerm  notipalu </span></span>
+<span id="cb8-303"><a href="#cb8-303" tabindex="-1"></a><span class="co">#&gt; 0.4949678 0.1672588 0.2694573 0.3590955 0.4162618 0.1993556 1.2077920 2.8233101 </span></span>
+<span id="cb8-304"><a href="#cb8-304" tabindex="-1"></a><span class="co">#&gt;  notisubs  olisrotu  patrassi  patratro  poecvers  pteradst  pterdili  ptermadi </span></span>
+<span id="cb8-305"><a href="#cb8-305" tabindex="-1"></a><span class="co">#&gt; 0.5975173 0.6946254 1.1885786 0.9729082 0.5171863 0.6622074 0.4095565 0.3820023 </span></span>
+<span id="cb8-306"><a href="#cb8-306" tabindex="-1"></a><span class="co">#&gt;  ptermela  pternige  pternigr  pterrhae  pterstre  ptervern  stompumi  synuviva </span></span>
+<span id="cb8-307"><a href="#cb8-307" tabindex="-1"></a><span class="co">#&gt; 0.3063155 0.2421468 0.3083133 0.4564679 0.3047889 0.4243951 0.6190257 0.3776050 </span></span>
+<span id="cb8-308"><a href="#cb8-308" tabindex="-1"></a><span class="co">#&gt;  trecmicr  trecobtu  trecquad  trecrube </span></span>
+<span id="cb8-309"><a href="#cb8-309" tabindex="-1"></a><span class="co">#&gt; 0.5911951 0.3958342 0.1921701 0.9339136 </span></span>
+<span id="cb8-310"><a href="#cb8-310" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-311"><a href="#cb8-311" tabindex="-1"></a><span class="co">#&gt; $Xcoef</span></span>
+<span id="cb8-312"><a href="#cb8-312" tabindex="-1"></a><span class="co">#&gt;          Management</span></span>
+<span id="cb8-313"><a href="#cb8-313" tabindex="-1"></a><span class="co">#&gt; agonfuli  1.1192656</span></span>
+<span id="cb8-314"><a href="#cb8-314" tabindex="-1"></a><span class="co">#&gt; agonmuel  0.3143687</span></span>
+<span id="cb8-315"><a href="#cb8-315" tabindex="-1"></a><span class="co">#&gt; amaraene  0.6017843</span></span>
+<span id="cb8-316"><a href="#cb8-316" tabindex="-1"></a><span class="co">#&gt; amarapri  0.4664815</span></span>
+<span id="cb8-317"><a href="#cb8-317" tabindex="-1"></a><span class="co">#&gt; amarauli  0.7132842</span></span>
+<span id="cb8-318"><a href="#cb8-318" tabindex="-1"></a><span class="co">#&gt; amarbifo  0.7879731</span></span>
+<span id="cb8-319"><a href="#cb8-319" tabindex="-1"></a><span class="co">#&gt; amarcomm  0.2937330</span></span>
+<span id="cb8-320"><a href="#cb8-320" tabindex="-1"></a><span class="co">#&gt; amareury  0.6213316</span></span>
+<span id="cb8-321"><a href="#cb8-321" tabindex="-1"></a><span class="co">#&gt; amarfami  0.2408062</span></span>
+<span id="cb8-322"><a href="#cb8-322" tabindex="-1"></a><span class="co">#&gt; amarluni  0.3180894</span></span>
+<span id="cb8-323"><a href="#cb8-323" tabindex="-1"></a><span class="co">#&gt; amarpleb  0.3505023</span></span>
+<span id="cb8-324"><a href="#cb8-324" tabindex="-1"></a><span class="co">#&gt; anchdors  0.3314318</span></span>
+<span id="cb8-325"><a href="#cb8-325" tabindex="-1"></a><span class="co">#&gt; asapflav  0.7794814</span></span>
+<span id="cb8-326"><a href="#cb8-326" tabindex="-1"></a><span class="co">#&gt; bembaene  0.7620770</span></span>
+<span id="cb8-327"><a href="#cb8-327" tabindex="-1"></a><span class="co">#&gt; bembbrux  0.7178404</span></span>
+<span id="cb8-328"><a href="#cb8-328" tabindex="-1"></a><span class="co">#&gt; bembgutt  0.2801436</span></span>
+<span id="cb8-329"><a href="#cb8-329" tabindex="-1"></a><span class="co">#&gt; bemblamp  0.2402252</span></span>
+<span id="cb8-330"><a href="#cb8-330" tabindex="-1"></a><span class="co">#&gt; bembmann  0.9396096</span></span>
+<span id="cb8-331"><a href="#cb8-331" tabindex="-1"></a><span class="co">#&gt; bembobtu  1.2584397</span></span>
+<span id="cb8-332"><a href="#cb8-332" tabindex="-1"></a><span class="co">#&gt; bembtetr  0.6965476</span></span>
+<span id="cb8-333"><a href="#cb8-333" tabindex="-1"></a><span class="co">#&gt; bradharp  0.5055923</span></span>
+<span id="cb8-334"><a href="#cb8-334" tabindex="-1"></a><span class="co">#&gt; bradrufi  0.5809252</span></span>
+<span id="cb8-335"><a href="#cb8-335" tabindex="-1"></a><span class="co">#&gt; calafusc  0.4803123</span></span>
+<span id="cb8-336"><a href="#cb8-336" tabindex="-1"></a><span class="co">#&gt; calamela  0.3490400</span></span>
+<span id="cb8-337"><a href="#cb8-337" tabindex="-1"></a><span class="co">#&gt; calamicr  1.1089740</span></span>
+<span id="cb8-338"><a href="#cb8-338" tabindex="-1"></a><span class="co">#&gt; caraarve  1.1586275</span></span>
+<span id="cb8-339"><a href="#cb8-339" tabindex="-1"></a><span class="co">#&gt; caraglab  0.8920396</span></span>
+<span id="cb8-340"><a href="#cb8-340" tabindex="-1"></a><span class="co">#&gt; caragran  1.3889865</span></span>
+<span id="cb8-341"><a href="#cb8-341" tabindex="-1"></a><span class="co">#&gt; caranemo  0.6967339</span></span>
+<span id="cb8-342"><a href="#cb8-342" tabindex="-1"></a><span class="co">#&gt; caranite  3.2705784</span></span>
+<span id="cb8-343"><a href="#cb8-343" tabindex="-1"></a><span class="co">#&gt; caraprob  0.3303783</span></span>
+<span id="cb8-344"><a href="#cb8-344" tabindex="-1"></a><span class="co">#&gt; caraviol  0.3835400</span></span>
+<span id="cb8-345"><a href="#cb8-345" tabindex="-1"></a><span class="co">#&gt; clivfoss  0.1919262</span></span>
+<span id="cb8-346"><a href="#cb8-346" tabindex="-1"></a><span class="co">#&gt; cychcara  0.6737503</span></span>
+<span id="cb8-347"><a href="#cb8-347" tabindex="-1"></a><span class="co">#&gt; dyscglob  1.9006425</span></span>
+<span id="cb8-348"><a href="#cb8-348" tabindex="-1"></a><span class="co">#&gt; elapcupr  0.5832024</span></span>
+<span id="cb8-349"><a href="#cb8-349" tabindex="-1"></a><span class="co">#&gt; elapulig  2.8420646</span></span>
+<span id="cb8-350"><a href="#cb8-350" tabindex="-1"></a><span class="co">#&gt; harpaffi  0.4239000</span></span>
+<span id="cb8-351"><a href="#cb8-351" tabindex="-1"></a><span class="co">#&gt; harplatu  0.4860779</span></span>
+<span id="cb8-352"><a href="#cb8-352" tabindex="-1"></a><span class="co">#&gt; harprufi  0.4509791</span></span>
+<span id="cb8-353"><a href="#cb8-353" tabindex="-1"></a><span class="co">#&gt; leisterm  0.4693189</span></span>
+<span id="cb8-354"><a href="#cb8-354" tabindex="-1"></a><span class="co">#&gt; loripili  0.1631488</span></span>
+<span id="cb8-355"><a href="#cb8-355" tabindex="-1"></a><span class="co">#&gt; nebrbrev  0.2699875</span></span>
+<span id="cb8-356"><a href="#cb8-356" tabindex="-1"></a><span class="co">#&gt; nebrsali  0.3340496</span></span>
+<span id="cb8-357"><a href="#cb8-357" tabindex="-1"></a><span class="co">#&gt; notiaqua  0.4044517</span></span>
+<span id="cb8-358"><a href="#cb8-358" tabindex="-1"></a><span class="co">#&gt; notibigu  0.1867114</span></span>
+<span id="cb8-359"><a href="#cb8-359" tabindex="-1"></a><span class="co">#&gt; notigerm  1.0421581</span></span>
+<span id="cb8-360"><a href="#cb8-360" tabindex="-1"></a><span class="co">#&gt; notipalu  2.2460571</span></span>
+<span id="cb8-361"><a href="#cb8-361" tabindex="-1"></a><span class="co">#&gt; notisubs  0.5572713</span></span>
+<span id="cb8-362"><a href="#cb8-362" tabindex="-1"></a><span class="co">#&gt; olisrotu  0.6286056</span></span>
+<span id="cb8-363"><a href="#cb8-363" tabindex="-1"></a><span class="co">#&gt; patrassi  1.2002830</span></span>
+<span id="cb8-364"><a href="#cb8-364" tabindex="-1"></a><span class="co">#&gt; patratro  0.8341210</span></span>
+<span id="cb8-365"><a href="#cb8-365" tabindex="-1"></a><span class="co">#&gt; poecvers  0.7430597</span></span>
+<span id="cb8-366"><a href="#cb8-366" tabindex="-1"></a><span class="co">#&gt; pteradst  0.5625847</span></span>
+<span id="cb8-367"><a href="#cb8-367" tabindex="-1"></a><span class="co">#&gt; pterdili  0.4637642</span></span>
+<span id="cb8-368"><a href="#cb8-368" tabindex="-1"></a><span class="co">#&gt; ptermadi  0.3582384</span></span>
+<span id="cb8-369"><a href="#cb8-369" tabindex="-1"></a><span class="co">#&gt; ptermela  0.3077618</span></span>
+<span id="cb8-370"><a href="#cb8-370" tabindex="-1"></a><span class="co">#&gt; pternige  0.2312864</span></span>
+<span id="cb8-371"><a href="#cb8-371" tabindex="-1"></a><span class="co">#&gt; pternigr  0.3169564</span></span>
+<span id="cb8-372"><a href="#cb8-372" tabindex="-1"></a><span class="co">#&gt; pterrhae  0.4896053</span></span>
+<span id="cb8-373"><a href="#cb8-373" tabindex="-1"></a><span class="co">#&gt; pterstre  0.3097579</span></span>
+<span id="cb8-374"><a href="#cb8-374" tabindex="-1"></a><span class="co">#&gt; ptervern  0.3920285</span></span>
+<span id="cb8-375"><a href="#cb8-375" tabindex="-1"></a><span class="co">#&gt; stompumi  0.5139202</span></span>
+<span id="cb8-376"><a href="#cb8-376" tabindex="-1"></a><span class="co">#&gt; synuviva  0.3398721</span></span>
+<span id="cb8-377"><a href="#cb8-377" tabindex="-1"></a><span class="co">#&gt; trecmicr  0.5421705</span></span>
+<span id="cb8-378"><a href="#cb8-378" tabindex="-1"></a><span class="co">#&gt; trecobtu  0.3795949</span></span>
+<span id="cb8-379"><a href="#cb8-379" tabindex="-1"></a><span class="co">#&gt; trecquad  0.2136039</span></span>
+<span id="cb8-380"><a href="#cb8-380" tabindex="-1"></a><span class="co">#&gt; trecrube  0.7403021</span></span>
+<span id="cb8-381"><a href="#cb8-381" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-382"><a href="#cb8-382" tabindex="-1"></a><span class="co">#&gt; $inv.phi</span></span>
+<span id="cb8-383"><a href="#cb8-383" tabindex="-1"></a><span class="co">#&gt;   agonfuli   agonmuel   amaraene   amarapri   amarauli   amarbifo   amarcomm </span></span>
+<span id="cb8-384"><a href="#cb8-384" tabindex="-1"></a><span class="co">#&gt; 0.03813294 0.09813205 0.05817473 0.15833792 0.02685390 0.04924555 0.11508654 </span></span>
+<span id="cb8-385"><a href="#cb8-385" tabindex="-1"></a><span class="co">#&gt;   amareury   amarfami   amarluni   amarpleb   anchdors   asapflav   bembaene </span></span>
+<span id="cb8-386"><a href="#cb8-386" tabindex="-1"></a><span class="co">#&gt; 0.18125373 0.11462173 0.08079717 0.08879735 0.13862101 0.32446154 0.03253902 </span></span>
+<span id="cb8-387"><a href="#cb8-387" tabindex="-1"></a><span class="co">#&gt;   bembbrux   bembgutt   bemblamp   bembmann   bembobtu   bembtetr   bradharp </span></span>
+<span id="cb8-388"><a href="#cb8-388" tabindex="-1"></a><span class="co">#&gt; 0.05610365 0.06274436 0.04495052 0.02154673 0.02916814 0.09503122 0.04123043 </span></span>
+<span id="cb8-389"><a href="#cb8-389" tabindex="-1"></a><span class="co">#&gt;   bradrufi   calafusc   calamela   calamicr   caraarve   caraglab   caragran </span></span>
+<span id="cb8-390"><a href="#cb8-390" tabindex="-1"></a><span class="co">#&gt; 0.36372438 0.02702216 0.03097815 0.03896507 0.09085503 0.35623632 0.04605532 </span></span>
+<span id="cb8-391"><a href="#cb8-391" tabindex="-1"></a><span class="co">#&gt;   caranemo   caranite   caraprob   caraviol   clivfoss   cychcara   dyscglob </span></span>
+<span id="cb8-392"><a href="#cb8-392" tabindex="-1"></a><span class="co">#&gt; 0.02846483 0.05804580 0.18239506 0.07508526 0.12548720 0.11201795 0.02339661 </span></span>
+<span id="cb8-393"><a href="#cb8-393" tabindex="-1"></a><span class="co">#&gt;   elapcupr   elapulig   harpaffi   harplatu   harprufi   leisterm   loripili </span></span>
+<span id="cb8-394"><a href="#cb8-394" tabindex="-1"></a><span class="co">#&gt; 0.07125151 0.06978114 0.45068375 0.13940414 0.08962128 0.03983867 0.16947129 </span></span>
+<span id="cb8-395"><a href="#cb8-395" tabindex="-1"></a><span class="co">#&gt;   nebrbrev   nebrsali   notiaqua   notibigu   notigerm   notipalu   notisubs </span></span>
+<span id="cb8-396"><a href="#cb8-396" tabindex="-1"></a><span class="co">#&gt; 0.17600159 0.03971283 0.12884706 0.13612827 0.18017768 0.23932716 0.06193837 </span></span>
+<span id="cb8-397"><a href="#cb8-397" tabindex="-1"></a><span class="co">#&gt;   olisrotu   patrassi   patratro   poecvers   pteradst   pterdili   ptermadi </span></span>
+<span id="cb8-398"><a href="#cb8-398" tabindex="-1"></a><span class="co">#&gt; 0.08645156 0.06963487 0.03610458 0.01651042 0.08640114 0.04889716 0.07964027 </span></span>
+<span id="cb8-399"><a href="#cb8-399" tabindex="-1"></a><span class="co">#&gt;   ptermela   pternige   pternigr   pterrhae   pterstre   ptervern   stompumi </span></span>
+<span id="cb8-400"><a href="#cb8-400" tabindex="-1"></a><span class="co">#&gt; 0.04038486 0.04859116 0.06911433 0.06593244 0.11268238 0.12274321 0.13578305 </span></span>
+<span id="cb8-401"><a href="#cb8-401" tabindex="-1"></a><span class="co">#&gt;   synuviva   trecmicr   trecobtu   trecquad   trecrube </span></span>
+<span id="cb8-402"><a href="#cb8-402" tabindex="-1"></a><span class="co">#&gt; 0.10181767 0.11901413 0.02394097 0.12844643 0.16497471 </span></span>
+<span id="cb8-403"><a href="#cb8-403" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-404"><a href="#cb8-404" tabindex="-1"></a><span class="co">#&gt; $phi</span></span>
+<span id="cb8-405"><a href="#cb8-405" tabindex="-1"></a><span class="co">#&gt;   agonfuli   agonmuel   amaraene   amarapri   amarauli   amarbifo   amarcomm </span></span>
+<span id="cb8-406"><a href="#cb8-406" tabindex="-1"></a><span class="co">#&gt;  6.0157660  0.4167686  5.0936040  0.5983961  9.2279789  2.4269765  0.5971964 </span></span>
+<span id="cb8-407"><a href="#cb8-407" tabindex="-1"></a><span class="co">#&gt;   amareury   amarfami   amarluni   amarpleb   anchdors   asapflav   bembaene </span></span>
+<span id="cb8-408"><a href="#cb8-408" tabindex="-1"></a><span class="co">#&gt;  2.1913922  0.6151878  1.2275805  0.4134279  0.4905342  1.9931330  2.0555096 </span></span>
+<span id="cb8-409"><a href="#cb8-409" tabindex="-1"></a><span class="co">#&gt;   bembbrux   bembgutt   bemblamp   bembmann   bembobtu   bembtetr   bradharp </span></span>
+<span id="cb8-410"><a href="#cb8-410" tabindex="-1"></a><span class="co">#&gt;  3.9657747  0.6171876  0.7222822 17.2824227  4.9268316  0.9771158  3.5061772 </span></span>
+<span id="cb8-411"><a href="#cb8-411" tabindex="-1"></a><span class="co">#&gt;   bradrufi   calafusc   calamela   calamicr   caraarve   caraglab   caragran </span></span>
+<span id="cb8-412"><a href="#cb8-412" tabindex="-1"></a><span class="co">#&gt;  1.4452856  1.3562591  0.9129844  4.1332534  1.6670291  0.7293611  3.6290890 </span></span>
+<span id="cb8-413"><a href="#cb8-413" tabindex="-1"></a><span class="co">#&gt;   caranemo   caranite   caraprob   caraviol   clivfoss   cychcara   dyscglob </span></span>
+<span id="cb8-414"><a href="#cb8-414" tabindex="-1"></a><span class="co">#&gt;  6.5733142  5.1431463  0.4535010  1.3017848  0.2619039  1.5241643 11.2887761 </span></span>
+<span id="cb8-415"><a href="#cb8-415" tabindex="-1"></a><span class="co">#&gt;   elapcupr   elapulig   harpaffi   harplatu   harprufi   leisterm   loripili </span></span>
+<span id="cb8-416"><a href="#cb8-416" tabindex="-1"></a><span class="co">#&gt;  4.0292586  5.5839373  2.0791139  0.9033559  0.9817424  2.8021269  0.1905679 </span></span>
+<span id="cb8-417"><a href="#cb8-417" tabindex="-1"></a><span class="co">#&gt;   nebrbrev   nebrsali   notiaqua   notibigu   notigerm   notipalu   notisubs </span></span>
+<span id="cb8-418"><a href="#cb8-418" tabindex="-1"></a><span class="co">#&gt;  0.2074802  1.5319849  0.9529823  0.3688609  1.9549743  2.4778299  1.6089384 </span></span>
+<span id="cb8-419"><a href="#cb8-419" tabindex="-1"></a><span class="co">#&gt;   olisrotu   patrassi   patratro   poecvers   pteradst   pterdili   ptermadi </span></span>
+<span id="cb8-420"><a href="#cb8-420" tabindex="-1"></a><span class="co">#&gt;  7.2291431  1.2229548  3.7886881  6.7797223  1.7646942  1.5195194  0.5343336 </span></span>
+<span id="cb8-421"><a href="#cb8-421" tabindex="-1"></a><span class="co">#&gt;   ptermela   pternige   pternigr   pterrhae   pterstre   ptervern   stompumi </span></span>
+<span id="cb8-422"><a href="#cb8-422" tabindex="-1"></a><span class="co">#&gt;  0.8190740  0.4956840  0.9678907  1.0000282  0.4587387  1.1445973  1.3558461 </span></span>
+<span id="cb8-423"><a href="#cb8-423" tabindex="-1"></a><span class="co">#&gt;   synuviva   trecmicr   trecobtu   trecquad   trecrube </span></span>
+<span id="cb8-424"><a href="#cb8-424" tabindex="-1"></a><span class="co">#&gt;  0.6240811  1.0674458  2.2021892  0.2752949  3.6130887</span></span></code></pre></div>
+<p>Iteration behavior can be traced during optimization process with
+<code>trace</code> and <code>optimizer.trace</code>. One can trace the
+maximum gradien evaluation during optimization in each iteration by
+setting <code>trace = TRUE</code>. The progress of the (minus)
+log-likelihood value can be traced with
+<code>optimizer.trace = 1</code>. This argument is passed to the
+optimizer, and it can also print additional information, eg. parameter
+values during iterations depending on the optimizer used.</p>
+<p>As a conclusion:</p>
+<ul>
+<li><p>Small gradient values and a negative-definite, invertible Hessian
+indicate that the model has likely converged.</p></li>
+<li><p>Instead, large gradients or a singular (non‑invertible) Hessian
+indicate that convergence was likely not achieved, for example due bad
+starting values, or that there are identification problems. which may
+stem from an ill‑behaved likelihood function — for example, a flat
+likelihood surface, multimodality, ridges in the likelihood, or
+near‑collinearity among parameters.</p></li>
+</ul>
+<p>Let’s consider next what can be done if problems arise and how to
+identify the possible problematic parameters or reasons causing the
+challenges in the optimization eg. the problematic shape of likelihood
+function.</p>
+</div>
+<div id="what-to-do-if-the-model-did-not-converge" class="section level2">
+<h2>What to Do If the Model Did Not Converge</h2>
+<p>Non-convergence may arise from number of reasons like poor initial
+values, overly complex models, scaling issues, or unsuitable
+optimization settings. The gllvm package allows several adjustments.
+Let’s look at an example; add random slopes for env covariates to adjust
+species specific responses to environment.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Fit a fourth corner GLLVM with random slopes and two latent variables</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>fit2 <span class="ot">&lt;-</span> <span class="fu">gllvm</span>(<span class="at">y =</span> y,  <span class="at">X =</span> X, <span class="at">TR =</span> TR, <span class="at">num.lv =</span> <span class="dv">2</span>, </span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>              <span class="at">formula =</span><span class="sc">~</span> Management<span class="sc">*</span>LPW <span class="sc">+</span> (<span class="dv">0</span> <span class="sc">+</span> Management<span class="sc">|</span><span class="dv">1</span>), </span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>              <span class="at">family =</span> <span class="st">&quot;negative.binomial&quot;</span>, <span class="at">seed =</span> <span class="dv">123</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co"># Relative convergence was reached</span></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a>fit2<span class="sc">$</span>convergence</span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="co"># Gradients are quite small, although some around 0.04:</span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">c</span>(fit2<span class="sc">$</span>TMBfn<span class="sc">$</span><span class="fu">gr</span>()))</span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co"># HEssian is not negative definite:</span></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a>H1 <span class="ot">&lt;-</span> <span class="sc">-</span>fit2<span class="sc">$</span>Hess<span class="sc">$</span>Hess.full</span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a>Hsym <span class="ot">&lt;-</span> <span class="fl">0.5</span> <span class="sc">*</span> (H1 <span class="sc">+</span> <span class="fu">t</span>(H1))</span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co"># Calculate eigenvalues and check sign:</span></span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a>ev <span class="ot">&lt;-</span> <span class="fu">eigen</span>(Hsym, <span class="at">symmetric =</span> <span class="cn">TRUE</span>)<span class="sc">$</span>values</span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a><span class="fu">all</span>(ev <span class="sc">&lt;</span> <span class="dv">0</span>)</span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a><span class="co">#&gt; [1] FALSE</span></span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a><span class="co"># Hessian is not negative definite and likelihood is not concave</span></span></code></pre></div>
+<div class="figure" style="text-align: center">
+<img role="img" aria-label="plot of chunk ex2" src="data:image/png;base64,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" alt="plot of chunk ex2" width="70%" />
+<p class="caption">
+plot of chunk ex2
+</p>
+</div>
+<p>So convergence is not very good. Let’s look at options what can be
+done.</p>
+<div id="relative-convergence-maximum-number-of-iterations-and-optimization-algorithm" class="section level3">
+<h3>Relative convergence, maximum number of iterations and optimization
+Algorithm</h3>
+<p>In gllvm, the <code>optimizer</code> argument controls the numerical
+optimizer to be used. Possible options currently include
+<code>optim</code> and <code>nlminb</code>, and for ordination with
+predictors (<code>num.RR&gt;0</code> or <code>num.lv.c&gt;0</code>) also
+<code>alabama</code>(default), <code>nloptr(agl)</code> or
+<code>nloptr(sqp)</code>. Changing the algorithm may sometimes help to
+find good optimum more easily.</p>
+<p>Usually numerical optimization algorithms use relative convergence of
+the function to be maximized as a criteria for the convergence. It means
+that the optimization stops when the change (in the log‑likelihood)
+becomes sufficiently small relative to the value from the previous
+iteration. In gllvm the relative convergence criteria is defined by
+<code>reltol</code> and the default is <em>1e-10</em>.</p>
+<p>We can check if the optimization algorithm reached the relative
+convergence:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>fit2<span class="sc">$</span>convergence</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<p>If relative convergence was not reached, gllvm throws a warning
+indicating this.</p>
+<p>In case maximum number of iterations was reached, it can be increased
+with <code>maxit</code> and/or <code>max.iter</code>:</p>
+<ul>
+<li>for optimizer <code>optim</code>: <code>maxit</code> is passed to
+<code>optim()</code>’s maxit to control the maximum number of
+iterations.</li>
+<li>for optimizer <code>nlminb</code>: <code>maxit</code> is passed to
+<code>nlminb()</code>’s <code>eval.max</code> to control maximum number
+of evaluations of the objective function and <code>max.iter</code> to
+<code>nlminb()</code>’s <code>iter.max</code> to control maximum number
+of iterations</li>
+</ul>
+<p>For the previous model default relative convergence was reached with
+the given maximum number of iterations, but maybe that was not enough
+for this model, so make the criteria smaller:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>fit3 <span class="ot">&lt;-</span> <span class="fu">gllvm</span>(<span class="at">y =</span> y,  <span class="at">X =</span> X, TR, <span class="at">num.lv =</span> <span class="dv">2</span>,</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>              <span class="at">formula =</span><span class="sc">~</span> Management<span class="sc">*</span>LPW <span class="sc">+</span> (<span class="dv">0</span> <span class="sc">+</span> Management<span class="sc">|</span><span class="dv">1</span>), </span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>              <span class="at">family =</span> <span class="st">&quot;negative.binomial&quot;</span>, <span class="at">seed =</span> <span class="dv">123</span>, <span class="at">reltol =</span> <span class="fl">1e-14</span>)</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="co"># Relative convergence was reached</span></span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>fit3<span class="sc">$</span>convergence</span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a><span class="co"># Gradients are now smaller:</span></span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">c</span>(fit3<span class="sc">$</span>TMBfn<span class="sc">$</span><span class="fu">gr</span>()))</span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a><span class="co"># check Hessian for negative definiteness:</span></span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a>H1 <span class="ot">&lt;-</span> <span class="sc">-</span> fit3<span class="sc">$</span>Hess<span class="sc">$</span>Hess.full</span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a>Hsym <span class="ot">&lt;-</span> <span class="fl">0.5</span> <span class="sc">*</span> (H1 <span class="sc">+</span> <span class="fu">t</span>(H1))</span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a>ev <span class="ot">&lt;-</span> <span class="fu">eigen</span>(Hsym, <span class="at">symmetric =</span> <span class="cn">TRUE</span>)<span class="sc">$</span>values</span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a><span class="fu">all</span>(ev <span class="sc">&lt;</span> <span class="dv">0</span>)</span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a><span class="co"># All eigenvalues are negative so Hessian is negative definite:</span></span></code></pre></div>
+<div class="figure" style="text-align: center">
+<img role="img" aria-label="plot of chunk ex2reltol" src="data:image/png;base64,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" alt="plot of chunk ex2reltol" width="70%" />
+<p class="caption">
+plot of chunk ex2reltol
+</p>
+</div>
+<p>This time stricter relative convergence criteria did help with the
+gradients and hessian is now also negative definite, so seems like
+better convergence and maximum for the log-likelihood was reached.</p>
+</div>
+<div id="modify-starting-values-and-many-starting-points" class="section level3">
+<h3>Modify Starting Values and many starting points</h3>
+<p>Poor initial values can trap the optimizer in local optima. You can
+modify starting values for gllvm in a number of ways. Firstly, in gllvm
+there are three main procedures to generate starting values for the
+model to be fitted, and which can be modified with argument
+<code>starting.val</code>. The options are:</p>
+<ul>
+<li><code>starting.val = &quot;res&quot;</code>: uses parameters of multivariate
+glm as starting values for fixed effects, and then generates starting
+values for latent variables with factor analysis based on residuals of
+the glm. Each factor analysis calculation produces slightly different
+starting values as the residuals are calculated as randomized quantile
+residuals.</li>
+<li><code>starting.val = &quot;random&quot;</code>: uses parameters of
+multivariate glm as starting values for fixed effects, and then randomly
+generates starting values for latent variables.</li>
+<li><code>starting.val = &quot;zero&quot;</code>: uses zeros as starting values
+for fixed effects, random effects and latent variables, (except variance
+terms appropriate starting values are fixed to suitable value).</li>
+</ul>
+<p>In addition to these, it is always recommended to use multiple
+initial runs with different starting points with
+<code>n.init</code>.</p>
+<p>Repeating the estimation with different random starts can also reveal
+whether the solution is stable.</p>
+<p>In addition, there are several other ways to modify starting values.
+For example, one can use another already fitted model as starting value
+point with <code>start.fit</code> (with some restrictions), generate
+additional random variation to the starting values with
+<code>jitter.var</code> and <code>jitter.var.br</code>. Starting values
+for some specific parameters, like range parameter in spatial models and
+zetacutoff parameters for orderd beta models can be given freely.</p>
+</div>
+<div id="approximation-method-variational-extended-variational-or-laplace-approximation" class="section level3">
+<h3>Approximation method: Variational, Extended Variational or Laplace
+approximation</h3>
+<p>There are alternative approximation methods implemented in the
+<em>gllvm</em> package, and switching the method can stabilize
+convergence. The options are controlled with <code>method</code> an
+are:</p>
+<ul>
+<li><code>method = &quot;VA&quot;</code> Variational approximation (default)</li>
+<li><code>method = &quot;EVA&quot;</code> Extended Variational approximation</li>
+<li><code>method = &quot;LA&quot;</code> Laplace approximation</li>
+</ul>
+<p>There are some differences in for which distributions and link
+functions these method’s can be applied, the table of these can be found
+in the Vignette 1: ‘Analysing multivariate abundance data using
+gllvm’.</p>
+<p>In addition, research has shown that some methods for some
+distributions and models may work better and produce better behaved
+likelihood function, and others may have certain problems, <a href="https://github.com/JenniNiku/gllvm/issues/237">see for example
+discussion about VA’s underestimation of variance for random
+effects</a>.</p>
+</div>
+<div id="simplify-variational-covariance-structure-and-two-step-iteration-for-variance-covariance-estimation" class="section level3">
+<h3>Simplify variational covariance structure and two-step iteration for
+variance covariance estimation</h3>
+<p>In case variational or extended variational approximation is used,
+there are different options for the variational covariance structure to
+be used. Simplest possible structure is diagonal covariance and most
+complex is unstructured covariance. However, depending on the random
+effect term and model, there are also options in between the most
+complex and most simple and the covariance structure can be
+modified.</p>
+<ul>
+<li><p><code>Lambda.struc</code>: covariance structure of VA
+distributions for latent variables can be <code>&quot;unstructured&quot;</code>
+(default) or <code>&quot;diagonal&quot;</code>, or in case correlated latent
+variables are used, also <code>&quot;bdNN&quot;</code> and <code>&quot;UNN&quot;</code> can
+be used.</p></li>
+<li><p><code>Ab.struct</code>: covariance structure of VA distributions
+for random slopes, ordered in terms of complexity:
+<code>&quot;diagonal&quot;</code>, <code>&quot;MNdiagonal&quot;</code> (only with colMat),
+<code>&quot;blockdiagonal&quot;</code> (default without colMat),
+<code>&quot;MNunstructured&quot;</code> (default, only with colMat),
+<code>&quot;diagonalCL1&quot;</code> ,<code>&quot;CL1&quot;</code> (only with colMat),
+<code>&quot;CL2&quot;</code> (only with colMat),<code>&quot;diagonalCL2&quot;</code> (only
+with colMat), or <code>&quot;unstructured&quot;</code> (only with
+colMat).</p></li>
+<li><p><code>Ar.struc</code>: covariance structure of VA distributions
+for random row effects: <code>&quot;unstructured&quot;</code> or
+<code>&quot;diagonal&quot;</code>. Defaults to <code>&quot;diagonal&quot;</code>.
+<code>&quot;Unstructured&quot;</code> is block diagonal for ordinary random
+effects.</p></li>
+</ul>
+<p>In optimization, there is also an option to optimize the model in
+two-step procedure, where the model is first optimized with simpler
+diagonal variational covariance, and using those estimates as starting
+values, the fit the model with more complex variational covariance
+structure. These can be controlled with <code>diag.iter</code> and
+<code>Ab.diag.iter</code></p>
+</div>
+</div>
+<div id="profiling-the-problematic-parameters" class="section level2">
+<h2>Profiling the problematic parameter(s)</h2>
+<p>If the optimization process did not succeed, eg. it ends up with
+large gradients, parameter values on the edge, non negative definite
+hessian or does not converge even if number of iterations is large,
+finding the problematic parameters may help with identifying the reasons
+behind bad convergence. Profiling the shape of the likelihood can also
+give insight.</p>
+<p>When identifying the problematic parameters one can look for example
+parameter estimates:</p>
+<ul>
+<li>parameters close to theoretical boundaries (eg. variances close to
+zero, correlations close to 1/-1),</li>
+<li>extreme values,</li>
+<li>parameters that are not stable between fits,</li>
+</ul>
+<p>or alternatively one can take a look at: * gradients: which
+parameters has large gradients still at the end * standard errors: eg.
+parameters with “negative variance” (in inverse of hessian), or
+parameters with almost zero standard error even though data would be
+small</p>
+<p>Let’s look at the next example:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">data</span>(antTraits, <span class="at">package =</span> <span class="st">&quot;mvabund&quot;</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>ya <span class="ot">=</span> antTraits<span class="sc">$</span>abund</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>Xa <span class="ot">=</span> <span class="fu">scale</span>(antTraits<span class="sc">$</span>env)</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>TRa <span class="ot">=</span> antTraits<span class="sc">$</span>traits</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>TRa[,<span class="fu">unlist</span>(<span class="fu">lapply</span>(TRa, is.numeric))] <span class="ot">=</span> <span class="fu">scale</span>(TRa[,<span class="fu">unlist</span>(<span class="fu">lapply</span>(TRa, is.numeric))])</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a></span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="co"># Fit a fourth corner GLLVM with two latent variables</span></span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>fitAnt <span class="ot">&lt;-</span> <span class="fu">gllvm</span>(<span class="at">y =</span> ya,  <span class="at">X =</span> Xa, <span class="at">TR =</span> TRa, <span class="at">num.lv =</span> <span class="dv">2</span>, </span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a>                <span class="at">formula =</span> <span class="sc">~</span>(Bare.ground <span class="sc">+</span> Canopy.cover)<span class="sc">*</span>Femur.length <span class="sc">+</span> </span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a>                (<span class="dv">0</span> <span class="sc">+</span> Bare.ground <span class="sc">+</span> Canopy.cover<span class="sc">|</span><span class="dv">1</span>), </span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a>                <span class="at">family =</span> <span class="st">&quot;negative.binomial&quot;</span>, <span class="at">n.init=</span><span class="dv">3</span>, <span class="at">seed =</span> <span class="dv">123</span>)</span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a></span>
+<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a>fitAnt<span class="sc">$</span>convergence</span>
+<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span>
+<span id="cb12-15"><a href="#cb12-15" tabindex="-1"></a><span class="co"># Some gradients are quite large</span></span>
+<span id="cb12-16"><a href="#cb12-16" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">c</span>(fitAnt<span class="sc">$</span>TMBfn<span class="sc">$</span><span class="fu">gr</span>()))</span>
+<span id="cb12-17"><a href="#cb12-17" tabindex="-1"></a><span class="co"># Hessian is not negative definite:</span></span>
+<span id="cb12-18"><a href="#cb12-18" tabindex="-1"></a>H1 <span class="ot">&lt;-</span> <span class="sc">-</span> fitAnt<span class="sc">$</span>Hess<span class="sc">$</span>Hess.full</span>
+<span id="cb12-19"><a href="#cb12-19" tabindex="-1"></a>Hsym <span class="ot">&lt;-</span> <span class="fl">0.5</span> <span class="sc">*</span> (H1 <span class="sc">+</span> <span class="fu">t</span>(H1))</span>
+<span id="cb12-20"><a href="#cb12-20" tabindex="-1"></a>ev <span class="ot">&lt;-</span> <span class="fu">eigen</span>(Hsym, <span class="at">symmetric =</span> <span class="cn">TRUE</span>)<span class="sc">$</span>values</span>
+<span id="cb12-21"><a href="#cb12-21" tabindex="-1"></a><span class="fu">all</span>(ev <span class="sc">&lt;</span> <span class="dv">0</span>)</span>
+<span id="cb12-22"><a href="#cb12-22" tabindex="-1"></a><span class="co">#&gt; [1] FALSE</span></span>
+<span id="cb12-23"><a href="#cb12-23" tabindex="-1"></a></span>
+<span id="cb12-24"><a href="#cb12-24" tabindex="-1"></a><span class="co"># See which parameters have largest gradients</span></span>
+<span id="cb12-25"><a href="#cb12-25" tabindex="-1"></a><span class="fu">table</span>(<span class="fu">names</span>(fitAnt<span class="sc">$</span>TMBfn<span class="sc">$</span>par[<span class="fu">abs</span>(<span class="fu">c</span>(fitAnt<span class="sc">$</span>TMBfn<span class="sc">$</span><span class="fu">gr</span>()))<span class="sc">&gt;</span><span class="fl">0.1</span>]))</span>
+<span id="cb12-26"><a href="#cb12-26" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb12-27"><a href="#cb12-27" tabindex="-1"></a><span class="co">#&gt;       b       B      Br  lambda sigmaLV </span></span>
+<span id="cb12-28"><a href="#cb12-28" tabindex="-1"></a><span class="co">#&gt;       1       3       7       5       1</span></span>
+<span id="cb12-29"><a href="#cb12-29" tabindex="-1"></a><span class="co"># B refers to fixed coefficients (fourth corner), Br random slopes, sigmaLV diagonal scaling parameter in loading matrix and lambda other loading parameters</span></span>
+<span id="cb12-30"><a href="#cb12-30" tabindex="-1"></a></span>
+<span id="cb12-31"><a href="#cb12-31" tabindex="-1"></a><span class="co"># Look for extremes and parameters at theoretical boundary, eg.:</span></span>
+<span id="cb12-32"><a href="#cb12-32" tabindex="-1"></a>fitAnt<span class="sc">$</span>params[<span class="fu">c</span>(<span class="st">&quot;sigma.lv&quot;</span>, <span class="st">&quot;B&quot;</span>, <span class="st">&quot;phi&quot;</span>, <span class="st">&quot;sigmaB&quot;</span>)]</span>
+<span id="cb12-33"><a href="#cb12-33" tabindex="-1"></a><span class="co">#&gt; $sigma.lv</span></span>
+<span id="cb12-34"><a href="#cb12-34" tabindex="-1"></a><span class="co">#&gt;        LV1        LV2 </span></span>
+<span id="cb12-35"><a href="#cb12-35" tabindex="-1"></a><span class="co">#&gt; 0.03570092 2.93901760 </span></span>
+<span id="cb12-36"><a href="#cb12-36" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb12-37"><a href="#cb12-37" tabindex="-1"></a><span class="co">#&gt; $B</span></span>
+<span id="cb12-38"><a href="#cb12-38" tabindex="-1"></a><span class="co">#&gt;               Bare.ground              Canopy.cover              Femur.length </span></span>
+<span id="cb12-39"><a href="#cb12-39" tabindex="-1"></a><span class="co">#&gt;                0.23730529                0.16335188                0.11901798 </span></span>
+<span id="cb12-40"><a href="#cb12-40" tabindex="-1"></a><span class="co">#&gt;  Bare.ground:Femur.length Canopy.cover:Femur.length </span></span>
+<span id="cb12-41"><a href="#cb12-41" tabindex="-1"></a><span class="co">#&gt;                0.03005463               -0.20594212 </span></span>
+<span id="cb12-42"><a href="#cb12-42" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb12-43"><a href="#cb12-43" tabindex="-1"></a><span class="co">#&gt; $phi</span></span>
+<span id="cb12-44"><a href="#cb12-44" tabindex="-1"></a><span class="co">#&gt;          Amblyopone.australis       Aphaenogaster.longiceps </span></span>
+<span id="cb12-45"><a href="#cb12-45" tabindex="-1"></a><span class="co">#&gt;                    4.58437666                    2.59539538 </span></span>
+<span id="cb12-46"><a href="#cb12-46" tabindex="-1"></a><span class="co">#&gt;   Camponotus.cinereus.amperei           Camponotus.claripes </span></span>
+<span id="cb12-47"><a href="#cb12-47" tabindex="-1"></a><span class="co">#&gt;                    0.88803002                    0.79104547 </span></span>
+<span id="cb12-48"><a href="#cb12-48" tabindex="-1"></a><span class="co">#&gt;        Camponotus.consobrinus          Camponotus.nigriceps </span></span>
+<span id="cb12-49"><a href="#cb12-49" tabindex="-1"></a><span class="co">#&gt;                    0.57344576                    3.94279588 </span></span>
+<span id="cb12-50"><a href="#cb12-50" tabindex="-1"></a><span class="co">#&gt;        Camponotus.nigroaeneus   Cardiocondyla.nuda.atalanta </span></span>
+<span id="cb12-51"><a href="#cb12-51" tabindex="-1"></a><span class="co">#&gt;                    0.97930032                    5.80868620 </span></span>
+<span id="cb12-52"><a href="#cb12-52" tabindex="-1"></a><span class="co">#&gt;           Crematogaster.sp..A            Heteroponera.sp..A </span></span>
+<span id="cb12-53"><a href="#cb12-53" tabindex="-1"></a><span class="co">#&gt;                    4.22165897                    0.53993550 </span></span>
+<span id="cb12-54"><a href="#cb12-54" tabindex="-1"></a><span class="co">#&gt;         Iridomyrmex.bicknelli            Iridomyrmex.dromus </span></span>
+<span id="cb12-55"><a href="#cb12-55" tabindex="-1"></a><span class="co">#&gt;                    0.40510477                    3.60992569 </span></span>
+<span id="cb12-56"><a href="#cb12-56" tabindex="-1"></a><span class="co">#&gt;          Iridomyrmex.mjobergi         Iridomyrmex.purpureus </span></span>
+<span id="cb12-57"><a href="#cb12-57" tabindex="-1"></a><span class="co">#&gt;                    0.46385810                    4.69575877 </span></span>
+<span id="cb12-58"><a href="#cb12-58" tabindex="-1"></a><span class="co">#&gt;         Iridomyrmex.rufoniger          Iridomyrmex.suchieri </span></span>
+<span id="cb12-59"><a href="#cb12-59" tabindex="-1"></a><span class="co">#&gt;                    0.11363043                    0.78803584 </span></span>
+<span id="cb12-60"><a href="#cb12-60" tabindex="-1"></a><span class="co">#&gt;      Iridomyrmex.suchieroides              Melophorus.sp..E </span></span>
+<span id="cb12-61"><a href="#cb12-61" tabindex="-1"></a><span class="co">#&gt;                    0.52182315                    0.94416950 </span></span>
+<span id="cb12-62"><a href="#cb12-62" tabindex="-1"></a><span class="co">#&gt;              Melophorus.sp..F              Melophorus.sp..H </span></span>
+<span id="cb12-63"><a href="#cb12-63" tabindex="-1"></a><span class="co">#&gt;                    0.43572531                    0.56694903 </span></span>
+<span id="cb12-64"><a href="#cb12-64" tabindex="-1"></a><span class="co">#&gt;              Meranoplus.sp..A               Monomorium.leae </span></span>
+<span id="cb12-65"><a href="#cb12-65" tabindex="-1"></a><span class="co">#&gt;                    3.35133398                    0.97995036 </span></span>
+<span id="cb12-66"><a href="#cb12-66" tabindex="-1"></a><span class="co">#&gt;         Monomorium.rothsteini         Monomorium.sydneyense </span></span>
+<span id="cb12-67"><a href="#cb12-67" tabindex="-1"></a><span class="co">#&gt;                    0.53236690                    1.54610655 </span></span>
+<span id="cb12-68"><a href="#cb12-68" tabindex="-1"></a><span class="co">#&gt;     Myrmecia.pilosula.complex            Notoncus.capitatus </span></span>
+<span id="cb12-69"><a href="#cb12-69" tabindex="-1"></a><span class="co">#&gt;                    2.46784075                    5.78667102 </span></span>
+<span id="cb12-70"><a href="#cb12-70" tabindex="-1"></a><span class="co">#&gt;        Notoncus.ectatommoides              Nylanderia.sp..A </span></span>
+<span id="cb12-71"><a href="#cb12-71" tabindex="-1"></a><span class="co">#&gt;                    0.42105524                    1.23189219 </span></span>
+<span id="cb12-72"><a href="#cb12-72" tabindex="-1"></a><span class="co">#&gt;             Ochetellus.glaber        Paraparatrechina.sp..B </span></span>
+<span id="cb12-73"><a href="#cb12-73" tabindex="-1"></a><span class="co">#&gt;                    2.32410415                    8.07236751 </span></span>
+<span id="cb12-74"><a href="#cb12-74" tabindex="-1"></a><span class="co">#&gt;                Pheidole.sp..A                Pheidole.sp..B </span></span>
+<span id="cb12-75"><a href="#cb12-75" tabindex="-1"></a><span class="co">#&gt;                    0.06138527                    1.93098742 </span></span>
+<span id="cb12-76"><a href="#cb12-76" tabindex="-1"></a><span class="co">#&gt;                Pheidole.sp..E                Pheidole.sp..J </span></span>
+<span id="cb12-77"><a href="#cb12-77" tabindex="-1"></a><span class="co">#&gt;                    0.74937411                    4.43042636 </span></span>
+<span id="cb12-78"><a href="#cb12-78" tabindex="-1"></a><span class="co">#&gt;             Polyrhachis.sp..A Rhytidoponera.metallica.sp..A </span></span>
+<span id="cb12-79"><a href="#cb12-79" tabindex="-1"></a><span class="co">#&gt;                    0.31143396                    0.20357015 </span></span>
+<span id="cb12-80"><a href="#cb12-80" tabindex="-1"></a><span class="co">#&gt;           Rhytidoponera.sp..B              Solenopsis.sp..A </span></span>
+<span id="cb12-81"><a href="#cb12-81" tabindex="-1"></a><span class="co">#&gt;                    1.72241349                    0.82275587 </span></span>
+<span id="cb12-82"><a href="#cb12-82" tabindex="-1"></a><span class="co">#&gt;              Stigmacros.sp..A                Tapinoma.sp..A </span></span>
+<span id="cb12-83"><a href="#cb12-83" tabindex="-1"></a><span class="co">#&gt;                    1.46339919                    0.91412757 </span></span>
+<span id="cb12-84"><a href="#cb12-84" tabindex="-1"></a><span class="co">#&gt;             Tetramorium.sp..A </span></span>
+<span id="cb12-85"><a href="#cb12-85" tabindex="-1"></a><span class="co">#&gt;                    0.61201003 </span></span>
+<span id="cb12-86"><a href="#cb12-86" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb12-87"><a href="#cb12-87" tabindex="-1"></a><span class="co">#&gt; $sigmaB</span></span>
+<span id="cb12-88"><a href="#cb12-88" tabindex="-1"></a><span class="co">#&gt;                Bare.ground  Canopy.cover</span></span>
+<span id="cb12-89"><a href="#cb12-89" tabindex="-1"></a><span class="co">#&gt; Bare.ground   1.002563e-07 -1.595587e-08</span></span>
+<span id="cb12-90"><a href="#cb12-90" tabindex="-1"></a><span class="co">#&gt; Canopy.cover -1.595587e-08  2.174267e-08</span></span>
+<span id="cb12-91"><a href="#cb12-91" tabindex="-1"></a><span class="co"># For example, variances for random slopes in sigmaB are close to zero</span></span>
+<span id="cb12-92"><a href="#cb12-92" tabindex="-1"></a> </span>
+<span id="cb12-93"><a href="#cb12-93" tabindex="-1"></a><span class="co">#Look for &quot;negative variances&quot;:</span></span>
+<span id="cb12-94"><a href="#cb12-94" tabindex="-1"></a><span class="fu">sum</span>(<span class="fu">diag</span>(fitAnt<span class="sc">$</span>Hess<span class="sc">$</span>cov.mat.mod)<span class="sc">&lt;</span><span class="dv">0</span>)</span>
+<span id="cb12-95"><a href="#cb12-95" tabindex="-1"></a><span class="co">#&gt; [1] 55</span></span>
+<span id="cb12-96"><a href="#cb12-96" tabindex="-1"></a>(fitAnt<span class="sc">$</span>TMBfn<span class="sc">$</span>par[fitAnt<span class="sc">$</span>Hess<span class="sc">$</span>incl])[(<span class="fu">diag</span>(fitAnt<span class="sc">$</span>Hess<span class="sc">$</span>cov.mat.mod)<span class="sc">&lt;</span><span class="dv">0</span>)]</span>
+<span id="cb12-97"><a href="#cb12-97" tabindex="-1"></a><span class="co">#&gt;       sigmaLV        lambda        lambda        lambda        lambda </span></span>
+<span id="cb12-98"><a href="#cb12-98" tabindex="-1"></a><span class="co">#&gt;  -2.939017597  37.277876483  -7.548098679  -0.208650756  14.424832344 </span></span>
+<span id="cb12-99"><a href="#cb12-99" tabindex="-1"></a><span class="co">#&gt;        lambda        lambda        lambda        lambda        lambda </span></span>
+<span id="cb12-100"><a href="#cb12-100" tabindex="-1"></a><span class="co">#&gt;  -3.350201501 -21.451504675 -20.575424114 -14.744403460  -7.484899207 </span></span>
+<span id="cb12-101"><a href="#cb12-101" tabindex="-1"></a><span class="co">#&gt;        lambda        lambda        lambda        lambda        lambda </span></span>
+<span id="cb12-102"><a href="#cb12-102" tabindex="-1"></a><span class="co">#&gt; -20.655719211  -0.070936022  12.016846627  -4.538485283   1.759055991 </span></span>
+<span id="cb12-103"><a href="#cb12-103" tabindex="-1"></a><span class="co">#&gt;        lambda        lambda        lambda        lambda        lambda </span></span>
+<span id="cb12-104"><a href="#cb12-104" tabindex="-1"></a><span class="co">#&gt; -11.776694095   7.550566659 -10.493590390  20.396136709   3.471411060 </span></span>
+<span id="cb12-105"><a href="#cb12-105" tabindex="-1"></a><span class="co">#&gt;        lambda        lambda        lambda        lambda        lambda </span></span>
+<span id="cb12-106"><a href="#cb12-106" tabindex="-1"></a><span class="co">#&gt; -15.124219958   1.845136944   0.321068452   0.208260555  -0.077917847 </span></span>
+<span id="cb12-107"><a href="#cb12-107" tabindex="-1"></a><span class="co">#&gt;        lambda        lambda        lambda        lambda        lambda </span></span>
+<span id="cb12-108"><a href="#cb12-108" tabindex="-1"></a><span class="co">#&gt;   0.183468373  -0.769367361   0.841669924   0.246964211  -0.134442932 </span></span>
+<span id="cb12-109"><a href="#cb12-109" tabindex="-1"></a><span class="co">#&gt;        lambda        lambda        lambda        lambda        lambda </span></span>
+<span id="cb12-110"><a href="#cb12-110" tabindex="-1"></a><span class="co">#&gt;   0.493581114  -0.182404949  -0.332339654  -0.242733409  -0.357891358 </span></span>
+<span id="cb12-111"><a href="#cb12-111" tabindex="-1"></a><span class="co">#&gt;        lambda        lambda        lambda        lambda        lambda </span></span>
+<span id="cb12-112"><a href="#cb12-112" tabindex="-1"></a><span class="co">#&gt;  -0.365832221   0.083293342  -0.727839039  -0.455530847   0.356732798 </span></span>
+<span id="cb12-113"><a href="#cb12-113" tabindex="-1"></a><span class="co">#&gt;        lambda        lambda        lambda        lambda        lambda </span></span>
+<span id="cb12-114"><a href="#cb12-114" tabindex="-1"></a><span class="co">#&gt;  -0.255515712  -0.412666062  -0.024596387  -0.169648449   0.132403415 </span></span>
+<span id="cb12-115"><a href="#cb12-115" tabindex="-1"></a><span class="co">#&gt;        lambda        lambda        lambda        lambda        lambda </span></span>
+<span id="cb12-116"><a href="#cb12-116" tabindex="-1"></a><span class="co">#&gt;  -0.036653934   0.052331886  -0.020231849  -0.204588323  -0.357623031 </span></span>
+<span id="cb12-117"><a href="#cb12-117" tabindex="-1"></a><span class="co">#&gt;        lambda        lambda        lambda        lambda       sigmaij </span></span>
+<span id="cb12-118"><a href="#cb12-118" tabindex="-1"></a><span class="co">#&gt;  -0.214005007   0.002040557  -0.094585447  -0.484310801  -0.363644404</span></span>
+<span id="cb12-119"><a href="#cb12-119" tabindex="-1"></a><span class="co"># There are lot of &quot;negative variances&quot;, which can be a result from non negative Hessian</span></span></code></pre></div>
+<div class="figure" style="text-align: center">
+<img role="img" aria-label="plot of chunk identifypar" src="data:image/png;base64,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" alt="plot of chunk identifypar" width="70%" />
+<p class="caption">
+plot of chunk identifypar
+</p>
+</div>
+<p>Profiling the likelihood shape with <code>TMB::tmbprofile</code> for
+these problematic parameter can give insight on the problem. Well shaped
+likelihood is smooth around the maximum.</p>
+<pre><code># Let&#39;s profile the likelihood for (log) variances of random slopes:
+parProblem &lt;- fitAnt$TMBfn$par[names(fitAnt$TMBfn$par) == &quot;sigmaB&quot;]
+parProblem
+#&gt;    sigmaB    sigmaB 
+#&gt; -8.057768 -8.821995
+# Find the index of the log-variance of species specific slope for Bare.ground
+(parNO1 &lt;- which(fitAnt$TMBfn$par == parProblem[1]))
+#&gt; sigmaB 
+#&gt;    311
+# Draw a profile of the likelihood with respect to this parameter:
+par1prof &lt;- TMB::tmbprofile(fitAnt$TMBfn,parNO1, h=1e-3, parm.range = c(-12,-1), trace = FALSE)
+
+# Find the index of the log-variance of species specific slope for Canopy.cover:
+(parNO2 &lt;- which(fitAnt$TMBfn$par == parProblem[2]))
+#&gt; sigmaB 
+#&gt;    312
+# Draw a profile of the likelihood with respect to this parameter:
+par2prof &lt;- TMB::tmbprofile(fitAnt$TMBfn,parNO2, h=1e-3, parm.range = c(-12,-1), trace = FALSE)
+
+par(mfrow=c(1,2))
+plot(par1prof,main = &quot;Bare.ground&quot;)
+plot(par2prof,main = &quot;Canopy.cover&quot;)</code></pre>
+<div class="figure" style="text-align: center">
+<img role="img" aria-label="plot of chunk profilelogL" src="data:image/png;base64,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" alt="plot of chunk profilelogL" width="70%" />
+<p class="caption">
+plot of chunk profilelogL
+</p>
+</div>
+<p>Above, the negative log-likelihood is mostly well shaped with respect
+to the log-variance of random slope <code>Bare.ground</code>. For the
+random slope variance of <code>Canopy.cover</code>, the curvature is not
+clean but rather jagged and non‑smooth, with irregular sharp jumps. This
+behaviour is common when the log‑variance enters a region where the
+random slope variance is near zero, which can introduce instability and
+complicate the optimization process.</p>
+<p>The above is an example of a situation where the likelihood is not
+well-shaped, or where the algorithm has wandered into a region where the
+curvature is problematic. Some of the common reasons for such behaviour
+include:</p>
+<ul>
+<li>Too complex a model for the amount of data / insufficient
+information in the data: When the data do not contain enough signal for
+a parameter (e.g., a random slope variance), the likelihood may become
+flat, weakly curved, or unstable.</li>
+<li>Parameter constraints: Parameters which have restrictions can create
+sharp bends or irregularities in the likelihood surface, such in areas
+near zero when parameter is restricted to be non‑negative.</li>
+<li>Poor initial values: Bad starting points may lead the optimizer into
+ill-behaved regions of the parameter space.</li>
+<li>Approximation methods: Techniques, such as Laplace approximation,
+can introduce numerical artifacts, making the likelihood non‑smooth or
+inaccurate in certain areas of the parameter space.</li>
+<li>Collinearity or weak identifiability: Highly correlated parameters
+or poorly identified model components can produce unstable gradients and
+Hessians.</li>
+<li>Numerical instability: Underflow, overflow, and rounding errors can
+disrupt smooth evaluation of the likelihood and lead to irregular
+behaviour.</li>
+</ul>
+</div>
+<div id="modify-or-simplify-the-model" class="section level2">
+<h2>Modify or Simplify the Model</h2>
+<p>Complex models are harder to optimize. If non of the previous steps
+do help, and maybe profiling the likelihood also suggest it, it might be
+that the model you are trying to fit, is not suitable to the data or
+that there is not enough information in the data to estimate the
+parameters of the model.</p>
+<p>A number of options can then be tried with consideration, to modify
+or simplify the model.</p>
+<p>Options include, for example:</p>
+<ul>
+<li>Simplifying the “nuicance” parameters structures, eg. setting common
+dispersion/scale/shape parameter for different responses using
+<code>disp.formula</code></li>
+<li>Reducing the number of latent variables, removing random
+effects/random slopes etc. Or simplifying the structure for them, eg.
+using site level random effects/LVs instead of plot level random effects
+if sampling structure has nested form.</li>
+<li>Changing fixed effect to random effect or vice versa</li>
+<li>Standardize Predictors: (if not already done that), strongly
+differently scaled predictors may cause numerical instabilities.</li>
+<li>Removing problematic covariates: analysing your data visually and
+the parameters even from the model that did not converge may help.
+Analysing the likelihood for the coefficient for this covariate with
+<code>TMB::tmbprofile</code> may also help in identifying this
+problem.</li>
+<li>Trying a different response distribution (if alternative options are
+available to your data type). Residual analysis may help in this
+choice.</li>
+<li>And so on</li>
+</ul>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

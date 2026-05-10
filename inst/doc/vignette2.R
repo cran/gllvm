@@ -36,7 +36,7 @@ legend("bottomright", lty=1:2, legend = c("var = mean", "var = mean+phi*mu^2"), 
 sDesign<-data.frame(Site=Xenv$Site)
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  ftNULL <- gllvm(Ysoil, studyDesign = sDesign, family = "negative.binomial", row.eff = ~(1|Site), num.lv = 2, sd.errors = FALSE)
+# ftNULL <- gllvm(Ysoil, studyDesign = sDesign, family = "negative.binomial", row.eff = ~(1|Site), num.lv = 2, sd.errors = FALSE)
 
 ## -----------------------------------------------------------------------------
 ftNULL
@@ -100,8 +100,8 @@ legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch=c(1, 2, 3), bty = "n")
 Xsoils <- scale(Xenv[, 1:3])
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  ftXph <- gllvm(Ysoil, X = Xsoils, studyDesign = sDesign, formula = ~pH, family = "negative.binomial",
-#                 row.eff = ~(1|Site), num.lv = 2)
+# ftXph <- gllvm(Ysoil, X = Xsoils, studyDesign = sDesign, formula = ~pH, family = "negative.binomial",
+#                row.eff = ~(1|Site), num.lv = 2)
 
 ## -----------------------------------------------------------------------------
 ftXph
@@ -115,7 +115,7 @@ ordiplot(ftXph, main = "Ordination of sites",
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  ftX <- gllvm(Ysoil, X = Xsoils, studyDesign = sDesign, family = "negative.binomial", row.eff = ~(1|Site), num.lv = 2)
+# ftX <- gllvm(Ysoil, X = Xsoils, studyDesign = sDesign, family = "negative.binomial", row.eff = ~(1|Site), num.lv = 2)
 
 ## -----------------------------------------------------------------------------
 ftX
@@ -129,11 +129,11 @@ ordiplot(ftX, main = "Ordination of sites",
 legend("topleft", legend = c("Kil", "NyA", "Mayr"), pch = c(1, 2, 3), bty = "n")
 
 ## ----eval = FALSE-------------------------------------------------------------
-#  Xenv <- data.frame(Xsoils, Region = factor(Xenv$Region),
-#                     Soiltype = factor(Xenv$Soiltype))
-#  ftXi <- gllvm(Ysoil, X = Xenv, studyDesign = sDesign, formula = ~ SOM + pH + Phosp + Region,
-#                family = "negative.binomial", row.eff = ~(1|Site), num.lv = 2,
-#                sd.errors = FALSE)
+# Xenv <- data.frame(Xsoils, Region = factor(Xenv$Region),
+#                    Soiltype = factor(Xenv$Soiltype))
+# ftXi <- gllvm(Ysoil, X = Xenv, studyDesign = sDesign, formula = ~ SOM + pH + Phosp + Region,
+#               family = "negative.binomial", row.eff = ~(1|Site), num.lv = 2,
+#               sd.errors = FALSE)
 
 ## -----------------------------------------------------------------------------
 ftXi
