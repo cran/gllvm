@@ -31,13 +31,15 @@
 #'# Fit gllvm model
 #'fit <- gllvm(y = y, X, formula = ~soil.dry, family = poisson())
 #'# Fitted values
-#'newX = data.frame(soil.dry = seq(min(X[,"soil.dry"]),max(X[,"soil.dry"]),length.out=100))
+#'newX = data.frame(soil.dry = seq(min(X[,"soil.dry"]),
+#'                  max(X[,"soil.dry"]),length.out=100))
 #'predSR <- predictSR(fit, newX = newX, level = 0)
 #'
 #'# Visualize the results
-#' par(mfrow = c(4,4))
+#' par(mfrow = c(2,2))
 #' for(i in 0:ncol(fit$y)){
-#' plot(x = newX$soil.dry, y = predSR$predicted$fit[,i+1], xlab = "Soil dry matter content", 
+#' plot(x = newX$soil.dry, y = predSR$predicted$fit[,i+1], 
+#'      xlab = "Soil dry matter content", 
 #'      ylab = bquote(p(SR == .(i))), type = "l", ylim = c(0,1))
 #' }
 #'
@@ -52,6 +54,7 @@
 
 predictSR.gllvm <- function(object, spp = NULL, expected = "mean", se.fit = 1000, level = 1, ci = "expected", alpha = 0.95, seed = 42, return.pred = FALSE, batch = NULL, ...){
 
+  if(isFALSE(object$sd) || is.null(object$sd)) se.fit = FALSE
   fit <- predict(object, type = "response", se.fit = FALSE, ordinal.cat = 1L, spp = spp, level = level, ...)
 
   probs <- gllvm.presence.prob(fit, object, spp = spp)
@@ -205,9 +208,11 @@ hilbert_to_provided_center <- function(mat, center) {
 #'# Fit gllvm model
 #'fit <- gllvm(y = y, X, formula = ~soil.dry, family = poisson())
 #'# fitted values
-#'newX = data.frame(soil.dry = seq(min(X[,"soil.dry"]),max(X[,"soil.dry"]),length.out=100))
+#'newX = data.frame(soil.dry = seq(min(X[,"soil.dry"]),
+#'                  max(X[,"soil.dry"]), length.out=100))
 #'predPair <- predictPairwise(fit, spp = c(1,2), newX = newX, level = 0)
-#'plot(x = newX$soil.dry, y = predPair$prob, type = "l", xlab = "Soil dry moisture content", 
+#'plot(x = newX$soil.dry, y = predPair$prob, type = "l", 
+#'     xlab = "Soil dry moisture content", 
 #'     ylab = "Probability of co-occurrence", ylim = c(0,1))
 #'
 #'}
@@ -306,21 +311,18 @@ gllvm.presence.prob <- function(fit, object, spp = NULL) {
     mu    <- fit[, fcols, drop = FALSE]
 
     if(fam == "binomial"){
-      Ntrials_mat <- matrix(object$Ntrials[, j, drop = FALSE], nrow = n, ncol = length(pos))
-      probs[, pos] <- 1 - pbinom(0, size = Ntrials_mat, prob = mu)
+      probs[, pos] <- mu
     } else if(fam == "ZIB"){
       # params$phi for ZIB stores the zero-inflation probability directly (see gllvm.TMB.R line ~1669)
       sigma_vec <- rep(object$params$phi[j], each = n)
-      Ntrials_vec <- c(object$Ntrials[, j, drop = FALSE])
-      probs[, pos] <- matrix(1 - pzib(0, mu = as.vector(mu), sigma = sigma_vec, Ntrials = Ntrials_vec), nrow = n)
+      probs[, pos] <- matrix(1 - pzib(0, mu = as.vector(mu), sigma = sigma_vec, Ntrials = 1L), nrow = n)
     } else if(fam == "ZNIB"){
       # params$phi stores p0 and ZINB.phi stores pN (already on probability scale, see residuals.gllvm)
       phis0 <- (object$params$phi[j]      / (1 + object$params$phi[j] + object$params$ZINB.phi[j]))
       phisN <- (object$params$ZINB.phi[j] / (1 + object$params$phi[j] + object$params$ZINB.phi[j]))
       p0_vec  <- rep(phis0, each = n)
       pN_vec  <- rep(phisN, each = n)
-      Ntrials_vec <- c(object$Ntrials[, j, drop = FALSE])
-      probs[, pos] <- matrix(1 - pznib(0, mu = as.vector(mu), p0 = p0_vec, pN = pN_vec, Ntrials = Ntrials_vec), nrow = n)
+      probs[, pos] <- matrix(1 - pznib(0, mu = as.vector(mu), p0 = p0_vec, pN = pN_vec, Ntrials = 1L), nrow = n)
     } else if(fam == "poisson"){
       probs[, pos] <- ppois(0, lambda = mu, lower.tail = FALSE)
     } else if(fam == "negative.binomial"){
@@ -332,13 +334,18 @@ gllvm.presence.prob <- function(fit, object, spp = NULL) {
     } else if(fam == "betaH"){
       probs[, pos] <- 1 - fit[, -seq_len(ncol(object$y)), drop = FALSE][, j, drop = FALSE]
     } else if(fam == "orderedBeta"){
-      linkinv <- binomial(link = object$link)$linkinv
-      linkfun <- binomial(link = object$link)$linkfun
-      zeta1 <- if(object$zeta.struc == "species")
-        matrix(object$params$zeta[j, 1], nrow = n, ncol = length(pos), byrow = TRUE)
-      else
-        object$params$zeta[1]
-      probs[, pos] <- 1 - linkinv(zeta1 - linkfun(mu))
+      for(lnk in unique(object$link[j])){
+        lnk_idx  <- which(object$link[j] == lnk)
+        lnk_j    <- j[lnk_idx]
+        lnk_pos  <- pos[lnk_idx]
+        linkinv  <- binomial(link = lnk)$linkinv
+        linkfun  <- binomial(link = lnk)$linkfun
+        zeta1 <- if(object$zeta.struc == "species")
+          matrix(object$params$zeta[lnk_j, 1], nrow = n, ncol = length(lnk_pos), byrow = TRUE)
+        else
+          object$params$zeta[1]
+        probs[, lnk_pos] <- 1 - linkinv(zeta1 - linkfun(mu[, lnk_idx, drop = FALSE]))
+      }
     } else if(fam == "ZIP"){
       phi_vec <- rep(object$params$phi[j], each = n)
       probs[, pos] <- matrix(1 - pzip(0, mu = as.vector(mu), sigma = phi_vec), nrow = n)
@@ -354,8 +361,7 @@ gllvm.presence.prob <- function(fit, object, spp = NULL) {
       probs[, pos] <- 1 - mu # mu = p(y;k=1), i.e., 1- probability of absence
     } else if(fam == "beta.binomial"){
       phi_vec <- rep(object$params$phi[j], each = n)
-      Ntrials_vec <- c(object$Ntrials[, j, drop = FALSE])
-      probs[, pos] <- matrix(1 - pbetabinom(0, mu = as.vector(mu), phi = phi_vec, Ntrials = Ntrials_vec), nrow = n)
+      probs[, pos] <- matrix(1 - pbetabinom(0, mu = as.vector(mu), phi = phi_vec, Ntrials = 1L), nrow = n)
     }
   }
 

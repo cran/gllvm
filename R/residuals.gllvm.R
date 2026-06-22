@@ -235,9 +235,9 @@ residuals.gllvm <- function(object, ...) {
   if (any(object$family == "ZIB")) {
     p_f = sum(object$family == "ZIB")
     if(length(Ntrials)==1)Ntrials <- rep(Ntrials,p_f)
-    if(length(Ntrials)==p)Ntrials <- rep(Ntrials, each = n)
-    if(is.matrix(Ntrials))Ntrials <- c(Ntrials)
-    
+    if(length(Ntrials)==p)Ntrials <- rep(Ntrials[object$family == "ZIB"], each = n)
+    if(is.matrix(Ntrials))Ntrials <- c(Ntrials[,object$family == "ZIB"])
+
     b <- pzib(as.vector(y[,object$family == "ZIB"]), Ntrials = Ntrials, mu = as.vector(mu[,object$family == "ZIB"]), sigma = rep(object$params$phi[object$family == "ZIB"], each = n))
     a <- pmin(b, pzib(as.vector(y[,object$family == "ZIB"]) - 1, Ntrials = Ntrials, mu = as.vector(mu[,object$family == "ZIB"]), sigma = rep(object$params$phi[object$family == "ZIB"], each = n)))
     
@@ -250,9 +250,9 @@ residuals.gllvm <- function(object, ...) {
   if (any(object$family == "ZNIB")) {
     p_f = sum(object$family == "ZNIB")
     if(length(Ntrials)==1)Ntrials <- rep(Ntrials,p_f)
-    if(length(Ntrials)==p)Ntrials <- rep(Ntrials, each = n)
-    if(is.matrix(Ntrials))Ntrials <- c(Ntrials)
-    
+    if(length(Ntrials)==p)Ntrials <- rep(Ntrials[object$family == "ZNIB"], each = n)
+    if(is.matrix(Ntrials))Ntrials <- c(Ntrials[,object$family == "ZNIB"])
+
     phis0 = (object$params$phi/(1+object$params$phi + object$params$ZINB.phi))[object$family == "ZNIB"];
     phisN = (object$params$ZINB.phi/(1+object$params$phi + object$params$ZINB.phi))[object$family == "ZNIB"];
     
@@ -310,9 +310,9 @@ residuals.gllvm <- function(object, ...) {
               }
             probK[k.max[j],] <- 1 - binomial(link=linkj)$linkinv(object$params$zeta[j,k.max[j] - 1] - eta.mat[, j])
             probK <- rbind(0, probK)
-            cumsum.b <- colSums(probK*outer(1:(k.max[j]+1),y[,j]+ifelse(min(y[,j])==0,1,0)+1,"<="))
-            cumsum.a <- pmin(cumsum.b, colSums(probK[-nrow(probK),]*outer(1:k.max[j],y[,j]+ifelse(min(y[,j])==0,1,0),"<=")))
-          
+            cumsum.b <- colSums(probK*outer(1:(k.max[j]+1),y[,j]+ifelse(min(y[,j], na.rm=TRUE)==0,1,0)+1,"<="))
+            cumsum.a <- pmin(cumsum.b, colSums(probK[-nrow(probK),]*outer(1:k.max[j],y[,j]+ifelse(min(y[,j], na.rm=TRUE)==0,1,0),"<=")))
+
             u = cumsum.a+(cumsum.b-cumsum.a)*runif(n)
           
             if(any(u==1, na.rm = TRUE)&&replace)u[u==1] <- 1-1e-16
@@ -333,8 +333,8 @@ residuals.gllvm <- function(object, ...) {
             }
             probK[k.max,] <- 1 - binomial(link=linkj)$linkinv(object$params$zeta[k.max - 1 + kz] - eta.mat[, j])
             probK <- rbind(0, probK)
-            cumsum.b <- colSums(probK*outer(1:(k.max+1),y[,j]+ifelse(min(y[,o_ind])==0,1,0)+1,"<="))
-            cumsum.a <- pmin(cumsum.b, colSums(probK[-nrow(probK),]*outer(1:k.max,y[,j]+ifelse(min(y[,o_ind])==0,1,0),"<=")))
+            cumsum.b <- colSums(probK*outer(1:(k.max+1),y[,j]+ifelse(min(y[,o_ind], na.rm=TRUE)==0,1,0)+1,"<="))
+            cumsum.a <- pmin(cumsum.b, colSums(probK[-nrow(probK),]*outer(1:k.max,y[,j]+ifelse(min(y[,o_ind], na.rm=TRUE)==0,1,0),"<=")))
             
             u = cumsum.a+(cumsum.b-cumsum.a)*runif(n)
             

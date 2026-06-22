@@ -37,9 +37,11 @@ gllvm.iter <- function(...){
     if((sum(args$y[,args$family == "orderedBeta", drop=FALSE]==1, na.rm = TRUE) + sum(args$y[,args$family == "orderedBeta", drop=FALSE]==0, na.rm = TRUE))==0){
       stop("No zeros or ones in the data, please use 'family = `beta`' instead.")
     }
-    if(!all(colSums(args$y[,args$family == "orderedBeta", drop=FALSE]==1, na.rm = TRUE)>0) & !all(colSums(args$y[,args$family == "orderedBeta", drop=FALSE]==0, na.rm = TRUE)>0)){
+    if(!all(colSums(args$y[,args$family == "orderedBeta", drop=FALSE]==1, na.rm = TRUE)>0) & !all(colSums(args$y[,args$family == "orderedBeta", drop=FALSE]==0, na.rm = TRUE)>0) && is.null(args$setMap$zeta)){
       warning("Not all species have zeros and ones. Setting 'zeta.struc = `common`'.")
       args$zeta.struc = "common"
+    }else if(!all(colSums(args$y[,args$family == "orderedBeta", drop=FALSE]==1, na.rm = TRUE)>0) & !all(colSums(args$y[,args$family == "orderedBeta", drop=FALSE]==0, na.rm = TRUE)>0) && !is.null(args$setMap$zeta)){
+      warning("Not all species have zeros and ones. You may want to set 'zeta.struc = `common`'.")
     }
   }
   
@@ -78,10 +80,20 @@ while(n.i <= args$n.init && n.i.i<args$n.init.max){
   
   if(!is.null(seed)) set.seed(seed[n.i])
   
+  fit_error <- NULL
   if(model == "gllvm.TMB"){
-  fit <- do.call(gllvm.TMB, args)
+    fit <- tryCatch(do.call(gllvm.TMB, args), error = function(e) { fit_error <<- conditionMessage(e); NULL })
   }else if(model == "trait.TMB"){
-    fit <- do.call(trait.TMB, args)
+    fit <- tryCatch(do.call(trait.TMB, args), error = function(e) { fit_error <<- conditionMessage(e); NULL })
+  }
+  if(!is.null(fit_error) || !is.finite(fit$logL)){
+    if(!is.null(fit_error) && args$trace){
+      cat("  -> Iteration", n.i, "failed with error:", fit_error, "\n")
+    } else if(args$trace){
+      cat("  -> Iteration", n.i, "converged to infinity \n")
+    }
+    n.i <- n.i + 1
+    next
   }
   #### Check if model fit succeeded/improved on this iteration n.i
   
@@ -96,12 +108,11 @@ while(n.i <= args$n.init && n.i.i<args$n.init.max){
   norm.gr2 <- norm(as.matrix(gr2))
   max.gr2 <- max(abs(gr2))
   n.i.i <- n.i.i +1
-  grad.similar <- isTRUE(all.equal(norm.gr1, norm.gr2, tolerance = 1,   scale = 1))
-  grad.better  <- !grad.similar && norm.gr2 < norm.gr1  # meaningfully better gradient (diff > 1)
+  grad.similar <- norm.gr2/norm.gr1 < 2 # arbitrary cut-off
+  grad.better  <- norm.gr2/norm.gr1 < 0.1 # grad better scale invariant
   logL.better  <- fit$logL > fitFinal$logL
-  logL.similar <- isTRUE(all.equal(fit$logL, fitFinal$logL, tolerance = 0.5, scale = 1))
-  accept <- (logL.better  && (grad.better || grad.similar)) || # better logL with non-worse gradient
-            (logL.similar && grad.better)                      # similar logL but meaningfully better gradient
+  accept <- (grad.similar && logL.better) || # similar gradients and logL improved
+            grad.better                      # gradient meaningfully better (>0.1), regardless of logL
 
   if((n.i==1 || ((is.nan(norm.gr1) && !is.nan(norm.gr2)) || !is.nan(norm.gr2) && accept))  && is.finite(fit$logL)){
     n.i.i <- 0

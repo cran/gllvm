@@ -144,9 +144,7 @@ Type objective_function<Type>::operator() ()
     // num_RR=0;
   }
   
-  // Distance matrix calculated from the coordinates for LVs
-  matrix<Type> DiSc_lv(dc_lv.cols(),dc_lv.cols()); DiSc_lv.fill(0.0);
-  matrix<Type> dc_scaled_lv(dc_lv.rows(),dc_lv.cols()); dc_scaled_lv.fill(0.0);
+  // dc_lv is a pre-computed pairwise distance matrix (from R)
   // matrix<Type> DistM(dc.rows(),dc.rows());
   // if(((num_corlv>0) || (((random(0)>0) & (nlvr==(num_lv+num_lv_c))) & (rstruc>0))) & ((cstruc(0)==2) || (cstruc(0)>3))){
   //   matrix<Type> DiSc(dc.cols(),dc.cols());
@@ -443,6 +441,7 @@ Type objective_function<Type>::operator() ()
         A(i) = Delta*A(i);
       }
       
+      
     } else if(num_corlv > 0) {
       u *= Delta;
       if((num_RR*random(2))>0 && (quadratic)>0){
@@ -453,6 +452,8 @@ Type objective_function<Type>::operator() ()
         }
       }
     } // ad else for num_corlv to create ucopy & create D*u*= Delta;
+    
+    
     
     //random slopes for constr. ord.
     vector<matrix<Type>> Ab_lvcov;  //covariance of LVs due to random slopes
@@ -2115,13 +2116,8 @@ Type objective_function<Type>::operator() ()
                   Sr = gllvm::corCS(Type(1), log_sigma(sigmacounter), trmsize(1,re));
                   sigmacounter += 1;
                 }else if((cstruc(re) == 8) || (cstruc(re) == 10)){ // corMatern, corExp
-                  // Distance matrix calculated from the coordinates for rows
-                  matrix<Type> DiSc(dc(dccounter).cols(),dc(dccounter).cols()); DiSc.fill(0.0);
-                  matrix<Type> dc_scaled(dc(dccounter).rows(),dc(dccounter).cols()); dc_scaled.fill(0.0);
-                  DiSc.setZero();
-                  DiSc.diagonal().array() += 1/sigma(sigmacounter);
+                  matrix<Type> dc_scaled = dc(dccounter) / sigma(sigmacounter);
                   sigmacounter++;
-                  dc_scaled = dc(dccounter)*DiSc;
                   if(cstruc(re) == 8){ // corExp
                     Sr = gllvm::corExp(Type(1), Type(0), trmsize(1,re), dc_scaled);
                   } else if(cstruc(re) == 10) { // corMatern
@@ -2130,7 +2126,7 @@ Type objective_function<Type>::operator() ()
                   }
                   dccounter++;
                 }
-                
+
                 //TMB's matinvpd function: inverse of matrix with logdet for free
                 CppAD::vector<Type> res = atomic::invpd(atomic::mat2vec(Sr));
                 logdetSr = logdetSr*trmsize(1,re) + trmsize(0,re)*res[0];
@@ -2228,13 +2224,8 @@ Type objective_function<Type>::operator() ()
             Sr = gllvm::corCS(sigma(sigmacounter), log_sigma(sigmacounter+1), trmsize(1,re));
             sigmacounter += 2;
           }else if((cstruc(re) == 4) || (cstruc(re) == 2)){ // corMatern, corExp
-            // Distance matrix calculated from the coordinates for rows
-            matrix<Type> DiSc(dc(dccounter).cols(),dc(dccounter).cols()); DiSc.fill(0.0);
-            matrix<Type> dc_scaled(dc(dccounter).rows(),dc(dccounter).cols()); dc_scaled.fill(0.0);
-            DiSc.setZero();
-            DiSc.diagonal().array() += 1/sigma(sigmacounter);
+            matrix<Type> dc_scaled = dc(dccounter) / sigma(sigmacounter);
             sigmacounter++;
-            dc_scaled = dc(dccounter)*DiSc;
             if(cstruc(re)==2){ // corExp
               Sr = gllvm::corExp(sigma(sigmacounter), Type(0), trmsize(1,re), dc_scaled);
               sigmacounter++;
@@ -2244,7 +2235,7 @@ Type objective_function<Type>::operator() ()
             }
             dccounter++;
           }
-          
+
           //TMB's matinvpd function: inverse of matrix with logdet for free
           CppAD::vector<Type> res = atomic::invpd(atomic::mat2vec(Sr));
           logdetSr = res[0];
@@ -2339,13 +2330,8 @@ Type objective_function<Type>::operator() ()
                   Sr = gllvm::corCS(Type(1), log_sigma(sigmacounter), trmsize(1,re));
                   sigmacounter += 1;
                 }else if((cstruc(re) == 8) || (cstruc(re) == 10)){ // corMatern, corExp
-                  // Distance matrix calculated from the coordinates for rows
-                  matrix<Type> DiSc(dc(dccounter).cols(),dc(dccounter).cols()); DiSc.fill(0.0);
-                  matrix<Type> dc_scaled(dc(dccounter).rows(),dc(dccounter).cols()); dc_scaled.fill(0.0);
-                  DiSc.setZero();
-                  DiSc.diagonal().array() += 1/sigma(sigmacounter);
+                  matrix<Type> dc_scaled = dc(dccounter) / sigma(sigmacounter);
                   sigmacounter++;
-                  dc_scaled = dc(dccounter)*DiSc;
                   if(cstruc(re) == 8){ // corExp
                     Sr = gllvm::corExp(Type(1), Type(0), trmsize(1,re), dc_scaled);
                   } else if(cstruc(re) == 10) { // corMatern
@@ -2354,7 +2340,7 @@ Type objective_function<Type>::operator() ()
                   }
                   dccounter++;
                 }
-                
+
                 //TMB's matinvpd function: inverse of matrix with logdet for free
                 CppAD::vector<Type> res = atomic::invpd(atomic::mat2vec(Sr));
                 logdetSr = logdetSr*trmsize(1,re) + trmsize(0,re)*res[0];
@@ -2398,17 +2384,43 @@ Type objective_function<Type>::operator() ()
               nll -= 0.5*(trmsize(0,re)*trmsize(1,re)-logdetSr);
             }
             
+          }else if(cstruc(re) == 0 && trmsize(0,re) > 1){
+            // diag() with nc > 1 covariates: nc independent per-covariate prior variances.
+            // Va covariance is nc x nc diagonal per group, looped over nl groups.
+            matrix<Type> sds = Eigen::MatrixXd::Zero(trmsize(0,re), trmsize(0,re));
+            sds.diagonal() = sigma.segment(sigmacounter, trmsize(0,re));
+            sigmacounter += trmsize(0,re);
+            matrix<Type> invSrDiag(trmsize(0,re), trmsize(0,re));
+            invSrDiag.setZero();
+            invSrDiag.diagonal() = sds.diagonal().array().pow(-2);
+            Type logdetSr = 2 * sds.diagonal().array().log().sum(); // log-det per group
+
+            matrix<Type> Arm(trmsize(0,re), trmsize(0,re));
+            for(int q = 0; q < trmsize(1,re); q++){
+              Arm.setZero();
+              for(int d = 0; d < trmsize(0,re); d++){
+                Arm(d,d) = exp(lg_Ar(sdcounter));
+                sdcounter++;
+              }
+              matrix<Type> ArmMat = Arm * Arm.transpose();
+              int col_offset = trmsize.row(1).cwiseProduct(trmsize.row(0)).head(re).sum() + trmsize(0,re)*q;
+              cQ += (0.5*(dr0.middleCols(col_offset, trmsize(0,re)) * ArmMat * dr0.middleCols(col_offset, trmsize(0,re)).transpose()).diagonal()).replicate(1,p);
+              int r0r_offset = trmsize.row(1).cwiseProduct(trmsize.row(0)).head(re).sum() + trmsize(0,re)*q;
+              nll -= Arm.diagonal().array().log().sum()
+                     - 0.5*((invSrDiag * ArmMat).trace() + (r0r.col(0).segment(r0r_offset, trmsize(0,re)).transpose() * (invSrDiag * r0r.col(0).segment(r0r_offset, trmsize(0,re)))).sum());
+              nll -= 0.5*(trmsize(0,re) - logdetSr);
+            }
           }else{
           Eigen::DiagonalMatrix<Type, Eigen::Dynamic> Arm(trmsize(1,re));
           matrix<Type> Sr(trmsize(1,re), trmsize(1,re));Sr.setZero();
-          
+
           for (int d=0; d<(trmsize(1,re)); d++){ // diagonals of varcov
             Arm.diagonal()(d)=exp(lg_Ar(sdcounter));
             sdcounter++;
           }
           // add terms to cQ
           cQ += (0.5*(dr0.middleCols(trmsize.row(1).cwiseProduct(trmsize.row(0)).head(re).sum(), trmsize(1,re))*Arm*Arm*dr0.middleCols(trmsize.row(1).cwiseProduct(trmsize.row(0)).head(re).sum(), trmsize(1,re)).transpose()).eval().diagonal()).replicate(1,p);
-          
+
           // We build the actual covariance matrix
           // This can straightforwardly be extended to estimate correlation between effects
           matrix <Type> invSr(trmsize(1,re), trmsize(1,re));invSr.setZero();
@@ -2425,13 +2437,8 @@ Type objective_function<Type>::operator() ()
             Sr = gllvm::corCS(sigma(sigmacounter), log_sigma(sigmacounter+1), trmsize(1,re));
             sigmacounter += 2;
           }else if((cstruc(re) == 4) || (cstruc(re) == 2)){ // corMatern, corExp
-            // Distance matrix calculated from the coordinates for rows
-            matrix<Type> DiSc(dc(dccounter).cols(),dc(dccounter).cols()); DiSc.fill(0.0);
-            matrix<Type> dc_scaled(dc(dccounter).rows(),dc(dccounter).cols()); dc_scaled.fill(0.0);
-            DiSc.setZero();
-            DiSc.diagonal().array() += 1/sigma(sigmacounter);
+            matrix<Type> dc_scaled = dc(dccounter) / sigma(sigmacounter);
             sigmacounter++;
-            dc_scaled = dc(dccounter)*DiSc;
             if(cstruc(re)==2){ // corExp
               Sr = gllvm::corExp(sigma(sigmacounter), Type(0), trmsize(1,re), dc_scaled);
               sigmacounter++;
@@ -2477,6 +2484,7 @@ Type objective_function<Type>::operator() ()
     
     vector<Eigen::DiagonalMatrix<Type, Eigen::Dynamic>> D(p);
     
+
     // LVs in model:
     if(nlvr>0){
       matrix<Type> b_lv2(x_lv.cols(),nlvr);
@@ -2498,10 +2506,14 @@ Type objective_function<Type>::operator() ()
       //Binomial, Gaussian, Ordinal
       if(num_corlv==0){
         for (int i=0; i<n; i++) {
+          matrix <Type> Atemp = A(i)*A(i).transpose();
           for (int j=0; j<p;j++){
-            cQ(i,j) += 0.5*(newlam.col(j).transpose()*A(i)*A(i).transpose()*newlam.col(j)).value();
+            cQ(i,j) += 0.5*(newlam.col(j).transpose()*Atemp*newlam.col(j)).value();
           }
         }
+        // REPORT(cQ);
+        // REPORT(A);
+        
       } else if(num_corlv>0) { //CorLV // Correlated LVs
         int i,j,d;
         int arank = 2;
@@ -2539,7 +2551,7 @@ Type objective_function<Type>::operator() ()
                   }}
               }
             
-              nll -= Alvm.diagonal().array().log().sum() - (Alvm.array().square()).sum() - 0.5*((ucopy.row(d)*ucopy.row(d).transpose()).sum());  // nll -= atomic::logdet(Alvm.col(d).matrix()) + 0.5*( - (Alvm.col(d).matrix()*Alvm.col(d).matrix().transpose()).diagonal().sum() - (ucopy.row(d).matrix()*ucopy.row(d).matrix().transpose()).sum());
+              nll -= Alvm.diagonal().array().log().sum() - 0.5*(Alvm.array().square()).sum() - 0.5*((ucopy.row(d)*ucopy.row(d).transpose()).sum());  // nll -= atomic::logdet(Alvm.col(d).matrix()) + 0.5*( - (Alvm.col(d).matrix()*Alvm.col(d).matrix().transpose()).diagonal().sum() - (ucopy.row(d).matrix()*ucopy.row(d).matrix().transpose()).sum());
               
               AAT = Alvm*Alvm.transpose();
               DAATD = Delta * AAT * Delta.transpose();
@@ -2549,57 +2561,46 @@ Type objective_function<Type>::operator() ()
             }
             nll -= 0.5*(nu*num_corlv);
             
+            // REPORT(AAT);
+            // REPORT(DAATD);
+
           } else {
-            vector<matrix<Type> > Slv(num_corlv);
-            
-            matrix<Type> Slvinv;
-            
-            for(int q=0; q<num_corlv; q++){
-              // site specific LVs, which are correlated between sites/groups
-              if(cstruclv(0)==1){// AR1 covariance
-                Slv(q) = gllvm::corAR1(Type(1), rho_lvc(q,0), nu);
-              } else if(cstruclv(0)==3) {// Compound Symm  if(cstruclv==3)
-                Slv(q) = gllvm::corCS(Type(1), rho_lvc(q,0), nu);
-              } else {
-                
-                // Slv(q) = exp(-dc_lv.array()*Type(1/exp(rho_lvc(q,0))) ).matrix()*Type(0.99);
-                // Slv(q).diagonal().fill(1.0);
-                DiSc_lv.fill(0.0);
-                for(int j=0; j<dc_lv.cols(); j++){
-                  DiSc_lv(j,j) += 1/exp(rho_lvc(q,0));
-                }
-                dc_scaled_lv = dc_lv*DiSc_lv;
-                if(cstruclv(0)==2){// exp decaying
-                  Slv(q) = gllvm::corExp(Type(1), Type(0), nu, dc_scaled_lv);
-                } else if(cstruclv(0)==4) {// Matern
-                  Slv(q) = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,dc_lv.cols())), nu, dc_scaled_lv);
-                }
-              }
-              nll -= 0.5*(nu - atomic::logdet(Slv(q)));
-            }
-            
+
             if(Astruc<3){
-              
+              // Single loop: build Slv_q, get logdet+inverse via one invpd call, apply all NLL terms.
               for(int q=0; q<num_corlv; q++){
-                
+                matrix<Type> Slv_q;
+                if(cstruclv(0)==1){// AR1 covariance
+                  Slv_q = gllvm::corAR1(Type(1), rho_lvc(q,0), nu);
+                } else if(cstruclv(0)==3) {// Compound Symm
+                  Slv_q = gllvm::corCS(Type(1), rho_lvc(q,0), nu);
+                } else {
+                  matrix<Type> dc_scaled_lv = dc_lv / exp(rho_lvc(q,0));
+                  if(cstruclv(0)==2){// exp decaying
+                    Slv_q = gllvm::corExp(Type(1), Type(0), nu, dc_scaled_lv);
+                  } else if(cstruclv(0)==4) {// Matern
+                    Slv_q = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,rho_lvc.cols()-1)), nu, dc_scaled_lv);
+                  }
+                }
+
+                // Single Cholesky: get logdet and inverse together
+                CppAD::vector<Type> res = atomic::invpd(atomic::mat2vec(Slv_q));
+                nll -= 0.5*(nu - res[0]);
+                matrix<Type> Slvinv = atomic::vec2mat(res, Slv_q.rows(), Slv_q.cols(), 1);
+
                 // u^T*Sinv*u
-                Slvinv = atomic::matinv(Slv(q));
                 nll -= - 0.5*( ucopy.col(q).transpose()*(Slvinv*ucopy.col(q)) ).sum();
-                
-                if(Astruc==0 ){//diagonal A cov
+
+                if(Astruc==0){//diagonal A cov
                   vector<Type> Atemp = exp(Au.segment(q*nu, nu));
-                  
+
                   vector<Type> AtempSq(nu);
                   for(int d=0; d<nu; d++) AtempSq[d] = Atemp[d] * Atemp[d];
-                  
+
                   // summa tr(Sinv * A) = sum_i Sinv(ii) * AtempSq(i)
                   Type trSinvA = (Slvinv.diagonal().array() * AtempSq.array()).sum();
                   nll -= -0.5 * trSinvA;
-                  
-                  // for (d=0; d<(nu); d++){ // - tr(Sinv*A)
-                  //   nll -= - 0.5*Slvinv(d,d)*pow(Atemp(d),2);
-                  // }
-                  
+
                   // 0.5*lambda_qj*A_qii*lambda_qj
                   for (j=0; j<p;j++){
                     Type sca = 0.5*pow(newlam(q,j),2)*pow(Delta(q,q),2);
@@ -2611,10 +2612,10 @@ Type objective_function<Type>::operator() ()
                 } else if((Astruc>0)){
                   matrix<Type> Atemp(nu, nu);
                   Atemp.setZero();
-                  
+
                   // diagonal
                   Atemp.diagonal().array() = (Au.segment(q*nu, nu)).array().exp();
-                  
+
                   int k=0;
                   if((Astruc==1) & (Au.size() > nu*num_corlv) ){ // unstructured variational covariance
                     for (d=0; d<nu; d++){
@@ -2631,27 +2632,48 @@ Type objective_function<Type>::operator() ()
                     }
                   }
                   // REPORT(k);
-                  
+
                   // 0.5*lambda_qj*A_qii*lambda_qj
                   AAT = Atemp*Atemp.transpose();
                   for (j=0; j<p;j++){
                     Type sca = 0.5*pow(newlam(q,j),2)*pow(Delta(q,q),2);
                     cQ.col(j) += sca*(dLV*AAT.diagonal().matrix()); //this works
                   }
-                  
-                  // 0.5*logdet(A) -0.5*tr(Sinv*A)
-                  nll -= Atemp.diagonal().array().log().sum() + 0.5*(- (Slvinv*AAT).diagonal().sum());
+
+                  // 0.5*logdet(A) -0.5*tr(Sinv*A); trace(Slvinv*AAT) = (Slvinv⊙AAT).sum() since both symmetric
+                  nll -= Atemp.diagonal().array().log().sum() - 0.5*((Slvinv.array() * AAT.array()).sum());
                 }
-                
+
               }
-              
+
             } else if((num_corlv>1) & (Astruc<6)){
               // UNN/Kronecker variational covariance
+              // Loop 1: build Slv_q, get logdet+inverse via one invpd call, store Slvinv(q).
+              vector<matrix<Type>> Slvinv_store(num_corlv);
+              for(int q=0; q<num_corlv; q++){
+                matrix<Type> Slv_q;
+                if(cstruclv(0)==1){
+                  Slv_q = gllvm::corAR1(Type(1), rho_lvc(q,0), nu);
+                } else if(cstruclv(0)==3) {
+                  Slv_q = gllvm::corCS(Type(1), rho_lvc(q,0), nu);
+                } else {
+                  matrix<Type> dc_scaled_lv = dc_lv / exp(rho_lvc(q,0));
+                  if(cstruclv(0)==2){
+                    Slv_q = gllvm::corExp(Type(1), Type(0), nu, dc_scaled_lv);
+                  } else if(cstruclv(0)==4) {
+                    Slv_q = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,rho_lvc.cols()-1)), nu, dc_scaled_lv);
+                  }
+                }
+                CppAD::vector<Type> res = atomic::invpd(atomic::mat2vec(Slv_q));
+                nll -= 0.5*(nu - res[0]);
+                Slvinv_store(q) = atomic::vec2mat(res, Slv_q.rows(), Slv_q.cols(), 1);
+              }
+
               matrix<Type> Alvm = matrix<Type>::Zero(nu, nu);
-              
+
               // diagonal
               Alvm.diagonal().array() = (Au.segment(0, nu)).array().exp();
-              
+
               int k=0;
               arank = NN.rows();
               if(Au.size()>(nu+num_corlv*(num_corlv+1)/2)) {
@@ -2669,7 +2691,7 @@ Type objective_function<Type>::operator() ()
                   }
                 }
               }
-              
+
               for (d=0; d<num_corlv; d++){
                 AQ(d,d)=exp(Au(nu+k));
                 ++k;
@@ -2678,7 +2700,7 @@ Type objective_function<Type>::operator() ()
                   ++k;
                 }
               }
-              
+
               // logdet(A) for triang.mat = prod of diag. elements
               // Moved right after Slv initialization: + 0.5*num_corlv*nu;
               const Type logdet_Alvm = Alvm.diagonal().array().log().sum();
@@ -2686,19 +2708,20 @@ Type objective_function<Type>::operator() ()
               nll -= num_corlv * logdet_Alvm + nu * logdet_AQ;
               // nll -= num_corlv*Alvm.diagonal().array().log().sum() + nu*AQ.diagonal().array().log().sum();
               // nll -= num_corlv*log(Alvm.determinant()) + nu*log(AQ.determinant()) + 0.5*num_corlv*nu;
-              
+
               // Alvm *= Alvm.transpose();
               // AQ *= AQ.transpose();
               Alvm = Alvm*Alvm.transpose();
               AQ = AQ*AQ.transpose();
-              
-              
-              // tr(Sinv*A) + u^T*Sinv*u
+
+              // tr(Sinv*A) + u^T*Sinv*u — use stored inverses
+              // trace(Slvinv*Alvm) = (Slvinv ⊙ Alvm).sum() since both are symmetric: O(n²) not O(n³)
               for(int q=0; q<num_corlv; q++){
-                const matrix<Type>& Slvinv = atomic::matinv(Slv(q));
-                nll -= 0.5*(- AQ(q,q)*(Slvinv*Alvm).trace()-( ucopy.col(q).transpose()*(Slvinv*ucopy.col(q)) ).sum());
+                const matrix<Type>& Slvinv = Slvinv_store(q);
+                Type trSinvA = (Slvinv.array() * Alvm.array()).sum();
+                nll -= 0.5*(- AQ(q,q)*trSinvA-( ucopy.col(q).transpose()*(Slvinv*ucopy.col(q)) ).sum());
               }
-              
+
               matrix<Type> AQt = Delta * AQ * Delta.transpose();
               // 0.5*lambda_qj*A_qii*lambda_qj
               for (j=0; j<p;j++){
@@ -2706,11 +2729,13 @@ Type objective_function<Type>::operator() ()
                 cQ.col(j) += sca * (dLV * Alvm.diagonal());
                 // cQ.col(j) += 0.5*(dLV*Alvm.diagonal())*((newlam.col(j).transpose()*(Delta*AQ*Delta.transpose()))*newlam.col(j));
               }
-              
+
               REPORT(Alvm);
             }
-            
+
           }
+          // REPORT(cQ);
+          
         } else {
           // Correlation within group
           // eta += ucopy*newlamCor;
@@ -2791,25 +2816,23 @@ Type objective_function<Type>::operator() ()
                 } else if(cstruclv(ics)==3) {// Compound Symm  if(cstruclv==3)
                   Slv(i) = gllvm::corCS(Type(1), rho_lvc(q,i), times(0,i));
                 } else {
-                  DiSc_lv.setZero();
-                  for(int j=0; j<dc_lv.cols(); j++){
-                    DiSc_lv(j,j) += 1/exp(rho_lvc(q,i));
-                  }
-                  dc_scaled_lv = dc_lv.block(it_ind,0,times(0,i),dc_lv.cols())*DiSc_lv;
+                  matrix<Type> dc_scaled_lv = dc_lv.block(it_ind,it_ind,times(0,i),times(0,i)) / exp(rho_lvc(q,i));
                   if(cstruclv(ics)==2){// exp decaying
                     Slv(i) = gllvm::corExp(Type(1), Type(0), times(0,i), dc_scaled_lv);
                   } else if(cstruclv(ics)==4) {// matern
-                    Slv(i) = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,dc_lv.cols())), times(0,i), dc_scaled_lv);
+                    Slv(i) = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,rho_lvc.cols()-1)), times(0,i), dc_scaled_lv);
                   }
                 }
-                
-                nll -= 0.5*(times(0,i) - atomic::logdet(Slv(i)));
 
-                Slvinv = atomic::matinv(Slv(i));
+                // Single Cholesky: get logdet and inverse together
+                CppAD::vector<Type> res_i = atomic::invpd(atomic::mat2vec(Slv(i)));
+                nll -= 0.5*(times(0,i) - res_i[0]);
+                Slvinv = atomic::vec2mat(res_i, Slv(i).rows(), Slv(i).cols(), 1);
                 matrix<Type> ublock = ucopy.block(it_ind,q,times(0,i),1);
-                nll -= 0.5*(- (Slvinv * AlvAlvT).trace()-(ublock.transpose() * Slvinv * ublock).sum());
+                // trace(Slvinv*AlvAlvT) = (Slvinv⊙AlvAlvT).sum() since both symmetric
+                nll -= 0.5*(- (Slvinv.array() * AlvAlvT.array()).sum()-(ublock.transpose() * Slvinv * ublock).sum());
                 it_ind += times(0,i);
-                
+
               }
             }
             
@@ -2883,24 +2906,23 @@ Type objective_function<Type>::operator() ()
                 } else if(cstruclv(ics)==3) {// Compound Symm  if(cstruclv==3)
                   Slv(i) = gllvm::corCS(Type(1), rho_lvc(q,i), times(0,i));
                 } else {
-                  DiSc_lv.setZero();
-                  for(int j=0; j<dc_lv.cols(); j++){
-                    DiSc_lv(j,j) += 1/exp(rho_lvc(q,i));
-                  }
-                  dc_scaled_lv = dc_lv.block(it_ind,0,times(0,i),dc_lv.cols())*DiSc_lv;
+                  matrix<Type> dc_scaled_lv = dc_lv.block(it_ind,it_ind,times(0,i),times(0,i)) / exp(rho_lvc(q,i));
                   if(cstruclv(ics)==2){// exp decaying
                     Slv(i) = gllvm::corExp(Type(1), Type(0), times(0,i), dc_scaled_lv);
                   } else if(cstruclv(ics)==4) {// matern
-                    Slv(i) = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,dc_lv.cols())), times(0,i), dc_scaled_lv);
+                    Slv(i) = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,rho_lvc.cols()-1)), times(0,i), dc_scaled_lv);
                   }
                 }
-                
-                nll -= 0.5*(times(0,i) - atomic::logdet(Slv(i)));
+
+                // Single Cholesky: get logdet and inverse together
+                CppAD::vector<Type> res_i = atomic::invpd(atomic::mat2vec(Slv(i)));
+                nll -= 0.5*(times(0,i) - res_i[0]);
                 // nll -= - 0.5*nu*atomic::logdet(Slv(i));
-                Slvinv = atomic::matinv(Slv(i));
-                
+                Slvinv = atomic::vec2mat(res_i, Slv(i).rows(), Slv(i).cols(), 1);
+
                 matrix<Type> ublock = ucopy.block(it_ind,q,times(0,i),1);
-                nll -=  0.5*(- AQAQT(q,q)*(Slvinv*AlvAlvT).trace() - (ublock.transpose()*(Slvinv*ublock)).sum());
+                // trace(Slvinv*AlvAlvT) = (Slvinv⊙AlvAlvT).sum() since both symmetric
+                nll -=  0.5*(- AQAQT(q,q)*(Slvinv.array()*AlvAlvT.array()).sum() - (ublock.transpose()*(Slvinv*ublock)).sum());
                 
               }
               it_ind += times(0,i); 
@@ -2908,6 +2930,7 @@ Type objective_function<Type>::operator() ()
             REPORT(Alvm);
           }
           
+          // REPORT(cQ);
           
         }
         REPORT(AQ);
@@ -4668,13 +4691,8 @@ Type objective_function<Type>::operator() ()
            Sr = gllvm::corCS(Type(1), log_sigma(sigmacounter), trmsize(1,re));
            sigmacounter += 1;
          }else if((cstruc(re) == 8) || (cstruc(re) == 10)){ // corMatern, corExp
-           // Distance matrix calculated from the coordinates for rows
-           matrix<Type> DiSc(dc(dccounter).cols(),dc(dccounter).cols()); DiSc.fill(0.0);
-           matrix<Type> dc_scaled(dc(dccounter).rows(),dc(dccounter).cols()); dc_scaled.fill(0.0);
-           DiSc.setZero();
-           DiSc.diagonal().array() += 1/sigma(sigmacounter);
+           matrix<Type> dc_scaled = dc(dccounter) / sigma(sigmacounter);
            sigmacounter++;
-           dc_scaled = dc(dccounter)*DiSc;
            if(cstruc(re) == 8){ // corExp
              Sr = gllvm::corExp(Type(1), Type(0), trmsize(1,re), dc_scaled);
            } else if(cstruc(re) == 10) { // corMatern
@@ -4683,7 +4701,7 @@ Type objective_function<Type>::operator() ()
            }
            dccounter++;
          }
-         
+
          //TMB's matinvpd function: inverse of matrix with logdet for free
          CppAD::vector<Type> res = atomic::invpd(atomic::mat2vec(Sr));
          logdetSr = logdetSr*trmsize(1,re) + trmsize(0,re)*res[0];
@@ -4722,13 +4740,8 @@ Type objective_function<Type>::operator() ()
           Sr = gllvm::corCS(sigma(sigmacounter), log_sigma(sigmacounter+1), trmsize(1,re));
           sigmacounter += 2;
         }else if((cstruc(re) == 4) || (cstruc(re) == 2)){ // corMatern, corExp
-          // Distance matrix calculated from the coordinates for rows
-          matrix<Type> DiSc(dc(dccounter).cols(),dc(dccounter).cols()); DiSc.fill(0.0);
-          matrix<Type> dc_scaled(dc(dccounter).rows(),dc(dccounter).cols()); dc_scaled.fill(0.0);
-          DiSc.setZero();
-          DiSc.diagonal().array() += 1/sigma(sigmacounter);
+          matrix<Type> dc_scaled = dc(dccounter) / sigma(sigmacounter);
           sigmacounter++;
-          dc_scaled = dc(dccounter)*DiSc;
           if(cstruc(re)==2){ // corExp
             Sr = gllvm::corExp(sigma(sigmacounter), Type(0), trmsize(1,re), dc_scaled);
             sigmacounter++;
@@ -4738,7 +4751,7 @@ Type objective_function<Type>::operator() ()
           }
           dccounter++;
         }
-        
+
         if(cstruc(re)==0){
           //independence of REs
           if(re==0){
@@ -4812,19 +4825,14 @@ Type objective_function<Type>::operator() ()
             } else if(cstruclv(0)==3) {// Compound Symm  if(cstruclv==3)
               Slv = gllvm::corCS(Type(1), rho_lvc(q,0), nu);
             } else {
-              DiSc_lv.setZero();
-              for(int j=0; j<dc_lv.cols(); j++){
-                DiSc_lv(j,j) += 1/exp(rho_lvc(q,0));
-              }
-              dc_scaled_lv = dc_lv*DiSc_lv;
+              matrix<Type> dc_scaled_lv = dc_lv / exp(rho_lvc(q,0));
               if(cstruclv(0)==2){// exp decaying
                 Slv = gllvm::corExp(Type(1), Type(0), nu, dc_scaled_lv);
-                // Slv = gllvm::corExp(Type(1), (rho_lvc(q,0)), nu, DistM);
               } else if(cstruclv(0)==4) {// matern
-                Slv = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,dc_lv.cols())), nu, dc_scaled_lv);
+                Slv = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,rho_lvc.cols()-1)), nu, dc_scaled_lv);
               }
             }
-            
+
             MVNORM_t<Type> mvnormS1(Slv);
             nll += mvnormS1(ucopy.col(q));
           }
@@ -4851,20 +4859,14 @@ Type objective_function<Type>::operator() ()
             } else if(cstruclv(ics)==3) {// Compound Symm  if(cstruclv==3)
               Slv = gllvm::corCS(Type(1), rho_lvc(q,i), times(0,i));
             } else {
-              DiSc_lv.setZero();
-              for(int j=0; j<dc_lv.cols(); j++){
-                DiSc_lv(j,j) += 1/exp(rho_lvc(q,i));
-                // DiSc_lv(j,j) += 1/exp(rho_lvc(q,j));
-              }
-              dc_scaled_lv = dc_lv.block(it_ind,0,times(0,i),dc_lv.cols())*DiSc_lv;
-              // dc_scaled_lv = dc_lv*DiSc_lv;
+              matrix<Type> dc_scaled_lv = dc_lv.block(it_ind,it_ind,times(0,i),times(0,i)) / exp(rho_lvc(q,i));
               if(cstruclv(ics)==2){// exp decaying
                 Slv = gllvm::corExp(Type(1), Type(0), times(0,i), dc_scaled_lv);
               } else if(cstruclv(ics)==4) {// matern
-                Slv = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,dc_lv.cols())), times(0,i), dc_scaled_lv);
+                Slv = gllvm::corMatern(Type(1), Type(1), exp(rho_lvc(q,rho_lvc.cols()-1)), times(0,i), dc_scaled_lv);
               }
             }
-            
+
             MVNORM_t<Type> mvnormS2(Slv);
             
             nll += mvnormS2(ucopy.block(it_ind,q,times(0,i),1));
