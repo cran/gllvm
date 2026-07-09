@@ -32,9 +32,11 @@
 #'@method se gllvm
 #'@export
 #'@export se.gllvm
+
 se.gllvm <- function(object, ...){
   if(!is.finite(object$logL)) stop("Standard errors can not be calculated if log-likelihood value is not finite.")
   if(object$TMB == FALSE) stop("Function is not implemented for TMB = FALSE.")
+  if(isNullPointer(object$TMBfn$env$ADFun$ptr)) stop("This model object is no longer valid, as it was loaded from file. Refit the model with gllvm() in the current session before calling se().")
   objrFinal <- object$TMBfn
 
   if(any(object$family %in% "betaH")){
@@ -1103,4 +1105,9 @@ se.gllvm <- function(object, ...){
 se <- function(object, ...)
 {
   UseMethod(generic = "se")
+}
+
+isNullPointer <- function(x) {
+  attributes(x) <- NULL
+  identical(x, new("externalptr"))
 }

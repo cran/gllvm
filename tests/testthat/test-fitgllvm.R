@@ -52,12 +52,41 @@ test_that("row effects works", {
   expect_true(round(fr5$params$sigma, digits = 2)- result[5]<0.1)
 })
 
+test_that("row.eff random slopes without a grouping factor work", {
+  data(microbialdata)
+  y <- microbialdata$Y[1:30, 1:15]
+  StudyDesign <- data.frame(Site = factor(microbialdata$Xenv$Site[1:30]),
+                            pH = as.numeric(scale(microbialdata$Xenv$pH[1:30])),
+                            Phosp = as.numeric(scale(microbialdata$Xenv$Phosp[1:30])))
+
+  fr6 <- gllvm(y, family = "negative.binomial", seed = 999, num.lv = 0,
+               studyDesign = StudyDesign, row.eff = ~(0+pH|1))
+  expect_true(is.finite(fr6$logL))
+  expect_equal(length(fr6$params$sigma), 1)
+  expect_true(!is.null(fr6$sd))
+
+  fr7 <- gllvm(y, family = "negative.binomial", seed = 999, num.lv = 0,
+               studyDesign = StudyDesign, row.eff = ~(0+pH+Phosp|1))
+  expect_true(is.finite(fr7$logL))
+  expect_equal(length(fr7$params$sigma), 2)
+  expect_equal(dim(fr7$params$sigmaijr), c(2,2))
+  expect_true(!is.null(fr7$sd))
+
+  fr8 <- gllvm(y, family = "negative.binomial", seed = 999, num.lv = 0,
+               studyDesign = StudyDesign, row.eff = ~(1|Site) + (0+pH+Phosp|1))
+  expect_true(is.finite(fr8$logL))
+  expect_equal(length(fr8$params$sigma), 3)
+  expect_equal(dim(fr8$params$sigmaijr), c(2,2))
+  expect_true(!is.null(fr8$sd))
+  expect_error(summary(fr8), NA)
+})
+
 test_that("binomial works", {
   data(microbialdata)
   y <- microbialdata$Y[, order(colMeans(microbialdata$Y > 0), decreasing = TRUE)[160:175]]
   y01<-(y>0)*1
   fb0<-gllvm(y01, family = binomial(link = "logit"), seed = 999, method = "LA", num.lv = 1)
-  fb2<-gllvm(y01, family = binomial(link = "probit"), seed = 999)
+  suppressWarnings( fb2<-gllvm(y01, family = binomial(link = "probit"), seed = 999))
   expect_true(is.finite(fb0$logL))
   expect_true(is.finite(fb2$logL))
 })
@@ -79,9 +108,9 @@ test_that("quadratic models work", {
   spider$x <- spider$X[spider$nonNA,]
   X <- scale(spider$x)
   y <- spider$abund
-  fq0<-gllvm(y, num.lv = 2, quadratic=TRUE, family = "poisson", seed = 999)
-  fq1<-gllvm(y, X, num.lv = 2, quadratic=TRUE, family = "poisson", seed = 999)
-  fq2<-gllvm(y, X, num.lv = 2, quadratic=TRUE, family = "poisson", row.eff="random", seed = 999)
+  suppressWarnings(fq0<-gllvm(y, num.lv = 2, quadratic=TRUE, family = "poisson", seed = 999))
+  suppressWarnings(fq1<-gllvm(y, X, num.lv = 2, quadratic=TRUE, family = "poisson", seed = 999))
+  suppressWarnings(fq2<-gllvm(y, X, num.lv = 2, quadratic=TRUE, family = "poisson", row.eff="random", seed = 999))
   expect_true(is.finite(fq0$logL))
   expect_true(is.finite(fq1$logL))
   expect_true(is.finite(fq2$logL))
@@ -97,7 +126,7 @@ test_that("constrained ordination models work", {
   suppressWarnings({fc0<-gllvm(y, X, num.RR = 2, family = "poisson", seed = 999)})
   fc1<-gllvm(y, X, num.RR = 2, family = "poisson", seed = 999, randomB="LV")
   fc2<-gllvm(y, X, num.RR = 2, family = "poisson", seed = 9, randomB="LV", row.eff="random")
-  fc3<-gllvm(y, X, num.RR = 2, quadratic=T, family = "poisson", seed = 9, randomB="LV", row.eff="random")
+  suppressWarnings(fc3<-gllvm(y, X, num.RR = 2, quadratic=T, family = "poisson", seed = 9, randomB="LV", row.eff="random"))
   expect_true(is.finite(fc0$logL))
   expect_true(is.finite(fc1$logL))
   expect_true(is.finite(fc2$logL))
@@ -115,7 +144,7 @@ test_that("concurrent ordination models work", {
   fc1<-gllvm(y, X, num.lv.c = 2, family = "poisson", seed = 999, randomB="LV")
   #this has a warning for overfitting that can be ignored
   suppressWarnings(fc2<-gllvm(y, X, num.lv.c = 2, family = "poisson", seed = 999, randomB="LV", row.eff="random"))
-  fc3<-gllvm(y, X, num.lv.c = 2, quadratic=T, family = "poisson", seed = 999, randomB="LV")
+  suppressWarnings(fc3<-gllvm(y, X, num.lv.c = 2, quadratic=T, family = "poisson", seed = 999, randomB="LV"))
   expect_true(is.finite(fc0$logL))
   expect_true(is.finite(fc1$logL))
   expect_true(is.finite(fc2$logL))

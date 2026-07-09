@@ -670,14 +670,26 @@ start_values_gllvm_TMB <- function(
   return(out)
 }
 
-# Factor loadings via pairwise-complete correlation matrix
+# Factor loadings. Without missing values, fit factanal directly on the data
+# (numerically more stable than forcing a correlation matrix to be PD). With
+# missing values, fall back to a pairwise-complete correlation matrix nudged
+# to the nearest PD matrix, since factanal() cannot handle NAs itself.
 factanal_gllvm <- function(Y, k) {
   n <- nrow(Y)
+  if (!anyNA(Y)) {
+    fa <- factanal(Y, factors = k, scores = "regression")
+    return(list(loadings = as.matrix(fa$loadings), scores = as.matrix(fa$scores)))
+  }
   cor_pw <- cor(Y, use = "pairwise.complete.obs")
   cor_pw[is.na(cor_pw)] <- 0
   diag(cor_pw) <- 1
   cor_pw <- as.matrix(Matrix::nearPD(cor_pw, corr = TRUE)$mat)
-  fa <- factanal(covmat = cor_pw, factors = k, n.obs = n)
+  fa <- try(factanal(covmat = cor_pw, factors = k, n.obs = n), silent = TRUE)
+  
+  # If not succeed, try other starting values:
+  if(inherits(fa, "try-error")){
+    fa <- try(factanal(covmat = cor_pw, factors = 2, n.obs = n, start = rep(0.5, ncol(cor_pw))))
+  }
   gamma <- as.matrix(fa$loadings)
   d <- 1 / fa$uniquenesses
   tmp <- t(gamma * d)
@@ -691,6 +703,7 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
                     jitter.var = 0, resi = NULL, lv.X, link = NULL, maxit=NULL,max.iter=NULL, Power = NULL, disp.group = NULL, randomB = FALSE, method = "VA", Ntrials = matrix(1), ZINB.phi = NULL, start.optimizer = "nlminb", start.optim.method = "BFGS"){
   
   n<-NROW(y); p <- NCOL(y)
+  has_na_y <- anyNA(y)
   b.lv <- NULL
   Ab_lv <- NULL
   RRcoef <- NULL
@@ -790,7 +803,11 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
         ds.res <- resi
       }
       resi <- as.matrix(ds.res)
-      resi[is.infinite(resi) | is.nan(resi)] <- NA
+      if (has_na_y) {
+        resi[is.infinite(resi) | is.nan(resi)] <- NA
+      } else {
+        resi[is.na(resi) | is.infinite(resi) | is.nan(resi)] <- 0
+      }
 
       resi_fa <- if(n >= p) resi else t(resi)
       fa <- try(factanal_gllvm(resi_fa, num.lv.c), silent = TRUE)
@@ -956,10 +973,17 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
     # betaSD=apply(beta,1,sd)
     # beta=beta/betaSD
     # }
-    qr.beta=qr(t(beta))
-    R=t(qr.R(qr.beta))[,1:num.RR,drop=F]
-    # R=R[,1:num.RR,drop=F]/sqrt(num.RR*nrow(RRmod$coefficients))
-    Q=t(qr.Q(qr.beta))[1:num.RR,,drop=F]
+    # Best rank-num.RR approximation of beta (Eckart-Young), rotated into the
+    # triangular/orthogonal shape the num.RR parameterization requires (theta's
+    # leading block unit lower-triangular, LvXcoef's columns orthogonal) via a
+    # single num.RR x num.RR QR of the leading block, instead of a full QR of beta
+    # itself - which is order-dependent on species/predictor order and can produce
+    # badly-scaled starting values.
+    sv <- svd(beta, nu=num.RR, nv=num.RR)
+    Ud <- sv$u %*% diag(sv$d[1:num.RR], num.RR, num.RR)
+    Trot <- qr.Q(qr(t(Ud[1:num.RR,,drop=F])))
+    R <- Ud %*% Trot
+    Q <- t(sv$v %*% Trot)
     
     # To ensure we do not start off at a point that fully satisfies the constraints
     # Especially optimizer="alabama" seems to not like that
@@ -1053,7 +1077,11 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
       ds.res <- resi
     }
     resi <- as.matrix(ds.res)
-    resi[is.infinite(resi) | is.nan(resi)] <- NA
+    if (has_na_y) {
+      resi[is.infinite(resi) | is.nan(resi)] <- NA
+    } else {
+      resi[is.na(resi) | is.infinite(resi) | is.nan(resi)] <- 0
+    }
     if(p>2 && n>2){
       resi_fa <- if(n >= p) resi else t(resi)
       fa <- try(factanal_gllvm(resi_fa, num.lv), silent = TRUE)
@@ -1136,7 +1164,11 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
       ds.res <- resi
     }
     resi <- as.matrix(ds.res)
-    resi[is.infinite(resi) | is.nan(resi)] <- NA
+    if (has_na_y) {
+      resi[is.infinite(resi) | is.nan(resi)] <- NA
+    } else {
+      resi[is.na(resi) | is.infinite(resi) | is.nan(resi)] <- 0
+    }
     if(p>2 && n>2){
       resi_fa <- if(n >= p) resi else t(resi)
       fa <- try(factanal_gllvm(resi_fa, num.lv), silent = TRUE)
@@ -2243,7 +2275,7 @@ sdrandom<-function(obj, Vtheta, incl, ignore.u = FALSE,return.covb = FALSE, type
         for(i in 1:n){
           Q <- as.matrix(Matrix::bdiag(replicate(num.RR+num.lv.c,lv.X.design[i,,drop=F],simplify=F)))
           temp <- Q%*%covsB%*%t(Q)
-          temp[col(temp)!=row(temp)] <- 2*temp[col(temp)!=row(temp)] ##should be double the covariance
+
           se[i,1:(num.RR+num.lv.c),1:(num.RR+num.lv.c)] <- se[i,1:(num.RR+num.lv.c),1:(num.RR+num.lv.c)] + temp
         }
       }
@@ -2638,7 +2670,7 @@ CMSEPf <- function(fit, return.covb = FALSE, type = NULL){
         for(i in 1:n){
           Q <- as.matrix(Matrix::bdiag(replicate(num.RR+num.lv.c,fit$lv.X.design[i,,drop=F],simplify=F)))
           temp <- Q%*%covsB%*%t(Q)
-          temp[col(temp)!=row(temp)] <- 2*temp[col(temp)!=row(temp)] ##should be double the covariance
+
           se[i,1:(num.RR+num.lv.c),1:(num.RR+num.lv.c)] <- se[i,1:(num.RR+num.lv.c),1:(num.RR+num.lv.c)] + temp
         }
       }
