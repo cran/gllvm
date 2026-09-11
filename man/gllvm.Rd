@@ -65,9 +65,9 @@ gllvm(
 
 \item{data}{data in long format, that is, matrix of responses, environmental and trait covariates and row index named as "id". When used, model needs to be defined using formula. This is alternative data input for y, X and TR.}
 
-\item{formula}{an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for column-specific effects).}
+\item{formula}{an object of class "formula" (or one that can be coerced to that class): a symbolic description of covariate effects \eqn{\beta_j} that are estimated separately for each species (column). Accepts both fixed-effect terms, and mixed-model syntax (as in \pkg{lme4}), e.g. \code{~ x1 + (1|group)}, to add species-specific random intercepts/slopes (returned as \code{Br} and covariance matrix \code{sigmaB}). The variable(s) must be included in \code{X}.}
 
-\item{family}{distribution function for responses, or a vector of families for mixed response type model. Options are \code{"negative.binomial"} and \code{"negative.binomial1"} (with log link), \code{poisson(link = "log")}, \code{binomial} (with probit, logit, or cloglog link), zero-inflated binomial (\code{ZIB}), zero-and-N-inflated binomial (\code{ZNIB}) zero-inflated poisson (\code{"ZIP"}), zero-inflated negative-binomial (\code{"ZINB"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link), \code{"gamma"} (with log link), \code{"exponential"} (with log link), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method), \code{"ordinal"} (with \code{"VA"} and \code{"EVA"}-method, with probit or logit link), beta hurdle \code{"betaH"} (for \code{"VA"} and \code{"EVA"}-method) and \code{"orderedBeta"} (for \code{"VA"} and \code{"EVA"}-method). Note: \code{"betaH"} and \code{"orderedBeta"} with \code{"VA"}-method are actually fitted using a hybrid approach such that EVA is applied to the beta distribution part of the likelihood.}
+\item{family}{distribution function for responses, or a vector of families for mixed response type model. Options are \code{"negative.binomial"} and \code{"negative.binomial1"} (with log link), \code{poisson(link = "log")}, \code{binomial} (with probit, logit, or cloglog link), beta-binomial (\code{"beta.binomial"}) (with probit, logit, or cloglog link, for \code{"LA"}-method only), zero-inflated binomial (\code{ZIB}), zero-and-N-inflated binomial (\code{ZNIB}) zero-inflated poisson (\code{"ZIP"}), zero-inflated negative-binomial (\code{"ZINB"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link), \code{"gamma"} (with log link), \code{"exponential"} (with log link), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method), \code{"ordinal"} (with \code{"VA"}-method with probit, logit, or cloglog link, or with \code{"EVA"}-method with logit link; not available with \code{"LA"}-method), beta hurdle \code{"betaH"} (with probit or logit link, for \code{"VA"}, \code{"EVA"} and \code{"LA"}-method) and \code{"orderedBeta"} (with \code{"VA"}-method with probit or logit link, or with \code{"EVA"}-method with logit link). Note: \code{"betaH"} and \code{"orderedBeta"} with \code{"VA"}-method are actually fitted using a hybrid approach such that EVA is applied to the beta distribution part of the likelihood.}
 
 \item{num.lv}{number of latent variables, d, in gllvm model. Non-negative integer, less than number of response variables (m). Defaults to 2, if \code{num.lv.c=0} and \code{num.RR=0}, otherwise 0.}
 
@@ -75,15 +75,15 @@ gllvm(
 
 \item{num.RR}{number of latent variables, d, in gllvm model to constrain, without residual term (reduced rank regression). Cannot yet be combined with traits.}
 
-\item{lv.formula}{an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for latent variables).}
+\item{lv.formula}{an object of class "formula" (or one that can be coerced to that class): defines the effects that inform the ordination axes in concurrent (\code{num.lv.c}) and/or constrained (\code{num.RR}) ordination. Accepts fixed effects or random effects, not both at the same time. Random effects formulation requires specifying the \code{randomB} argument.}
 
-\item{lvCor}{correlation structure for latent variables, defaults to \code{NULL} Correlation structure for latent variables can be defined via formula, eg. \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}'), \code{corCS} (compound symmetry), and \code{propto} (proportional covariance, used as propto(a+b|group, matrix)). The grouping variable needs to be included either in \code{studyDesign}. Works at the moment only with unconstrained ordination without quadratic term.}
+\item{lvCor}{correlation structure for latent variables, defaults to \code{NULL} Correlation structure for latent variables can be defined via formula, eg. \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}'), \code{corCS} (compound symmetry), and \code{corMatern} (Matern covariance, see argument '\code{dist}'). The grouping variable needs to be included either in \code{studyDesign}. Works at the moment only with ordination without quadratic term.}
 
 \item{studyDesign}{variables related to eg. sampling/study design, used for defining correlation structure of the latent variables and row effects.}
 
-\item{dist}{list of length equal to the number of row effects with correlation structure \code{corExp} that holds the matrix of coordinates or time points.}
+\item{dist}{list of length equal to the number of row effects with correlation structure \code{corExp}, \code{corMatern} that holds the matrix of coordinates or time points.}
 
-\item{distLV}{matrix of coordinates or time points used for LV correlation structure \code{corExp}.}
+\item{distLV}{matrix of coordinates or time points used for LV correlation structure \code{corExp}, \code{corMatern}.}
 
 \item{colMat}{either a list of length 2 with matrix of similarity for the column effects and named matrix "dist" of pairwise distances (of columns, to use in selecting nearest neighbours) for a sparse approximation of the matrix inverse in the likelihood, or only a (p.d.) matrix of similarity for the column effects for a normal inverse calculation.}
 
@@ -95,7 +95,7 @@ gllvm(
 
 \item{quadratic}{either \code{FALSE}(default), \code{TRUE}, or \code{LV}. If \code{FALSE} models species responses as a linear function of the latent variables. If \code{TRUE} models species responses as a quadratic function of the latent variables. If \code{LV} assumes species all have the same quadratic coefficient per latent variable.}
 
-\item{row.eff}{\code{FALSE}, \code{fixed}, \code{"random"} or formula to define the structure for the community level row effects, indicating whether row effects are included in the model as a fixed or as a random effects. Defaults to \code{FALSE} when row effects are not included. Structured random row effects can be defined via formula, eg. \code{~(1|groups)}, when unique row effects are set for each group, not for all rows, the grouping variable needs to be included in \code{studyDesign}. Correlation structure between random group effects/intercepts can also be set using \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}') and \code{corCS} (compound symmetry). Correlation structure can be set between or within groups, see argument '\code{corWithin}'.}
+\item{row.eff}{\code{FALSE}, \code{fixed}, \code{"random"} or an object of class "formula": defines the community-level or row effects, i.e. terms that (unlike \code{formula}) are the same for all species (columns) rather than species-specific. Defaults to \code{FALSE} when row effects are not included. \code{"fixed"} and \code{"random"} give, respectively, a single fixed or i.i.d. random intercept per row. Supports both fixed effects and random effects, e.g. \code{~ x1 + (1|group)}. The variable(s) must be included in \code{studyDesign}. Correlation structure between random group effects/intercepts can also be set using \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}'), \code{corCS} (compound symmetry), and \code{corMatern} (Matern covariance, see argument '\code{dist}'), or \code{propto} (proportional covariance, used as propto(a+b|group, matrix)). Correlation structure can be set between or within groups, see argument '\code{corWithin}'.}
 
 \item{sd.errors}{logical. If \code{TRUE} (default) standard errors for parameter estimates are calculated.}
 
@@ -313,7 +313,9 @@ Now we can set random intercept for each group \eqn{t}, (see argument '\code{row
 \describe{
   \item{\code{corAR1} }{ autoregressive process of order 1.}
   \item{\code{corExp} }{ exponentially decaying, see argument '\code{dist}'.}
+  \item{\code{corMatern} }{ compound symmetry.}
   \item{\code{corCS} }{ compound symmetry.}
+  \item{\code{propto.}}{ proportional to a known matrix}
 }  
 }
 
@@ -339,9 +341,13 @@ With ordinal family response classes must start from 0 or 1.
   \item{For binary data \code{family = binomial()}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = N_{trials}\mu_{ij}(1-\mu_{ij})}.}
   \item{ \code{family = "ZIB"}:}{ Expectation \eqn{E[Y_{ij}] = (1-p_j)N_j\mu_{ij}}, variance \eqn{V(\mu_{ij}) = N_j\mu_{ij}(1-p_j) (1+N_j\mu_{ij}p_j)}.}
   \item{ \code{family = "ZNIB"}:}{ Expectation \eqn{E[Y_{ij}] = p_j^N N_j + (1-p^0_j-p_j^N)N_j\mu_{ij}}, variance \eqn{V(\mu_{ij}) = p_j^N N_j^2 + (1-p_j^0-p^N_j)N_j\mu_{ij}(1-\mu_{ij}+N_j\mu_{ij})-E[Y_{ij}]^2}.}
-  \item{ \code{family = "beta.binomial"}:}{ Expectation \eqn{E[Y_{ij}] = N_j\mu_{ij}}, variance \eqn{V(\mu_{ij}) = N_j\mu_{ij}(1-\mu_{ij})(1 + (N_j-1)\phi_j/(\phi_j+1))} where \eqn{\phi_j > 0} is a species-specific overdispersion parameter. Only available for \code{method = "LA"}.}
+  \item{ \code{family = "beta.binomial"}:}{ Expectation \eqn{E[Y_{ij}] = N_j\mu_{ij}}, variance \eqn{V(\mu_{ij}) = N_j\mu_{ij}(1-\mu_{ij})(1 + (N_j-1)\phi_j/(\phi_j+1))}. Only available for \code{method = "LA"}.}
 
   \item{For percent cover data \eqn{0 < Y_{ij} < 1} \code{family = "beta"}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-\mu_{ij})/(1+\phi_j)}.}
+
+  \item{For percent cover data with absences \eqn{0 \le Y_{ij} < 1} \code{family = "betaH"}:}{ Beta hurdle model (Korhonen et al., 2024): a separate linear predictor \eqn{\eta^0_{ij}} models the probability of presence, so that \eqn{p^0_{ij} = p(Y_{ij} = 0) = 1-g^{-1}(\eta^0_{ij})}, and the non-zero responses follow the beta distribution above with mean \eqn{\mu_{ij}}. Expectation \eqn{E[Y_{ij}] = (1-p^0_{ij})\mu_{ij}}, variance \eqn{V(\mu_{ij}) = (1-p^0_{ij})\mu_{ij}(1-\mu_{ij})/(1+\phi_j) + p^0_{ij}(1-p^0_{ij})\mu_{ij}^2}.}
+
+  \item{For percent cover data with absences and full cover \eqn{0 \le Y_{ij} \le 1} \code{family = "orderedBeta"}:}{ Ordered beta model (Korhonen et al., 2024), which extends the beta distribution above with point masses at zero and one by means of two cut-off parameters \eqn{\zeta_{j0} < \zeta_{j1}} (reported as \code{cutoff0} and \code{cutoff1}; species-common or species-specific as set by \code{zeta.struc}, with starting values set by \code{zetacutoff} in \code{control.start}). With \eqn{\rho^k_{ij} = g^{-1}(\zeta_{jk} - \eta_{ij})}, we have \eqn{p(Y_{ij} = 0) = \rho^0_{ij}} and \eqn{p(Y_{ij} = 1) = 1-\rho^1_{ij}}, while responses in \eqn{(0,1)} occur with probability \eqn{\rho^1_{ij}-\rho^0_{ij}} and follow the beta distribution with mean \eqn{\mu_{ij} = g^{-1}(\eta_{ij})}. Expectation \eqn{E[Y_{ij}] = (1-\rho^1_{ij}) + (\rho^1_{ij}-\rho^0_{ij})\mu_{ij}}, variance \eqn{V(\mu_{ij}) = (1-\rho^1_{ij}) + (\rho^1_{ij}-\rho^0_{ij})\{\mu_{ij}(1-\mu_{ij})/(1+\phi_j)+\mu_{ij}^2\} - E[Y_{ij}]^2}.}
 
   \item{For positive continuous data \code{family = "gamma"}:}{Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}^2/\phi_j}, where \eqn{\phi_j} is species specific shape parameter.}
   
@@ -349,7 +355,7 @@ With ordinal family response classes must start from 0 or 1.
   
   \item{For non-negative continuous or biomass data \code{family = "tweedie"}}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \phi_j*\mu_{ij}^\nu}, where \eqn{\nu} is a power parameter of Tweedie distribution. See details Dunn and Smyth (2005).}
 
-  \item{For ordinal data \code{family = "ordinal"}:}{ Cumulative probit model, see Hui et.al. (2016).}
+  \item{For ordinal data \code{family = "ordinal"}:}{ Cumulative link model, with probit, logit, or cloglog link (logit only for \code{method = "EVA"}), not available for \code{method = "LA"}. With cut-offs \eqn{\zeta_{j1} < \ldots < \zeta_{jK-1}} for \eqn{K} classes (species-common or species-specific as set by \code{zeta.struc}), \eqn{p(Y_{ij} \le k) = g^{-1}(\zeta_{jk} - \eta_{ij})}, so that \eqn{p(Y_{ij} = k) = g^{-1}(\zeta_{jk} - \eta_{ij}) - g^{-1}(\zeta_{j,k-1} - \eta_{ij})}. As the classes are ordinal, the mean and variance are only defined once numerical scores are assigned to the classes; with the class labels \eqn{k = 1, \ldots, K} as scores, expectation \eqn{E[Y_{ij}] = \sum_k k p(Y_{ij} = k)} and variance \eqn{V(Y_{ij}) = \sum_k k^2 p(Y_{ij} = k) - E[Y_{ij}]^2}.}
   
   \item{For normal distributed data \code{family = gaussian()}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(y_{ij}) = \phi_j^2.}}
 }
@@ -504,6 +510,8 @@ Hui, F. K. C., Warton, D., Ormerod, J., Haapaniemi, V., and Taskinen, S. (2017).
 Kasper Kristensen, Anders Nielsen, Casper W. Berg, Hans Skaug, Bradley M. Bell (2016). TMB: Automatic Differentiation and Laplace Approximation. Journal of Statistical Software, 70(5), 1-21.
 
 Korhonen, P., Hui, F. K. C., Niku, J., and Taskinen, S. (2021). Fast, universal estimation of latent variable models using extended variational approximations. Stat Comput 33, 26 (2023).
+
+Korhonen, P., Hui, F. K. C., Niku, J., Taskinen, S., and van der Veen, B. (2024). A comparison of joint species distribution models for percent cover data. Methods in Ecology and Evolution, 15:2359-2372.
 
 Niku, J., Warton,  D. I., Hui, F. K. C., and Taskinen, S. (2017). Generalized linear latent variable models for multivariate count and biomass data in ecology. Journal of Agricultural, Biological, and Environmental Statistics, 22:498-522.
 

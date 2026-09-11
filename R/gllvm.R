@@ -6,20 +6,20 @@
 #' @param X matrix or data.frame of environmental covariates.
 #' @param TR matrix or data.frame of trait covariates.
 #' @param data data in long format, that is, matrix of responses, environmental and trait covariates and row index named as "id". When used, model needs to be defined using formula. This is alternative data input for y, X and TR.
-#' @param formula an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for column-specific effects).
-#' @param family  distribution function for responses, or a vector of families for mixed response type model. Options are \code{"negative.binomial"} and \code{"negative.binomial1"} (with log link), \code{poisson(link = "log")}, \code{binomial} (with probit, logit, or cloglog link), zero-inflated binomial (\code{ZIB}), zero-and-N-inflated binomial (\code{ZNIB}) zero-inflated poisson (\code{"ZIP"}), zero-inflated negative-binomial (\code{"ZINB"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link), \code{"gamma"} (with log link), \code{"exponential"} (with log link), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method), \code{"ordinal"} (with \code{"VA"} and \code{"EVA"}-method, with probit or logit link), beta hurdle \code{"betaH"} (for \code{"VA"} and \code{"EVA"}-method) and \code{"orderedBeta"} (for \code{"VA"} and \code{"EVA"}-method). Note: \code{"betaH"} and \code{"orderedBeta"} with \code{"VA"}-method are actually fitted using a hybrid approach such that EVA is applied to the beta distribution part of the likelihood.                                                   
+#' @param formula an object of class "formula" (or one that can be coerced to that class): a symbolic description of covariate effects \eqn{\beta_j} that are estimated separately for each species (column). Accepts both fixed-effect terms, and mixed-model syntax (as in \pkg{lme4}), e.g. \code{~ x1 + (1|group)}, to add species-specific random intercepts/slopes (returned as \code{Br} and covariance matrix \code{sigmaB}). The variable(s) must be included in \code{X}.
+#' @param family  distribution function for responses, or a vector of families for mixed response type model. Options are \code{"negative.binomial"} and \code{"negative.binomial1"} (with log link), \code{poisson(link = "log")}, \code{binomial} (with probit, logit, or cloglog link), beta-binomial (\code{"beta.binomial"}) (with probit, logit, or cloglog link, for \code{"LA"}-method only), zero-inflated binomial (\code{ZIB}), zero-and-N-inflated binomial (\code{ZNIB}) zero-inflated poisson (\code{"ZIP"}), zero-inflated negative-binomial (\code{"ZINB"}), \code{gaussian(link = "identity")}, Tweedie (\code{"tweedie"}) (with log link), \code{"gamma"} (with log link), \code{"exponential"} (with log link), beta (\code{"beta"}) (with logit and probit link, for \code{"LA"} and  \code{"EVA"}-method), \code{"ordinal"} (with \code{"VA"}-method with probit, logit, or cloglog link, or with \code{"EVA"}-method with logit link; not available with \code{"LA"}-method), beta hurdle \code{"betaH"} (with probit or logit link, for \code{"VA"}, \code{"EVA"} and \code{"LA"}-method) and \code{"orderedBeta"} (with \code{"VA"}-method with probit or logit link, or with \code{"EVA"}-method with logit link). Note: \code{"betaH"} and \code{"orderedBeta"} with \code{"VA"}-method are actually fitted using a hybrid approach such that EVA is applied to the beta distribution part of the likelihood.                                                   
 #' @param num.lv  number of latent variables, d, in gllvm model. Non-negative integer, less than number of response variables (m). Defaults to 2, if \code{num.lv.c=0} and \code{num.RR=0}, otherwise 0.
 #' @param num.lv.c  number of latent variables, d, in gllvm model to inform, i.e., with residual term. Non-negative integer, less than number of response (m) and equal to, or less than, the number of predictor variables (k). Defaults to 0. Requires specification of "lv.formula" in combination with "X" or "datayx". Can be used in combination with num.lv and fixed-effects, but not with traits.
 #' @param num.RR number of latent variables, d, in gllvm model to constrain, without residual term (reduced rank regression). Cannot yet be combined with traits.
-#' @param lv.formula an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted (for latent variables).
-#' @param lvCor correlation structure for latent variables, defaults to \code{NULL} Correlation structure for latent variables can be defined via formula, eg. \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}'), \code{corCS} (compound symmetry), and \code{propto} (proportional covariance, used as propto(a+b|group, matrix)). The grouping variable needs to be included either in \code{studyDesign}. Works at the moment only with unconstrained ordination without quadratic term.
+#' @param lv.formula an object of class "formula" (or one that can be coerced to that class): defines the effects that inform the ordination axes in concurrent (\code{num.lv.c}) and/or constrained (\code{num.RR}) ordination. Accepts fixed effects or random effects, not both at the same time. Random effects formulation requires specifying the \code{randomB} argument.
+#' @param lvCor correlation structure for latent variables, defaults to \code{NULL} Correlation structure for latent variables can be defined via formula, eg. \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}'), \code{corCS} (compound symmetry), and \code{corMatern} (Matern covariance, see argument '\code{dist}'). The grouping variable needs to be included either in \code{studyDesign}. Works at the moment only with ordination without quadratic term.
 #' @param studyDesign variables related to eg. sampling/study design, used for defining correlation structure of the latent variables and row effects.
 #' @param method  model can be fitted using Laplace approximation method (\code{method = "LA"}) or variational approximation method (\code{method = "VA"}), or with extended variational approximation method (\code{method = "EVA"}) when VA is not applicable. If particular model has not been implemented using the selected method, model is fitted using the alternative method as a default. Defaults to \code{"VA"}.
-#' @param row.eff  \code{FALSE}, \code{fixed}, \code{"random"} or formula to define the structure for the community level row effects, indicating whether row effects are included in the model as a fixed or as a random effects. Defaults to \code{FALSE} when row effects are not included. Structured random row effects can be defined via formula, eg. \code{~(1|groups)}, when unique row effects are set for each group, not for all rows, the grouping variable needs to be included in \code{studyDesign}. Correlation structure between random group effects/intercepts can also be set using \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}') and \code{corCS} (compound symmetry). Correlation structure can be set between or within groups, see argument '\code{corWithin}'.
+#' @param row.eff  \code{FALSE}, \code{fixed}, \code{"random"} or an object of class "formula": defines the community-level or row effects, i.e. terms that (unlike \code{formula}) are the same for all species (columns) rather than species-specific. Defaults to \code{FALSE} when row effects are not included. \code{"fixed"} and \code{"random"} give, respectively, a single fixed or i.i.d. random intercept per row. Supports both fixed effects and random effects, e.g. \code{~ x1 + (1|group)}. The variable(s) must be included in \code{studyDesign}. Correlation structure between random group effects/intercepts can also be set using \code{~struc(1|groups)}, where option to 'struc' are \code{corAR1} (AR(1) covariance), \code{corExp} (exponentially decaying, see argument '\code{dist}'), \code{corCS} (compound symmetry), and \code{corMatern} (Matern covariance, see argument '\code{dist}'), or \code{propto} (proportional covariance, used as propto(a+b|group, matrix)). Correlation structure can be set between or within groups, see argument '\code{corWithin}'.
 #' @param corWithin logical. Vector of length equal to the number of row effects. For structured row effects with correlation, If \code{TRUE}, correlation is set between row effects of the observation units within group. Correlation and groups can be defined using \code{row.eff}. Defaults to \code{FALSE}, when correlation is set for row parameters between groups.
 #' @param corWithinLV logical. For LVs with correlation, If \code{TRUE}, correlation is set between rows of the observation units within group. Defaults to \code{FALSE}, when correlation is set for rows between groups.
-#' @param dist list of length equal to the number of row effects with correlation structure \code{corExp} that holds the matrix of coordinates or time points.
-#' @param distLV matrix of coordinates or time points used for LV correlation structure \code{corExp}.
+#' @param dist list of length equal to the number of row effects with correlation structure \code{corExp}, \code{corMatern} that holds the matrix of coordinates or time points.
+#' @param distLV matrix of coordinates or time points used for LV correlation structure \code{corExp}, \code{corMatern}.
 #' @param colMat either a list of length 2 with matrix of similarity for the column effects and named matrix "dist" of pairwise distances (of columns, to use in selecting nearest neighbours) for a sparse approximation of the matrix inverse in the likelihood, or only a (p.d.) matrix of similarity for the column effects for a normal inverse calculation.
 #' @param colMat.rho.struct either \code{single} (default) or \code{term} indicating whether the signal parameter should be shared for covariates, or not.
 #' @param quadratic either \code{FALSE}(default), \code{TRUE}, or \code{LV}. If \code{FALSE} models species responses as a linear function of the latent variables. If \code{TRUE} models species responses as a quadratic function of the latent variables. If \code{LV} assumes species all have the same quadratic coefficient per latent variable.
@@ -142,7 +142,9 @@
 #'\describe{
 #'   \item{\code{corAR1} }{ autoregressive process of order 1.}
 #'   \item{\code{corExp} }{ exponentially decaying, see argument '\code{dist}'.}
+#'   \item{\code{corMatern} }{ compound symmetry.}
 #'   \item{\code{corCS} }{ compound symmetry.}
+#'   \item{\code{propto.}}{ proportional to a known matrix}
 #' }  
 #' }
 #'
@@ -168,9 +170,13 @@
 #'   \item{For binary data \code{family = binomial()}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = N_{trials}\mu_{ij}(1-\mu_{ij})}.}
 #'   \item{ \code{family = "ZIB"}:}{ Expectation \eqn{E[Y_{ij}] = (1-p_j)N_j\mu_{ij}}, variance \eqn{V(\mu_{ij}) = N_j\mu_{ij}(1-p_j) (1+N_j\mu_{ij}p_j)}.}
 #'   \item{ \code{family = "ZNIB"}:}{ Expectation \eqn{E[Y_{ij}] = p_j^N N_j + (1-p^0_j-p_j^N)N_j\mu_{ij}}, variance \eqn{V(\mu_{ij}) = p_j^N N_j^2 + (1-p_j^0-p^N_j)N_j\mu_{ij}(1-\mu_{ij}+N_j\mu_{ij})-E[Y_{ij}]^2}.}
-#'   \item{ \code{family = "beta.binomial"}:}{ Expectation \eqn{E[Y_{ij}] = N_j\mu_{ij}}, variance \eqn{V(\mu_{ij}) = N_j\mu_{ij}(1-\mu_{ij})(1 + (N_j-1)\phi_j/(\phi_j+1))} where \eqn{\phi_j > 0} is a species-specific overdispersion parameter. Only available for \code{method = "LA"}.}
+#'   \item{ \code{family = "beta.binomial"}:}{ Expectation \eqn{E[Y_{ij}] = N_j\mu_{ij}}, variance \eqn{V(\mu_{ij}) = N_j\mu_{ij}(1-\mu_{ij})(1 + (N_j-1)\phi_j/(\phi_j+1))}. Only available for \code{method = "LA"}.}
 #'
 #'   \item{For percent cover data \eqn{0 < Y_{ij} < 1} \code{family = "beta"}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}(1-\mu_{ij})/(1+\phi_j)}.}
+#'
+#'   \item{For percent cover data with absences \eqn{0 \le Y_{ij} < 1} \code{family = "betaH"}:}{ Beta hurdle model (Korhonen et al., 2024): a separate linear predictor \eqn{\eta^0_{ij}} models the probability of presence, so that \eqn{p^0_{ij} = p(Y_{ij} = 0) = 1-g^{-1}(\eta^0_{ij})}, and the non-zero responses follow the beta distribution above with mean \eqn{\mu_{ij}}. Expectation \eqn{E[Y_{ij}] = (1-p^0_{ij})\mu_{ij}}, variance \eqn{V(\mu_{ij}) = (1-p^0_{ij})\mu_{ij}(1-\mu_{ij})/(1+\phi_j) + p^0_{ij}(1-p^0_{ij})\mu_{ij}^2}.}
+#'
+#'   \item{For percent cover data with absences and full cover \eqn{0 \le Y_{ij} \le 1} \code{family = "orderedBeta"}:}{ Ordered beta model (Korhonen et al., 2024), which extends the beta distribution above with point masses at zero and one by means of two cut-off parameters \eqn{\zeta_{j0} < \zeta_{j1}} (reported as \code{cutoff0} and \code{cutoff1}; species-common or species-specific as set by \code{zeta.struc}, with starting values set by \code{zetacutoff} in \code{control.start}). With \eqn{\rho^k_{ij} = g^{-1}(\zeta_{jk} - \eta_{ij})}, we have \eqn{p(Y_{ij} = 0) = \rho^0_{ij}} and \eqn{p(Y_{ij} = 1) = 1-\rho^1_{ij}}, while responses in \eqn{(0,1)} occur with probability \eqn{\rho^1_{ij}-\rho^0_{ij}} and follow the beta distribution with mean \eqn{\mu_{ij} = g^{-1}(\eta_{ij})}. Expectation \eqn{E[Y_{ij}] = (1-\rho^1_{ij}) + (\rho^1_{ij}-\rho^0_{ij})\mu_{ij}}, variance \eqn{V(\mu_{ij}) = (1-\rho^1_{ij}) + (\rho^1_{ij}-\rho^0_{ij})\{\mu_{ij}(1-\mu_{ij})/(1+\phi_j)+\mu_{ij}^2\} - E[Y_{ij}]^2}.}
 #'
 #'   \item{For positive continuous data \code{family = "gamma"}:}{Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \mu_{ij}^2/\phi_j}, where \eqn{\phi_j} is species specific shape parameter.}
 #'   
@@ -178,7 +184,7 @@
 #'   
 #'   \item{For non-negative continuous or biomass data \code{family = "tweedie"}}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(\mu_{ij}) = \phi_j*\mu_{ij}^\nu}, where \eqn{\nu} is a power parameter of Tweedie distribution. See details Dunn and Smyth (2005).}
 #'
-#'   \item{For ordinal data \code{family = "ordinal"}:}{ Cumulative probit model, see Hui et.al. (2016).}
+#'   \item{For ordinal data \code{family = "ordinal"}:}{ Cumulative link model, with probit, logit, or cloglog link (logit only for \code{method = "EVA"}), not available for \code{method = "LA"}. With cut-offs \eqn{\zeta_{j1} < \ldots < \zeta_{jK-1}} for \eqn{K} classes (species-common or species-specific as set by \code{zeta.struc}), \eqn{p(Y_{ij} \le k) = g^{-1}(\zeta_{jk} - \eta_{ij})}, so that \eqn{p(Y_{ij} = k) = g^{-1}(\zeta_{jk} - \eta_{ij}) - g^{-1}(\zeta_{j,k-1} - \eta_{ij})}. As the classes are ordinal, the mean and variance are only defined once numerical scores are assigned to the classes; with the class labels \eqn{k = 1, \ldots, K} as scores, expectation \eqn{E[Y_{ij}] = \sum_k k p(Y_{ij} = k)} and variance \eqn{V(Y_{ij}) = \sum_k k^2 p(Y_{ij} = k) - E[Y_{ij}]^2}.}
 #'   
 #'   \item{For normal distributed data \code{family = gaussian()}:}{ Expectation \eqn{E[Y_{ij}] = \mu_{ij}}, variance \eqn{V(y_{ij}) = \phi_j^2.}}
 #' }
@@ -270,6 +276,8 @@
 #' Kasper Kristensen, Anders Nielsen, Casper W. Berg, Hans Skaug, Bradley M. Bell (2016). TMB: Automatic Differentiation and Laplace Approximation. Journal of Statistical Software, 70(5), 1-21.
 #'
 #' Korhonen, P., Hui, F. K. C., Niku, J., and Taskinen, S. (2021). Fast, universal estimation of latent variable models using extended variational approximations. Stat Comput 33, 26 (2023).
+#'
+#' Korhonen, P., Hui, F. K. C., Niku, J., Taskinen, S., and van der Veen, B. (2024). A comparison of joint species distribution models for percent cover data. Methods in Ecology and Evolution, 15:2359-2372.
 #'
 #' Niku, J., Warton,  D. I., Hui, F. K. C., and Taskinen, S. (2017). Generalized linear latent variable models for multivariate count and biomass data in ecology. Journal of Agricultural, Biological, and Environmental Statistics, 22:498-522.
 #'
@@ -619,9 +627,16 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
     if(control$optimizer=="optim" && !control$optim.method%in%c("Nelder-Mead","BFGS","CG","L-BFGS-B","SANN","Brent")){
       stop("Invalid optim.method '", control$optim.method,"'")
     }
+    if(control.start$start.optimizer=="optim" && !control.start$start.optim.method%in%c("Nelder-Mead","BFGS","CG","L-BFGS-B","SANN","Brent")){
+      stop("Invalid start.optim.method '", control.start$start.optim.method,"'")
+    }
   if(!control$optimizer%in%c("optim","nlminb","alabama","nloptr(sqp)","nloptr(agl)")){
     stop("Optimizer must be one of 'optim', 'nlminb', 'alabama', 'nloptr(sqp)' or 'nloptr(agl)'.")
-  }else if(control$optimizer%in%c("nloptr(sqp)","nloptr(agl)")){
+  }
+  if(!control.start$start.optimizer%in%c("optim","nlminb","alabama","nloptr(sqp)","nloptr(agl)")){
+    stop("start.optimizer must be one of 'optim', 'nlminb', 'alabama', 'nloptr(sqp)' or 'nloptr(agl)'.")
+  }
+  if(control$optimizer%in%c("nloptr(sqp)","nloptr(agl)")){
     # Change to NLOPT algorithm names
     if(control$optimizer=="nloptr(sqp)"){control$optimizer <- "NLOPT_LD_SLSQP"}else if(control$optimizer=="nloptr(agl)"){control$optimizer <- "NLOPT_LD_AUGLAG_EQ"}
   }
@@ -632,7 +647,8 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
       if(all(family!="tweedie"))control$optim.method <- "BFGS"
       if(any(family=="tweedie"))control$optim.method <- "L-BFGS-B"
     }
-    
+
+
   if((num.RR+num.lv.c)>1 && control$optimizer%in%c("optim","nlminb") && randomB == FALSE){
     warning("Cannot fit ordination with predictors using 'optim' or 'nlminb', using 'nloptr(agl)' instead.")
     control$optimizer <- "nloptr(agl)"
@@ -776,7 +792,9 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
         X.col.eff <- mf <- data.frame(Intercept=rep(1,nrow(y)))
       }
 
-      RElistSP<- mkReTrms1(bar.f, mf, nocorr=corstruc(expandDoubleVerts2(col.eff.formula))) #still add find double bars
+      nocorrSP <- corstruc(expandDoubleVerts2(col.eff.formula))
+      RElistSP<- mkReTrms1(bar.f, mf) #still add find double bars
+      RElistSP$cs <- csIndices(RElistSP$grps, nocorrSP)
       
       if(is.null(formula) && is.null(lv.formula)){
         X <- NULL
@@ -884,7 +902,9 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
             if(!is.null(nobars1_(lv.formula)))stop("lv.formula cannot yet incorporate fixed and random effects at the same time.")
             bar.f <- findbars1(lv.formula) # list with 3 terms
             lv.X <- model.frame(subbars1(reformulate(sprintf("(%s)", sapply(findbars1(lv.formula), deparse1)))),data=data.frame(datayx))
-            RElistLV <- mkReTrms1(bar.f,lv.X, nocorr=corstruc(expandDoubleVerts2(lv.formula))) #still add find double bars
+            nocorrLV <- corstruc(expandDoubleVerts2(lv.formula))
+            RElistLV <- mkReTrms1(bar.f,lv.X) #still add find double bars
+            RElistLV$cs <- csIndices(RElistLV$grps, nocorrLV)
             lv.X.design = t(as.matrix(RElistLV$Zt))
             if((ncol(csBlv) == 2) && randomB%in%c("iid","single")){
               warning("Correlated random canonical coefficients only allowed with randomB = 'P' or and randomB='LV'. Setting randomB = 'P'.\n")
@@ -916,7 +936,9 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
             if(!is.null(nobars1_(lv.formula)))stop("lv.formula cannot yet incorporate fixed and rando effects at the same time.")
             bar.f <- findbars1(lv.formula) # list with 3 terms
             lv.X <- model.frame(subbars1(reformulate(sprintf("(%s)", sapply(findbars1(lv.formula), deparse1)))),data=data.frame(datayx))
-            RElistLV<- mkReTrms1(bar.f,lv.X, nocorr=corstruc(expandDoubleVerts2(lv.formula))) #still add find double bars
+            nocorrLV <- corstruc(expandDoubleVerts2(lv.formula))
+            RElistLV<- mkReTrms1(bar.f,lv.X) #still add find double bars
+            RElistLV$cs <- csIndices(RElistLV$grps, nocorrLV)
             lv.X.design = t(as.matrix(RElistLV$Zt))
             if((ncol(csBlv) == 2) && randomB%in%c("iid","single")){
               warning("Correlated random canonical coefficients only allowed with randomB = 'P' or randomB = 'LV'. Setting randomB = 'P'.\n")
@@ -1026,6 +1048,19 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
         }
       }
     }
+    
+    .rownames <- function(x) if (.row_names_info(x) < 0) NULL else rownames(x)
+    
+    nmrY <- .rownames(y)
+    nmcY <- colnames(y)
+    
+    nmrX <- NULL
+    if(!missing(X)) nmrX <- .rownames(X)
+    if(!is.null(nmrY) && !is.null(nmrX) && !identical(nmrY,nmrX))warning("Row names of y and X do not match.")
+    
+    nmrTR <- NULL
+    if(!missing(TR))nmrTR <- .rownames(TR)
+    if(!is.null(nmcY) && !is.null(nmrTR) && !identical(nmcY, nmrTR))warning("Species names in y and TR do not match.")
     
     if(length(family) != NCOL(y)) family = rep(family, NCOL(y))[1:NCOL(y)]
     
@@ -1186,7 +1221,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
           mf.new[, corWithin] <- apply(mf[, corWithin, drop=F],2,function(x)order(order(x)))
         }
         colnames(mf.new) <- colnames(mf)
-        RElistRow <- mkReTrms1(bar.f, mf.new, nocorr=cstruc)
+        RElistRow <- mkReTrms1(bar.f, mf.new)
         dr <- Matrix::t(RElistRow$Zt)
 
         # This line errs for formulations such as (cov|1), which includes an intercept
@@ -1542,6 +1577,7 @@ gllvm <- function(y = NULL, X = NULL, TR = NULL, data = NULL, formula = NULL, fa
         method = method, family = family, row.eff = row.eff.formula, col.eff = list(col.eff = col.eff, col.eff.formula = col.eff.formula, spdr = Matrix::t(RElistSP$Zt), Ab.struct = Ab.struct, Ab.struct.rank = Ab.struct.rank, colMat.rho.struct = colMat.rho.struct), corP=list(cstruc = cstruc, cstruclv = cstruclv, corWithin = corWithin, corWithinLV = corWithinLV, Astruc=0), dist=dist, distLV = distLV, randomX = randomX, n.init = n.init,
         sd = FALSE, Lambda.struc = Lambda.struc, TMB = TMB, beta0com = beta0com, optim.method=optim.method, disp.group = disp.group, NN=NN, Ntrials = Ntrials, quadratic = quadratic, randomB = randomB, zeta.struc = zeta.struc)
     if(any(out$corP$cstruc=="corMatern")) out$corP$MaternSmoothness = MaternKappa
+    if(any(out$corP$cstruclv=="corMatern")) out$corP$MaternSmoothness = MaternKappa
     if(inherits(row.eff.formula, "formula"))out$row.eff <- row.eff.formula
     if(return.terms) {out$terms = term} #else {terms <- }
 

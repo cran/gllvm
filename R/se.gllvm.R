@@ -213,7 +213,7 @@ se.gllvm <- function(object, ...){
           neg_pnames <- names(object$TMBfn$par[incl])[d < 0]
           neg_counts <- table(neg_pnames)
           neg_summary <- paste(names(neg_counts), neg_counts, sep = " x", collapse = ", ")
-          warning(sprintf("%d parameter(s) have negative variance estimates (%s). Standard errors are 0 for these. The model likely has not converged - consider re-fitting.", sum(d < 0), neg_summary))
+          warning(sprintf("%d parameter(s) have negative variance estimates (%s). The model likely has not converged, consider re-fitting.", sum(d < 0), neg_summary))
         }
         se <- sqrt(pmax(d, 0))
         names(se) = names(object$TMBfn$par[incl])
@@ -483,7 +483,10 @@ se.gllvm <- function(object, ...){
               idx<-idx+k
             } else {
               if(!is.null(se.zetas)){
-              se.zetanew[j,] <- c(se.zetas[idx +1], se.zetas[idx +2]*object$params$zeta[j,2])
+              gap <- object$params$zeta[j,2] - object$params$zeta[j,1]
+              cv2 <- zeta.cov[(idx+1):(idx+2),(idx+1):(idx+2),drop=FALSE]
+              jac <- c(1, gap)
+              se.zetanew[j,1:2] <- c(se.zetas[idx +1], sqrt(as.numeric(t(jac) %*% cv2 %*% jac)))
               idx<-idx+2
               }
             }
@@ -498,7 +501,11 @@ se.gllvm <- function(object, ...){
           }
         }else{
           if(any(family%in%c("orderedBeta"))){
-            se.zetanew[2] <- object$params$zeta[2]*se.zetanew[2]
+            zeta.cov <- cov.mat.mod[names(object$TMBfn$par)[incl]=="zeta",names(object$TMBfn$par)[incl]=="zeta",drop=FALSE]
+            gap <- object$params$zeta[2] - object$params$zeta[1]
+            cv2 <- zeta.cov[1:2,1:2,drop=FALSE]
+            jac <- c(1, gap)
+            se.zetanew[2] <- sqrt(as.numeric(t(jac) %*% cv2 %*% jac))
             names(se.zetanew)[1:2] <- c("cutoff0","cutoff1")
             se.zetanew <- se.zetanew[-((kz+ 1):length(se.zetanew))]
           }
@@ -549,16 +556,11 @@ se.gllvm <- function(object, ...){
       sdr <- optimHess(pars, objrFinal$fn, objrFinal$gr)
     }
     rownames(sdr) <- colnames(sdr) <- names(pars)
-    # makes a small correction to the partial derivatives of LvXcoef if fixed-effect
-    # because of constrained objective function
-    # assumes L(x) = f(x) + lambda*c(x) for constraint function c(x)
-    # though this is not (exactly) how we are fitting the model.
-    if((object$num.RR+object$num.lv.c)>1 && isFALSE(object$randomB)){
-      b_lvHE <- sdr[names(pars)=="b_lv",names(pars)=="b_lv"]
-      Lmult <- lambda(pars,objrFinal) #estimates  lagranian multiplier
-      sdr[names(pars)=="b_lv",names(pars)=="b_lv"] = b_lvHE + b_lvHEcorrect(Lmult,K = ncol(object$lv.X.design), d = object$num.lv.c+object$num.RR)
-    }
-    
+    # with fixed b_lv the LVs are orthogonalised, so the covariance is that of
+    # an equality-constrained MLE and is projected onto the constraint's null space
+    constrained <- (object$num.RR+object$num.lv.c)>1 && isFALSE(object$randomB)
+    Jcon <- if(constrained) eval_eq_j(pars, objrFinal) else NULL
+
     m <- dim(sdr)[1]; incl <- rep(TRUE,m); incld <- rep(FALSE,m); inclr <- rep(FALSE,m)
     incl[names(objrFinal$par)=="ePower"] <- FALSE
     # Not used for this model
@@ -633,7 +635,7 @@ se.gllvm <- function(object, ...){
     }
     
     if(method=="LA" || ((num.lv+num.lv.c)==0 && (method %in% c("VA", "EVA")) && is.null(object$params$row.params.random) && isFALSE(object$randomB)) && object$col.eff$col.eff!="random"){
-      cov.mat.mod <- try(MASS::ginv(sdr[incl,incl]), silent = TRUE)
+      cov.mat.mod <- try(if(constrained) cov_constrained(sdr[incl,incl], Jcon[,incl,drop=FALSE]) else MASS::ginv(sdr[incl,incl]), silent = TRUE)
       if(inherits(cov.mat.mod, "try-error")) { stop("Standard errors for parameters could not be calculated, due to singular fit.\n") }
       d <- diag(cov.mat.mod)
       if(any(d < 0)){
@@ -691,7 +693,9 @@ se.gllvm <- function(object, ...){
 
       I <- A.mat-B.mat%*%as.matrix(solve(D.mat, t(B.mat)))
       if(!isSymmetric(I)) I <- 0.5*I + 0.5*t(I)
-      cov.mat.mod<- try(MASS::ginv(I),silent=T)
+      # jacobian on the scaled parameters, dc/dphi = (dc/dtheta)/sds
+      Jcon.s <- if(constrained) sweep(Jcon[,incl,drop=FALSE], 2, sds[incl], "/") else NULL
+      cov.mat.mod<- try(if(constrained) cov_constrained(I, Jcon.s) else MASS::ginv(I),silent=T)
       if(inherits(cov.mat.mod,"try-error")){
         # block inversion via inverse of fixed-effects block
         Ai <- try(solve(A.mat),silent=T)
@@ -1052,7 +1056,10 @@ se.gllvm <- function(object, ...){
             idx<-idx+k
           } else {
             if(!is.null(se.zetas)){
-              se.zetanew[j,] <- c(se.zetas[idx +1], se.zetas[idx +2]*object$params$zeta[j,2])
+              gap <- object$params$zeta[j,2] - object$params$zeta[j,1]
+              cv2 <- zeta.cov[(idx+1):(idx+2),(idx+1):(idx+2),drop=FALSE]
+              jac <- c(1, gap)
+              se.zetanew[j,1:2] <- c(se.zetas[idx +1], sqrt(as.numeric(t(jac) %*% cv2 %*% jac)))
               idx<-idx+2
             }
           }
@@ -1067,7 +1074,11 @@ se.gllvm <- function(object, ...){
         }
       }else{
         if(any(family%in%c("orderedBeta"))){
-          se.zetanew[2] <- object$params$zeta[2]*se.zetanew[2]
+          zeta.cov <- cov.mat.mod[names(object$TMBfn$par)[incl]=="zeta",names(object$TMBfn$par)[incl]=="zeta", drop=FALSE]
+          gap <- object$params$zeta[2] - object$params$zeta[1]
+          cv2 <- zeta.cov[1:2,1:2,drop=FALSE]
+          jac <- c(1, gap)
+          se.zetanew[2] <- sqrt(as.numeric(t(jac) %*% cv2 %*% jac))
           names(se.zetanew)[1:2] <- c("cutoff0","cutoff1")
         }
         sezetanew  <- NULL

@@ -692,11 +692,11 @@ trait.TMB <- function(
         
         if(zeta.struc =="common") {
           if(any(family%in%c("orderedBeta"))){
-            zeta <- c(zeta, res$zeta[1], log(res$zeta[2]))
+            zeta <- c(zeta, res$zeta[1], log(res$zeta[2]-res$zeta[1]))
             zetaO <- c(zetaO, rep(TRUE,2))
-            
+
             if(!is.null(zetacutoff)){
-              zeta<- c(zetacutoff[1], log(zetacutoff[2]))
+              zeta<- c(zetacutoff[1], log(zetacutoff[2]-zetacutoff[1]))
             }
           }
           if(any(family%in%c("ordinal"))){
@@ -711,9 +711,9 @@ trait.TMB <- function(
               zetaO <- c(zetaO, rep(FALSE,length(na.omit(res$zeta[j,-1]))))
             } else {
               if(!is.null(zetacutoff)){
-                zeta<- c(zeta, zetacutoff[1], log(zetacutoff[2]))
+                zeta<- c(zeta, zetacutoff[1], log(zetacutoff[2]-zetacutoff[1]))
               } else {
-                zeta <- c(zeta, res$zeta[j,1], log(res$zeta[j,2]))
+                zeta <- c(zeta, res$zeta[j,1], log(res$zeta[j,2]-res$zeta[j,1]))
               }
               zetaO <- c(zetaO, rep(TRUE,2))
             }
@@ -1124,7 +1124,8 @@ trait.TMB <- function(
             Abb <- c(rep(log(a.var), p*ncol(xb)),rep(1e-3, sum(ncol(xb)*blocksp*Abranks-Abranks*(Abranks-1)/2-Abranks)))
         }
       }
-       
+      Abb <- pmin(pmax(Abb, log(1e-5)), log(Lambda.start[2]))
+
       }else{ Abb <- 0 }
     
       
@@ -1294,6 +1295,7 @@ trait.TMB <- function(
     if(any(family == "ordinal")) {
       familyn[family == "ordinal"]=7
       if(any(link=="probit"))extra[family == "ordinal" & link=="probit"]=1
+      if(any(link=="cloglog"))extra[family == "ordinal" & link=="cloglog"]=2
     }
     if(any(family == "exponential")) {familyn[family == "exponential"] =8}
     if(any(family == "beta")){ 
@@ -1387,7 +1389,7 @@ trait.TMB <- function(
       parameter.list = list(r0r = matrix(r0r), sigmaijr = sigmaijr, r0f = matrix(r0f), b = rbind(a), b_lv = matrix(0), sigmab_lv = 0, Ab_lv = 0, B=matrix(B), Br=Br, lambda = theta, lambda2 = t(lambda2), sigmaLV = (sigma.lv), u = u, lg_phi=log(phi), sigmaB=sigmaB, sigmaij=sigmaij, log_sigma=c(sigma), rho_lvc=rho_lvc, Au=Au, lg_Ar=lg_Ar, Abb=Abb, zeta=zeta, ePower = ePower, lg_phiZINB = log(ZINBphi)) #, scaledc=scaledc, thetaH = thetaH, bH=bH
       data.list <- list(y = y, x = Xd, x_lv = matrix(0), xr = xr, xb = xb, dr0 = dr, csR = csR, proptoMats = proptoMats, dLV = dLV, offset = offset, trmsize = trmsize, num_lv = num.lv, num_RR = 0, num_lv_c = 0, num_corlv=num.lv.cor, quadratic = 0, randomB = 0, family=familyn,extra=extra,method=1,model=1,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0), times = matrix(times, nrow = 1), cstruc=cstrucn, cstruclv = cstruclvn, dc=dist, dc_lv = distLV, Astruc=Astruc, NN = NN, Ntrials = Ntrials, colMatBlocksI = blocks,  Abranks = Abranks, Abstruc = Abstruc, cs = cs, nncolMat = nncolMat, csb_lv = matrix(0), cw = corWithinLV*1, p_betaH = p_betaH)
 
-      if(any(family %in% c("ordinal", "orderedBeta"))){
+      if(any(family %in% c("ordinal"))){
         data.list$method = 0
       }
       
@@ -1532,7 +1534,8 @@ trait.TMB <- function(
           if(cstruclvn %in% c(2,4)){ #cstruc=="corExp" || cstruc=="corMatern"
             if(num.lv.cor>0){
               rho_lvc <- matrix((param1[nam=="rho_lvc"])[map.list$rho_lvc],nrow(rho_lvc),ncol(rho_lvc)); 
-              rho_lvc[is.na(rho_lvc)]=0 
+              rho_lvc[is.na(rho_lvc)]=parameter.list$rho_lvc[is.na(rho_lvc)]
+              # rho_lvc[is.na(rho_lvc)]=0 
             } #rho_lvc[-1]<- param1[nam=="rho_lvc"]
           } else {
             rho_lvc[1:length(rho_lvc)]<- param1[nam=="rho_lvc"]
@@ -1682,7 +1685,7 @@ trait.TMB <- function(
       if(zeta.struc =="common") {
         zetanew <- NULL
         if(any(family%in%c("orderedBeta"))){
-          zetanew <- c(zetanew, zetas[1], exp(zetas[2]))
+          zetanew <- c(zetanew, zetas[1], zetas[1] + exp(zetas[2]))
           names(zetanew) <- c("cutoff0","cutoff1")
         }
         if(any(family%in%c("ordinal"))){
@@ -1704,10 +1707,10 @@ trait.TMB <- function(
                 zetanew[j,l+1]<-zetas[idx+l]
               } 
             }
-            zetanew[j,] <- cumsum(exp(zetanew[j,]))
+            zetanew[j,] <- c(0, cumsum(exp(zetanew[j,-1])))
             idx<-idx+k
           } else {
-            zetanew[j,] <- c(zetas[idx +1], exp(zetas[idx +2]))
+            zetanew[j,1:2] <- c(zetas[idx +1], zetas[idx +1] + exp(zetas[idx +2]))
             idx<-idx+2
           }
         } # end for j
@@ -1806,7 +1809,7 @@ trait.TMB <- function(
         if(ncol(cs)==2){
           sigmaij <- rep(0,(ncol(xb)^2-ncol(xb))/2)
             for(i in 1:nrow(cs)){
-              sigmaij[(cs[i,1] - 1) * (cs[i,1] - 2) / 2 + cs[i,2]] = Sr[i]
+              sigmaij[(cs[i,2] - 1) * (2*ncol(xb) - cs[i,2]) / 2 + (cs[i,1] - cs[i,2])] = Sr[i]
             }
           Sr <- sigmaij
           L <- constructL(Sr)

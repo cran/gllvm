@@ -160,13 +160,13 @@ start_values_gllvm_TMB <- function(
         if(!is.null(RElist)){
           fit.mvaR <- gllvm.TMB(y, X = X, formula=formula(formula), family = family, num.lv = 0, RElist = RElist, xr = xr, dr = dr, csR = csR, proptoMats = proptoMats, trmsize = trmsize, cstruc = cstruc, Lambda.struc = "diagonal", trace = FALSE, maxit = 1000, max.iter=200, n.init=1,starting.val="zero", diag.iter = 0, optimizer = start.optimizer, optim.method = start.optim.method, link = link, Power = Power, disp.group = disp.group, method = method, Ntrials = Ntrials, sp.Ar.struc = Ab.struct, sp.Ar.struc.rank = Ab.struct.rank, colMat = colMat, nn.colMat = nn.colMat, col.eff = "random", beta0com = beta0com, zeta.struc = zeta.struc)
           if(!inherits(fit.mvaR,"try-error") && is.finite(fit.mvaR$logL)){
-            if(nrow(dr)==n) { # !!!!  
+            if(nrow(dr)==n) { # !!!!
               sigma=c(max(fit.mvaR$params$sigma[1],sigma),fit.mvaR$params$sigma[-1])
               fit.mva$params$row.params.random <- fit.mvaR$params$row.params.random/sd(fit.mvaR$params$row.params.random)*sigma[1]
             }
             if(any(family=="tweedie"))Power = fit.mvaR$Power
-            
-            out$fitstart <- list(A=fit.mvaR$A, Ab=fit.mvaR$Ab, TMBfnpar=fit.mvaR$TMBfn$par, B = fit.mvaR$params$B, Br = fit.mvaR$params$Br, sigmaB = fit.mvaR$params$sigmaB) #params = fit.mva$params, 
+
+            out$fitstart <- list(A=fit.mvaR$A, Ab=fit.mvaR$Ab, TMBfnpar=fit.mvaR$TMBfn$par, B = fit.mvaR$params$B, Br = fit.mvaR$params$Br, sigmaB = fit.mvaR$params$sigmaB) #params = fit.mva$params,
           }
         }
         
@@ -388,7 +388,7 @@ start_values_gllvm_TMB <- function(
       zeta[family == "ordinal",1] <- 0 ## polr parameterizes as no intercepts and all cutoffs vary freely. Change this to free intercept and first cutoff to zero
     }else{
       linko <- link[pmin(which(family == "ordinal"), length(link))][1]
-      cw.fit <- MASS::polr(factor(y[,family == "ordinal",drop=FALSE]) ~ 1, method = switch(linko, "logit" = "logistic","probit" = "probit"))
+      cw.fit <- MASS::polr(factor(y[,family == "ordinal",drop=FALSE]) ~ 1, method = switch(linko, "logit" = "logistic", "probit" = "probit", "cloglog" = "cloglog"))
       zeta[(length(zeta)-length(cw.fit$zeta)+1):length(zeta)] <- cw.fit$zeta
       zeta[(length(zeta)-length(cw.fit$zeta)+1)] <- 0
     }
@@ -427,11 +427,11 @@ start_values_gllvm_TMB <- function(
         linkj = link[min(j,length(link))]
         if(length(levels(y.fac)) > 2) {
           if((num.lv+num.lv.c)==0){
-            if(is.null(X)) try(cw.fit <- MASS::polr(y.fac ~ 1, method = switch(linkj, "logit" = "logistic","probit" = "probit")),silent = TRUE)
-            if(!is.null(X) ) try(cw.fit <- MASS::polr(y.fac ~ Xdesign, method = switch(linkj, "logit" = "logistic","probit" = "probit")),silent = TRUE)
+            if(is.null(X)) try(cw.fit <- MASS::polr(y.fac ~ 1, method = switch(linkj, "logit" = "logistic", "probit" = "probit", "cloglog" = "cloglog")),silent = TRUE)
+            if(!is.null(X) ) try(cw.fit <- MASS::polr(y.fac ~ Xdesign, method = switch(linkj, "logit" = "logistic", "probit" = "probit", "cloglog" = "cloglog")),silent = TRUE)
           } else {
-            if(is.null(X)) try(cw.fit <- MASS::polr(y.fac ~ index, method = switch(linkj, "logit" = "logistic","probit" = "probit")),silent = TRUE)
-            if(!is.null(X)) try(cw.fit <- MASS::polr(y.fac ~ Xdesign+index, method = switch(linkj, "logit" = "logistic","probit" = "probit")),silent = TRUE)
+            if(is.null(X)) try(cw.fit <- MASS::polr(y.fac ~ index, method = switch(linkj, "logit" = "logistic", "probit" = "probit", "cloglog" = "cloglog")),silent = TRUE)
+            if(!is.null(X)) try(cw.fit <- MASS::polr(y.fac ~ Xdesign+index, method = switch(linkj, "logit" = "logistic", "probit" = "probit", "cloglog" = "cloglog")),silent = TRUE)
           }
           params[j,1:length(c(cw.fit$zeta[1],-cw.fit$coefficients))] <- c(cw.fit$zeta[1],-cw.fit$coefficients)
           if(zeta.struc == "species"){
@@ -456,7 +456,7 @@ start_values_gllvm_TMB <- function(
         y.fac <- factor(y[,j])
         linkj = link[min(j,length(link))]
         if(length(levels(y.fac)) > 2) {
-          cw.fit <- try(MASS::polr(y.fac ~ 1, method = switch(linkj, "logit" = "logistic","probit" = "probit")),silent = TRUE)
+          cw.fit <- try(MASS::polr(y.fac ~ 1, method = switch(linkj, "logit" = "logistic", "probit" = "probit", "cloglog" = "cloglog")),silent = TRUE)
           zeta[j,2:length(cw.fit$zeta)] <- cw.fit$zeta[-1]-cw.fit$zeta[1]
         }
       } # end for j
@@ -469,6 +469,7 @@ start_values_gllvm_TMB <- function(
     kz <- 0
     if(any(family == "orderedBeta"))kz <- 2
     if(zeta.struc == "common"){
+        out.zeta <- zeta # keeps the orderedBeta cutoffs when families are mixed
         out.zeta[(kz+1):length(zeta)] <- c(zeta[kz+1][1], log(diff(zeta[(kz+1):length(zeta)]))  )
     }else if(zeta.struc == "species"){
       out.zeta <- zeta
@@ -714,8 +715,8 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
   if(any(family %in% c("ordinal", "orderedBeta")) & !is.matrix(zeta)) {
     if(any(family %in% "orderedBeta")) {kz =2} else {kz=0}
     zetanew <- matrix(NA, p, ncol = max(length(zeta)-kz, kz), byrow=TRUE)
-    if(any(family %in% "orderedBeta")) {zetanew[family %in% "orderedBeta", ] = matrix(zeta[1:kz], sum(family %in% "orderedBeta"), kz, byrow = TRUE)}
-    if(any(family %in% "ordinal")) {zetanew[family %in% "ordinal", ] = matrix(zeta[(kz+1):length(zeta)], sum(family %in% "ordinal"), length(zeta)-kz, byrow = TRUE)}
+    if(any(family %in% "orderedBeta")) {zetanew[family %in% "orderedBeta", 1:kz] = matrix(zeta[1:kz], sum(family %in% "orderedBeta"), kz, byrow = TRUE)}
+    if(any(family %in% "ordinal")) {zetanew[family %in% "ordinal", 1:(length(zeta)-kz)] = matrix(zeta[(kz+1):length(zeta)], sum(family %in% "ordinal"), length(zeta)-kz, byrow = TRUE)}
     zeta <- zetanew
   }
   
@@ -884,8 +885,8 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
     if(all(family!=c("ordinal", "orderedBeta"))){
       zeta.struc<-"species"
     }
-    if(num.lv.c>1)start.fit <- try(suppressWarnings(gllvm.TMB(y, lv.X = lv.X, num.lv = 0, num.lv.c = num.lv.c, family = family, starting.val = "zero", zeta.struc = zeta.struc, offset = eta, disp.group = disp.group, optimizer = "alabama", method = method, Ntrials = Ntrials, optim.method = start.optim.method)), silent = TRUE)
-    if(num.lv.c<=1)start.fit <- try(suppressWarnings(gllvm.TMB(y, lv.X = lv.X, num.lv = 0, num.lv.c = num.lv.c, family = family, starting.val = "zero", zeta.struc = zeta.struc, offset = eta, disp.group = disp.group, optimizer = start.optimizer, method = method, Ntrials = Ntrials, optim.method = start.optim.method)), silent = TRUE)
+    if(num.lv.c>1)start.fit <- try(suppressWarnings(gllvm.TMB(y, lv.X = lv.X, num.lv = 0, num.lv.c = num.lv.c, family = family, starting.val = "zero", zeta.struc = zeta.struc, offset = eta, disp.group = disp.group, optimizer = "alabama", method = method, Ntrials = Ntrials, optim.method = start.optim.method, link = link)), silent = TRUE)
+    if(num.lv.c<=1)start.fit <- try(suppressWarnings(gllvm.TMB(y, lv.X = lv.X, num.lv = 0, num.lv.c = num.lv.c, family = family, starting.val = "zero", zeta.struc = zeta.struc, offset = eta, disp.group = disp.group, optimizer = start.optimizer, method = method, Ntrials = Ntrials, optim.method = start.optim.method, link = link)), silent = TRUE)
 
     if(inherits(start.fit, "try-error") || is.null(start.fit$params$LvXcoef)) {
       b.lv  <- matrix(1, nrow = ncol(lv.X), ncol = num.lv.c)
@@ -941,7 +942,7 @@ FAstart <- function(eta, family, y, num.lv = 0, num.lv.c = 0, num.RR = 0, zeta =
           # ds.res[,j] <-              residuals.gllvm(list(y=(y[,j, drop=F]>0)*1, p=1, n=n,  Ntrials = matrix(1), params=list(phi = phis[j], zeta = zeta[min(j, nrow(zeta)),,drop=FALSE], ZINB.phi = ZINB.phi[j]), zeta.struc = zeta.struc, Power = Power, link = link, family = "binomial"), mu = mu[,j, drop=F], eta.mat = eta[,j, drop=F], replace = FALSE)$resi
           # } else {
           bhind =  c(1:p)[(family == famj & (c(1:p)<=(p-NobetaH/2)))]
-          ds.res[,bhind] <- residuals.gllvm(list(y=y[,bhind, drop=F], p=NobetaH/2, n=n,  Ntrials = NULL, params=list(phi = phis[bhind], zeta = NULL, ZINB.phi = NULL), zeta.struc = zeta.struc, Power = Power, link = link[bhbin], family = family[bhind]), mu = mu[,c(bhind,p-NobetaH/2+bhind), drop=F], eta.mat = eta[,c(bhind,p-NobetaH/2+bhind), drop=F], replace = FALSE)$resi
+          ds.res[,bhind] <- residuals.gllvm(list(y=y[,bhind, drop=F], p=NobetaH/2, n=n,  Ntrials = NULL, params=list(phi = phis[bhind], zeta = NULL, ZINB.phi = NULL), zeta.struc = zeta.struc, Power = Power, link = link[bhind], family = family[bhind]), mu = mu[,c(bhind,p-NobetaH/2+bhind), drop=F], eta.mat = eta[,c(bhind,p-NobetaH/2+bhind), drop=F], replace = FALSE)$resi
           # ds.res[,j] <- residuals.gllvm(list(y=y[,j, drop=F], p=1, n=n,  Ntrials = NULL, params=list(phi = phis[c(j)], zeta = zeta[min(j, nrow(zeta)),,drop=FALSE], ZINB.phi = ZINB.phi[j]), zeta.struc = zeta.struc, Power = Power, link = link, family = family[j]), mu = mu[,c(j,p-NobetaH/2+j), drop=F], eta.mat = eta[,c(j,p-NobetaH/2+j), drop=F], replace = FALSE)$resi
           # }
         }
@@ -2001,6 +2002,15 @@ inf.criteria <- function(fit)
   list(BIC = BIC, AIC = AIC, AICc = AICc, k = k)
 }
 
+# Aligns the columns of x to 'cols', filling absent columns with zeroes
+matchCols <- function(x, cols){
+  idx <- match(cols, colnames(x))
+  x <- cbind(x, 0)
+  out <- x[, ifelse(is.na(idx), ncol(x), idx), drop = FALSE]
+  colnames(out) <- cols
+  out
+}
+
 # Creates matrix of fourth corner terms from a vector
 getFourthCorner<- function(object){
   if(is.null(object$X) || is.null(object$TR)) stop();
@@ -2305,33 +2315,39 @@ start_values_randomX <- function(y, X, family, formula =NULL, starting.val, Powe
   tr0 <- try({
     
     if(starting.val %in% c("res", "random")){
-      if(any(family %in% c("poisson", "negative.binomial", "negative.binomial1","binomial", "ZIP", "ZINB","gaussian", "tweedie","ZIB", "ZNIB"))){
+      if(any(family %in% c("poisson", "negative.binomial", "negative.binomial1","binomial", "ZIP", "ZINB","gaussian", "tweedie","ZIB", "ZNIB", "orderedBeta"))){
         if(any(family == "tweedie")){
           start.optimizer <- "optim"
           optim.method  =  "L-BFGS-B"
         }
         f1 <- gllvm.TMB(y=y, X=X, family = family, formula=formula, num.lv=0, starting.val = "zero", link =link, Ntrials = Ntrials, optimizer = start.optimizer, optim.method = start.optim.method, max.iter = max.iter) #, method=method
+        if(!is.finite(f1$logL)){
+          Br <- matrix(0, ncol(Xb), p)
+          sigmaB <- diag(ncol(Xb))
+          B <- rep(1e-3,ncol(Xb))
+        } else {
         B <- attr(scale(f1$params$Xcoef),"scaled:center")
         coefs0 <- as.matrix(scale((f1$params$Xcoef), scale = FALSE))
         Br <- coefs0/max(apply(coefs0, 2, sd))
         sigmaB <- cov(Br)
         Br <- t(Br)
+        }
       } else {
         Br <- matrix(0, ncol(Xb), p)
         sigmaB <- diag(ncol(Xb))
-        B <- rep(1,ncol(Xb))
+        B <- rep(1e-3,ncol(Xb))
       }
     } else {
       Br <- matrix(0, ncol(Xb), p)
       sigmaB <- diag(ncol(Xb))
-      B <- rep(1,ncol(Xb))
+      B <- rep(1e-3,ncol(Xb))
     }
   }, silent = TRUE)
   
   if(inherits(tr0, "try-error")){
     Br <- matrix(0, ncol(Xb), p)
     sigmaB <- diag(ncol(Xb))
-    B <- rep(1,ncol(Xb))
+    B <- rep(1e-3,ncol(Xb))
   }
   
   
@@ -3077,7 +3093,15 @@ b_lvHEcorrect <- function(Lmult,K,d){
     diag(corHE[(combs[1,q]*K-K+1):(combs[1,q]*K),(combs[2,q]*K-K+1):(combs[2,q]*K)])<- Lmult[q]
     diag(corHE[(combs[2,q]*K-K+1):(combs[2,q]*K),(combs[1,q]*K-K+1):(combs[1,q]*K)])<- Lmult[q]
   }
-  corHE  
+  corHE
+}
+
+# covariance of an equality-constrained MLE, eq. (8) in
+# Moore, Sadler & Kozick (2008) IEEE Trans. Signal Process. 56(3)
+cov_constrained <- function(H, J){
+  qrJ <- qr(t(J))
+  U <- qr.Q(qrJ, complete = TRUE)[, -seq_len(qrJ$rank), drop = FALSE]
+  U %*% MASS::ginv(crossprod(U, H %*% U)) %*% t(U)
 }
 
 # distribution functions for ZIP, ZINB, and ZIB

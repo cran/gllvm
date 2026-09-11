@@ -4,7 +4,7 @@
 ########################################################################################
 gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, family = "poisson", 
                       num.lv = 2, num.lv.c = 0, num.RR = 0, num.lv.cor=0, lv.formula = NULL, corWithinLV = FALSE, LVgroups = NULL, randomB = FALSE, 
-                      method = "VA",Lambda.struc = "unstructured", Ar.struc = "diagonal", sp.Ar.struc = "diagonal",  sp.Ar.struc.rank = NULL, Ab.diag.iter = 1, row.eff = FALSE, col.eff = FALSE, colMat = matrix(0), nn.colMat = NULL, colMat.approx = "NNGP", colMat.rho.struct = "single", randomX.start = "res", reltol = 1e-8, reltol.c = 1e-8,
+                      method = "VA",Lambda.struc = "unstructured", Ar.struc = "diagonal", sp.Ar.struc = "diagonal",  sp.Ar.struc.rank = NULL, Ab.diag.iter = 0, row.eff = FALSE, col.eff = FALSE, colMat = matrix(0), nn.colMat = NULL, colMat.approx = "NNGP", colMat.rho.struct = "single", randomX.start = "res", reltol = 1e-8, reltol.c = 1e-8,
                       maxit = 3000, max.iter = 200, start.lvs = NULL, offset = NULL,
                       trace = FALSE, optimizer.trace = 0, link = "logit", n.init = 1, n.init.max = 10, restrict = 30, start.params = NULL, RElist = NULL, dr = matrix(0), trmsize = matrix(0), csR = matrix(0), proptoMats = list(list(matrix(0))), dLV=NULL, cstruc = "diag", cstruclv = "diag", dist = list(matrix(0)), distLV = matrix(0),
                       optimizer = "optim", starting.val = "res", Power = 1.5, diag.iter = 1, scalmax = 10, MaternKappa = 1.5, rangeP = NULL, zetacutoff = NULL,
@@ -487,7 +487,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
       }
       
       if(col.eff == "random"){
-        if(!is.null(RElist) && starting.val == "res" && randomX.start=="res" && (num.lv.c+num.RR+num.lv)>0){ # getting some improved starting values
+        if(!is.null(RElist) && starting.val == "res" && randomX.start=="res" && (num.lv.c+num.RR+num.lv)>0 && !is.null(fit$fitstart)){ # getting some improved starting values
           if(nrow(Xt)==n){
           B <- rep(0, ncol(spdr))
           B[colnames(spdr)%in%colnames(Xt)] <- fit$fitstart$B
@@ -623,10 +623,10 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
         } else {K=2}
         if(zeta.struc =="common") {
           if(any(family%in%c("orderedBeta"))){
-            zeta <- c(zeta, fit$zeta[1], log(fit$zeta[2]))
+            zeta <- c(zeta, fit$zeta[1], log(fit$zeta[2]-fit$zeta[1]))
             zetaO <- c(zetaO, rep(TRUE,2))
             if(!is.null(zetacutoff)){
-              zeta<- c(zetacutoff[1], log(zetacutoff[2]))
+              zeta<- c(zetacutoff[1], log(zetacutoff[2]-zetacutoff[1]))
             }
           }
           if(any(family%in%c("ordinal"))){
@@ -641,9 +641,9 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
               zetaO <- c(zetaO, rep(FALSE,length(na.omit(fit$zeta[j,-1]))))
             } else {
               if(!is.null(zetacutoff)){
-                zeta<- c(zeta, zetacutoff[1], log(zetacutoff[2]))
+                zeta<- c(zeta, zetacutoff[1], log(zetacutoff[2]-zetacutoff[1]))
               } else {
-                zeta <- c(zeta, fit$zeta[j,1], log(fit$zeta[j,2]))
+                zeta <- c(zeta, fit$zeta[j,1], log(fit$zeta[j,2]-fit$zeta[j,1]))
               }
               zetaO <- c(zetaO, rep(TRUE,2))
             }
@@ -1101,6 +1101,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
             }
             spAr <- c(spAr,rep(1e-3, sum(ncol(spdr)*blocksp*Abranks-Abranks*(Abranks+1)/2)))
       }
+      spAr <- pmin(pmax(spAr, log(1e-5)), log(Lambda.start[2]))
       } else {spAr <- 0;map.list$Abb <- factor(NA)}
       
       # Variational covariances for  random rows
@@ -1295,6 +1296,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
       if(any(family == "ordinal")) {
         familyn[family == "ordinal"]=7
         if(any(link=="probit"))extra[family == "ordinal" & (link=="probit")]=1
+        if(any(link=="cloglog"))extra[family == "ordinal" & (link=="cloglog")]=2
       }
       if(any(family == "exponential")) {familyn[family == "exponential"] =8}
       if(any(family == "beta")){ 
@@ -1317,12 +1319,12 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
       if(any(family == "ZNIB")){
         familyn[family == "ZNIB"] =14
         if(any(link=="probit")) extra[family == "ZNIB" & (link=="probit")]=1
-        if(any(link=="cloglog")) extra[family == "ZNIB"]=2
+        if(any(link=="cloglog")) extra[family == "ZNIB" & (link=="cloglog")]=2
       }
       if(any(family == "beta.binomial")){
         familyn[family == "beta.binomial"] =15
-        if(link=="probit") extra[family == "beta.binomial"]=1
-        if(link=="cloglog") extra[family == "beta.binomial"]=2
+        if(any(link=="probit")) extra[family == "beta.binomial" & (link=="probit")]=1
+        if(any(link=="cloglog")) extra[family == "beta.binomial" & (link=="cloglog")]=2
       }
 
       ## generate starting values quadratic coefficients in some cases
@@ -1453,8 +1455,8 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
         
       }
       if(inherits(optr,"try-error")) warning(optr[1]);
-      
-      
+
+
       ### Now diag.iter, improves the model fit sometimes
       if((diag.iter>0) && (!(Lambda.struc %in% c("diagonal", "diagU")) && (((nlvr+randoml[3]*num.RR)>1) | (num.lv.cor>0)) && !inherits(optr,"try-error") | ((nrow(dr)==n) & Ar.struc=="unstructured")) | ((Ab.diag.iter>0) && (col.eff=="random" && sp.Ar.struc%in%c("blockdiagonal","MNunstructured","unstructured","diagonalCL2","CL1","CL2")))){
         objr1 <- objr
@@ -1593,7 +1595,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
           if(cstruclvn>0){
             if(cstruclvn %in% c(2,4)){ #cstruc=="corExp" || cstruc=="corMatern"
               if(num.lv.cor>0){
-                rho_lvc <- matrix((param1[nam=="rho_lvc"])[map.list$rho_lvc],nrow(rho_lvc),ncol(rho_lvc)); rho_lvc[is.na(rho_lvc)]=0 
+                rho_lvc <- matrix((param1[nam=="rho_lvc"])[map.list$rho_lvc],nrow(rho_lvc),ncol(rho_lvc)); rho_lvc[is.na(rho_lvc)]=parameter.list$rho_lvc[is.na(rho_lvc)]
               } #rho_lvc[-1]<- param1[nam=="rho_lvc"]
             } else {
               rho_lvc[1:length(rho_lvc)]<- param1[nam=="rho_lvc"]
@@ -1701,7 +1703,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
         if(zeta.struc =="common") {
           zetanew <- NULL
           if(any(family%in%c("orderedBeta"))){
-            zetanew <- c(zetanew, zetas[1], exp(zetas[2]))
+            zetanew <- c(zetanew, zetas[1], zetas[1] + exp(zetas[2]))
             names(zetanew) <- c("cutoff0","cutoff1")
           }
           if(any(family%in%c("ordinal"))){
@@ -1723,10 +1725,10 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
                   zetanew[j,l+1]<-zetas[idx+l]
                 } 
               }
-              zetanew[j,] <- cumsum(exp(zetanew[j,]))
+              zetanew[j,] <- c(0, cumsum(exp(zetanew[j,-1])))
               idx<-idx+k
             } else {
-              zetanew[j,] <- c(zetas[idx +1], exp(zetas[idx +2]))
+              zetanew[j,1:2] <- c(zetas[idx +1], zetas[idx +1] + exp(zetas[idx +2]))
               idx<-idx+2
             }
           } # end for j
@@ -1882,7 +1884,11 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
       if(any(family == "gamma")) {familyn[family == "gamma"] =4}
       if(any(family == "tweedie")){ familyn[family == "tweedie"] =5}
       if(any(family == "ZIP")){ familyn[family == "ZIP"] =6;}
-      if(any(family == "ordinal")){ familyn[family == "ordinal"] =7}
+      if(any(family == "ordinal")){
+        familyn[family == "ordinal"] =7
+        if(any(link=="probit")) extra[family == "ordinal" & (link=="probit")]=1
+        if(any(link=="cloglog")) extra[family == "ordinal" & (link=="cloglog")]=2
+      }
       if(any(family == "exponential")){ familyn[family == "exponential"] =8}
       if(any(family == "beta")){ 
         familyn[family == "beta"] =9
@@ -1924,8 +1930,8 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
       }
       if(any(family == "beta.binomial")){
         familyn[family == "beta.binomial"] =15
-        if(link=="probit") extra[family == "beta.binomial"]=1
-        if(link=="cloglog") extra[family == "beta.binomial"]=2
+        if(any(link=="probit")) extra[family == "beta.binomial" & (link=="probit")]=1
+        if(any(link=="cloglog")) extra[family == "beta.binomial" & (link=="cloglog")]=2
       }
 
       ## generate starting values quadratic coefficients in some cases
@@ -1966,7 +1972,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
       }
       data.list = list(y = y, x = Xd, x_lv = lv.X, xr = xr, dr0 = dr, csR = csR, proptoMats = proptoMats,  dLV = dLV, colMatBlocksI = blocks, Abranks = Abranks, Abstruc = 0, xb = spdr, cs = cs, offset=offset, trmsize = trmsize, num_lv = num.lv, num_lv_c = num.lv.c, num_RR = num.RR, num_corlv=num.lv.cor, quadratic = ifelse(quadratic!=FALSE,1,0), randomB = as.integer(randomB=="LV"), family=familyn,extra=extra,method=1,model=0,random=randoml, zetastruc = ifelse(zeta.struc=="species",1,0), times = matrix(times, nrow = 1), cstruc=cstrucn, cstruclv = cstruclvn, dc=dist_dc, dc_lv = distLV_dc, Astruc=Astruc, NN = NN, Ntrials = Ntrials, nncolMat = nncolMat, csb_lv = csBlv, cw = corWithinLV*1, p_betaH = p_betaH)
       
-      if(any(family %in% c("ordinal", "orderedBeta"))){
+      if(any(family %in% c("ordinal"))){
         data.list$method = 0
       }
       
@@ -2108,9 +2114,10 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
       
       #### Set up data and parameters
       
-      if(any(family %in% c("ordinal", "orderedBeta"))){ #
+      if(any(family %in% c("ordinal"))){ #
         data.list$method = 0
       }
+      #, "orderedBeta"
       
       parameter.list = list(r0r= matrix(r0r), sigmaijr = sigmaijr, r0f = matrix(r0f), b = rbind(a,b), sigmaB = sigmaB, b_lv = b.lv, sigmab_lv = sigmab_lv, Ab_lv = Ab_lv, B = B, Br=Br,lambda = lambda, lambda2 = t(lambda2), sigmaLV = (sigma.lv), u = u, lg_phi=log(phi),sigmaij=sigmaij,log_sigma=c(sigma), rho_lvc=rho_lvc, Au=0, lg_Ar=0, Abb=0, zeta=zeta, ePower = ePower, lg_phiZINB = log(ZINBphi)) #, scaledc=scaledc,thetaH = thetaH, bH=bH
       
@@ -2184,7 +2191,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
       
       
       if(quadratic == TRUE && starting.val=="zero" && start.struc=="LV" & num.RR>0){
-        if(any(family %in% c("ordinal", "orderedBeta"))){
+        if(any(family %in% c("ordinal"))){
           data.list$method = 0
         }
         
@@ -2410,7 +2417,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
         if(zeta.struc =="common") {
           zetanew <- NULL
           if(any(family%in%c("orderedBeta"))){
-            zetanew <- c(zetanew, zetas[1], exp(zetas[2]))
+            zetanew <- c(zetanew, zetas[1], zetas[1] + exp(zetas[2]))
             names(zetanew) <- c("cutoff0","cutoff1")
           }
           if(any(family%in%c("ordinal"))){
@@ -2433,9 +2440,9 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
                 } 
               }
               idx<-idx+k
-              zetanew[j,] <- cumsum(exp(zetanew[j,]))
+              zetanew[j,] <- c(0, cumsum(exp(zetanew[j,-1])))
             } else {
-              zetanew[j,] <- c(zetas[idx +1], exp(zetas[idx +2]))
+              zetanew[j,1:2] <- c(zetas[idx +1], zetas[idx +1] + exp(zetas[idx +2]))
               idx<-idx+2
             }
           } # end for j
@@ -2506,7 +2513,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
               covsigmaB <- tail(sigmab_lv, -ifelse(randomB=="P", ncol(lv.X), num.lv.c+num.RR))
               sigmaBij <- rep(0,(ncol(lv.X)^2-ncol(lv.X))/2)
               for(i in 1:nrow(csBlv)){
-                sigmaBij[(csBlv[i,1] - 1) * (csBlv[i,1] - 2) / 2 + csBlv[i,2]] = covsigmaB[i]
+                sigmaBij[(csBlv[i,2] - 1) * (2*ncol(lv.X) - csBlv[i,2]) / 2 + (csBlv[i,1] - csBlv[i,2])] = covsigmaB[i]
               }
               bL <-  constructL(sigmaBij)
               out$params$corsLvXcoef <- bL%*%t(bL)
@@ -2813,7 +2820,7 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
         if(ncol(cs)==2){
           sigmaSPij <- rep(0,(ncol(spdr)^2-ncol(spdr))/2)
             for(i in 1:nrow(cs)){
-              sigmaSPij[(cs[i,1] - 1) * (cs[i,1] - 2) / 2 + cs[i,2]] = covsigma.sp[i]
+              sigmaSPij[(cs[i,2] - 1) * (2*ncol(spdr) - cs[i,2]) / 2 + (cs[i,1] - cs[i,2])] = covsigma.sp[i]
             }
           SprL <- out$params$sigmaB%*%constructL(sigmaSPij)
           out$params$sigmaB <- SprL%*%t(SprL)
@@ -3297,17 +3304,18 @@ gllvm.TMB <- function(y, X = NULL, lv.X = NULL, xr = matrix(0), formula = NULL, 
         }
       }
     }else{
-      objrFinal <- list()
-      optrFinal <- list()
+      objrFinal <- objr
+      optrFinal <- optr
+      if(is.null(out$logL)) out$logL <- Inf
     }
-  
+
   if(is.null(formula1)){ out$formula <- formula} else {out$formula <- formula1}
-  
-  
+
+
   # DW, 7/5/19: adding TMBfn to output:
   out$TMBfn <- objrFinal
-  out$TMBfn$par <- optrFinal$par #ensure params in this fn take final values
-  out$convergence <- optrFinal$convergence == 0
+  out$TMBfn$par <- if(!inherits(optrFinal,"try-error")) optrFinal$par else objrFinal$par #ensure params in this fn take final values
+  out$convergence <- !inherits(optrFinal,"try-error") && optrFinal$convergence == 0
   out$logL <- -out$logL
   
   # if((method %in% c("VA", "EVA"))){ # These have been moved to gllvm.cpp

@@ -7,7 +7,7 @@
 #' @param newTR A new data frame of traits for each response taxon. If omitted, the original matrix of traits is used.
 #' @param newLV A new matrix of latent variables.  If omitted, the original matrix of latent variables is used. Note that number of rows/sites must be the same for \code{newX} (if X covariates are included in the model).
 #' @param level specification for how to predict. Level one (\code{level = 1}) attempts to use the predicted site scores from variational approximations or laplace approximation or given site scores in \code{newLV}. Level 0 sets the latent variable to zero. Defaults to 1.
-#' @param offset specification whether of not offset values are included to the predictions in case they are in the model, defaults to \code{TRUE} when offset values that are used to fit the model are included to the predictions. Alternatives are matrix/vector (number of rows must match with the \code{newX}) of new offset values or \code{FALSE}, when offsets are ignored.
+#' @param offset logical or numerical, defaults to \code{TRUE} when offset values that are used to fit the model are included in the prediction. Alternatives are matrix/vector (number of rows must match with the \code{newX}) of new offset values or \code{FALSE}, when offsets are ignored.
 #' @param se.fit logical. If \code{TRUE}, performs 1000 simulations from the asymptotic covariance matrix for fixed effects, and from the CMSEP covariance matrix for the random effects. If an integer is provided, it is used as the number of simulations instead. 
 #' @param alpha numerical between 0 and 1, defaults to 0.95. The confidence level for se.fit.
 #' @param seed numeric, defaults to 42. Seed used for simulation in se.fit.
@@ -309,10 +309,10 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
         if(anyBars(object$lv.formula)){
           bar.f <- findbars1(object$lv.formula) # list with 3 terms
           lv.X <- model.frame(subbars1(reformulate(sprintf("(%s)", sapply(findbars1(object$lv.formula), deparse1)))),data=as.data.frame(newdata))
-          RElistLV <- mkReTrms1(bar.f,lv.X, nocorr=corstruc(expandDoubleVerts2(object$lv.formula)), drop.unused.levels = FALSE) #still add find double bars
+          RElistLV <- mkReTrms1(bar.f,lv.X)
           # double check column names, because we may now have unobserved combinations of random effect levels in the matrix
           lv.X = t(as.matrix(RElistLV$Zt))
-          lv.X <- lv.X[,colnames(lv.X)%in%colnames(object$lv.X.design),drop=FALSE]
+          lv.X <- matchCols(lv.X, colnames(object$lv.X.design))
           
         }else{
           lv.X <- model.matrix(object$lv.formula, as.data.frame(newdata))[,-1, drop = F]
@@ -385,10 +385,10 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
             mf.new[, corWithin] <- apply(mf[, corWithin, drop=F],2,function(x)order(order(x)))
           }
           colnames(mf.new) <- colnames(mf)
-          RElistRow <- mkReTrms1(bar.f, mf.new, nocorr=cstruc, drop.unused.levels = FALSE)
+          RElistRow <- mkReTrms1(bar.f, mf.new)
           dr <- Matrix::t(RElistRow$Zt)
           # double check column names, because we may now have unobserved combinations of random effect levels in the matrix
-          dr <- dr[,colnames(dr)%in%colnames(object$dr),drop=FALSE]
+          dr <- matchCols(dr, colnames(object$dr))
         }
         row.eff <- nobars1_(row.eff)
       }
@@ -426,23 +426,27 @@ predict.gllvm <- function(object, newX = NULL, newTR = NULL, newLV = NULL, type 
       X.col.eff <- mf <- data.frame(Intercept=rep(1,nrow(object$y)))
     }
     
-    RElistSP<- mkReTrms1(bar.f, mf, nocorr=corstruc(expandDoubleVerts2(object$col.eff$col.eff.formula)), drop.unused.levels = FALSE)
+    RElistSP<- mkReTrms1(bar.f, mf)
     spdr <- Matrix::t(RElistSP$Zt)
     # double check column names, because we may now have unobserved combinations of random effect levels in the matrix
-    spdr <- spdr[,colnames(spdr)%in%colnames(object$col.eff$spdr),drop=FALSE]
+    spdr <- matchCols(spdr, colnames(object$col.eff$spdr))
     
     eta <- eta + as.matrix(spdr%*%object$params$Br[, spp_idx, drop = FALSE])
     if(!is.null(object$params[["B"]]) && length(object$params[["B"]]>0))eta <- eta + as.matrix(spdr[,names(object$params$B),drop=FALSE]%*%matrix(object$params$B, ncol = length(spp_idx), nrow = length(object$params$B)))
   }
 
   if(!is.null(object$offset)){
-    if(offset!=FALSE){
+    if(!isFALSE(offset)){
       if(is.matrix(offset)){
         if((NROW(offset) == NROW(eta))){
-          eta <- eta+object$offset[, spp_idx, drop = FALSE]
+          eta <- eta+offset[, spp_idx, drop = FALSE]
         } else {stop(paste("Incorrect dimension for the 'offset', number of rows should now be ", NROW(eta)))}
       } else if((NROW(object$offset) == NROW(eta))){
-        eta <- eta+object$offset[, spp_idx, drop = FALSE]
+        if(NCOL(object$offset) == 1){ # a vector offset is common to all species, as in gllvm()
+          eta <- eta+matrix(object$offset, NROW(eta), length(spp_idx))
+        } else {
+          eta <- eta+object$offset[, spp_idx, drop = FALSE]
+        }
         } else {warning(paste("Could not include offset values as 'object$offset' has incorrect dimension, set 'offset = FALSE' or include new offset values"))}
     }
   }
@@ -686,6 +690,10 @@ simulate_params_gllvm <- function(object, R, seed = 42, level = 1, n = NULL){
       Vr <- sdrandom(object$TMBfn, Vf, object$Hess$incl, return.covb = TRUE)
     } else {
       Vr    <- CMSEPf(object, return.covb = TRUE)
+      if(object$num.RR > 0 && isFALSE(object$randomB) && !is.null(colnames(Vr))){
+        keep <- colnames(Vr) != "XB"
+        Vr   <- Vr[keep, keep, drop = FALSE]
+      }
       renms <- c("r0r","Br","u")
       if(!isFALSE(object$randomB)) renms <- c(renms, "b_lv")
       colnames(Vr) <- row.names(Vr) <- names(object$TMBfn$par[names(object$TMBfn$par) %in% renms])
@@ -705,7 +713,7 @@ simulate_params_gllvm <- function(object, R, seed = 42, level = 1, n = NULL){
                      object$Ab  # diagonalCL1 / CL1 / CL2
         )
         Vr[row.names(Vr) == "Br", colnames(Vr) == "Br"] <-
-          Vr[row.names(Vr) == "Br", colnames(Vr) == "Br"] + Ab
+          as.matrix(Vr[row.names(Vr) == "Br", colnames(Vr) == "Br"] + Ab)
       }
       if((object$num.lv + object$num.lv.c) > 0 && n == nrow(object$y)){
         A   <- lapply(seq(dim(object$A)[1]), function(i) object$A[i, , ])
@@ -841,15 +849,15 @@ perturb.gllvm <- function(object, params, r, type = "response", skeleton = NULL,
             k <- max(object$y[, j], na.rm = TRUE) - 2
             if(k > 0) zetanew[j, 2:(k + 1)] <- zetas[idx + seq_len(k)]
             idx <- idx + k
-            zetanew[j, ] <- cumsum(exp(zetanew[j, ]))
+            zetanew[j, ] <- c(0, cumsum(exp(zetanew[j, -1])))
           } else {
-            zetanew[j, ] <- c(zetas[idx + 1], exp(zetas[idx + 2])); idx <- idx + 2
+            zetanew[j, ] <- c(zetas[idx + 1], zetas[idx + 1] + exp(zetas[idx + 2])); idx <- idx + 2
           }
         }
       } else {
         zetanew <- NULL
         if(any(object$family == "orderedBeta")){
-          zetanew <- c(zetas[1], exp(zetas[2])); names(zetanew) <- c("cutoff0","cutoff1")
+          zetanew <- c(zetas[1], zetas[1] + exp(zetas[2])); names(zetanew) <- c("cutoff0","cutoff1")
         }
         if(any(object$family %in% "ordinal"))
           zetanew <- c(zetanew, 0, cumsum(exp(zetas[!zetaO])))
@@ -865,7 +873,7 @@ perturb.gllvm <- function(object, params, r, type = "response", skeleton = NULL,
       newobject$params$row.params.fixed <- c(newpars$r0f)
       names(newobject$params$row.params.fixed) <- names(object$params$row.params.fixed)
     }
-    if(num.RR > 0 && isFALSE(object$randomB)){
+    if((num.RR+num.lv.c) > 0 && isFALSE(object$randomB)){
       newobject$params$LvXcoef <- newpars$b_lv
       rownames(newobject$params$LvXcoef) <- rownames(object$params$LvXcoef)
       colnames(newobject$params$LvXcoef) <- colnames(object$params$LvXcoef)

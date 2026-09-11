@@ -1,3 +1,43 @@
+Version 2.0.15
+=============
+
+* CRAN update version 2.0.15, see also news for 2.0.14
+* Ordinal with cloglog link implemented
+* Parametrization of ordered beta cutoffs changed to cumulative parametrization
+
+## Bugfixes
+
+* Bug related to NaNs in SigmaB and starting values fixed
+
+
+Version 2.0.14
+=============
+
+* Poisson, ZIP, ZINB, gaussian, gamma and ordered beta model with probit link implemented with EVA
+* ordered beta model with logit and probit link implemented with LA
+* gllvm() now issues a warning if row/column names in y and X or y and TR do not match, see #258
+* plot.predictSR.gllvm() gained a third plot of observed against predicted species richness
+* predictSR() now stores the observed species richness, so that plot.predictSR.gllvm() and residuals.predictSR.gllvm() no longer require the gllvm object
+
+## Bugfixes
+
+* Fixed a fatal bug in plot.predictSR.gllvm due to a naming typo
+* Fixed the 'which' argument of plot.predictSR.gllvm, which drew the qq-line regardless of the requested plots, and which no longer leaves 'mfrow' changed
+* Fixed observed species richness for ordinal responses in residuals.predictSR.gllvm: the per-species minimum categories were recycled over rows instead of columns
+* Fixed a bug that prevented ordering randomCoefPlot.gllvm with order = TRUE
+* Fixed a bug that resulted in incorrect simulations from simulate.gllvm with num.lv=0
+* Fixed the parameterisation of nb1 in residuals.gllvm, simulate, and predictSR: the dispersion parameter was inverted relative to the C++ parameterisation
+* Fixed a bug that made predictSR underestimate richness for ZIP/ZINB
+* Fixed a bug in ordinal models with zeta.struc = "species": zeta was inappropriately offset by 1
+* Improved implementation (and VA derivation) of the cumulative logit likelihood
+* Fixed a bug in the ordinal likelihood with common cut-offs, introduced with mixed response types in v2.0.8
+
+Version 2.0.13
+=============
+
+* CRAN update version 2.0.13
+* See updates in 2.0.11-2.0.12
+
 Version 2.0.12
 =============
 
